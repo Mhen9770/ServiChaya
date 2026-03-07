@@ -63,4 +63,13 @@
   .btn-secondary {
     @apply bg-white text-primary-main border-2 border-primary-main px-6 py-3 rounded-xl font-medium hover:bg-primary-main hover:text-white transition-all duration-300;
   }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
