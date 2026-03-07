@@ -1,13 +1,16 @@
 package com.servichaya.service.service;
 
 import com.servichaya.service.dto.ServiceCategoryDto;
+import com.servichaya.service.dto.ServiceSubCategoryDto;
 import com.servichaya.service.entity.ServiceCategoryMaster;
 import com.servichaya.service.repository.ServiceCategoryMasterRepository;
+import com.servichaya.service.service.ServiceSubCategoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,6 +21,7 @@ import java.util.stream.Collectors;
 public class ServiceCategoryService {
 
     private final ServiceCategoryMasterRepository categoryRepository;
+    private final ServiceSubCategoryService subCategoryService;
 
     public List<ServiceCategoryDto> getAllActiveCategories() {
         log.debug("Getting all active service categories");
@@ -80,6 +84,13 @@ public class ServiceCategoryService {
     }
 
     private ServiceCategoryDto mapToDto(ServiceCategoryMaster category) {
+        List<ServiceSubCategoryDto> subCategories = new ArrayList<>();
+        try {
+            subCategories = subCategoryService.getSubCategoriesByCategoryId(category.getId());
+        } catch (Exception e) {
+            log.warn("Error fetching subcategories for categoryId: {}", category.getId(), e);
+        }
+        
         return ServiceCategoryDto.builder()
                 .id(category.getId())
                 .code(category.getCode())
@@ -89,6 +100,7 @@ public class ServiceCategoryService {
                 .displayOrder(category.getDisplayOrder())
                 .isFeatured(category.getIsFeatured())
                 .providerCount(0L) // TODO: Calculate actual provider count
+                .subCategories(subCategories)
                 .build();
     }
 }

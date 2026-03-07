@@ -23,6 +23,7 @@ export default function AdminSidebar() {
         { label: 'Zones', href: '/admin/master-data/zones', icon: Building2 },
         { label: 'PODs', href: '/admin/master-data/pods', icon: Layers },
         { label: 'Service Categories', href: '/admin/master-data/service-categories', icon: List },
+        { label: 'Service SubCategories', href: '/admin/master-data/service-subcategories', icon: List },
         { label: 'Service Skills', href: '/admin/master-data/service-skills', icon: Wrench },
         { label: 'Matching Rules', href: '/admin/master-data/matching-rules', icon: Sliders },
         { label: 'User Roles', href: '/admin/master-data/user-roles', icon: Shield },

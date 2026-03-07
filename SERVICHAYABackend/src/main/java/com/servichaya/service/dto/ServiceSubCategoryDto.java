@@ -9,14 +9,15 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ServiceCategoryDto {
+public class ServiceSubCategoryDto {
     private Long id;
     private String code;
     private String name;
     private String description;
+    private Long categoryId;
+    private String categoryName;
     private String iconUrl;
     private Integer displayOrder;
     private Boolean isFeatured;
-    private Long providerCount; // Count of providers offering services in this category
-    private java.util.List<ServiceSubCategoryDto> subCategories; // Subcategories under this category
+    private Long providerCount; // Count of providers offering services in this subcategory
 }

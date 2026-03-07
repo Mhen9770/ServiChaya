@@ -329,12 +329,58 @@ export default function ProviderProfilePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-background via-white to-neutral-background">
-      {/* Header Section - More Compact */}
-      <div className="bg-gradient-to-r from-primary-main via-primary-light to-primary-dark text-white relative overflow-hidden">
-        {/* Decorative Background Elements */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-72 h-72 bg-white rounded-full blur-3xl"></div>
+      {/* Enhanced Header Section with Modern Design */}
+      <div className="bg-gradient-to-br from-primary-main via-primary-light to-primary-dark text-white relative overflow-hidden">
+        {/* Enhanced Decorative Background Elements */}
+        <div className="absolute inset-0">
+          <motion.div
+            className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.1, 0.15, 0.1],
+              x: [0, 30, 0],
+              y: [0, -20, 0]
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+          <motion.div
+            className="absolute bottom-0 left-0 w-72 h-72 bg-white rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.1, 0.2, 0.1],
+              x: [0, -20, 0],
+              y: [0, 30, 0]
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1
+            }}
+          />
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-accent-green/10 via-primary-light/10 to-accent-green/10 rounded-full blur-3xl"
+            animate={{
+              rotate: [0, 360],
+              scale: [1, 1.1, 1]
+            }}
+            transition={{
+              rotate: {
+                duration: 20,
+                repeat: Infinity,
+                ease: "linear"
+              },
+              scale: {
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }
+            }}
+          />
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 md:py-6 lg:py-8 relative z-10">
           <motion.div
@@ -344,13 +390,26 @@ export default function ProviderProfilePage() {
             className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-4"
           >
             <div className="flex items-center gap-3 md:gap-4 lg:gap-6 w-full md:w-auto">
-              {/* Profile Image/Avatar */}
+              {/* Enhanced Profile Image/Avatar */}
               <motion.div
-                whileHover={{ scale: 1.05, rotate: 5 }}
-                className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-white/20 backdrop-blur-lg rounded-xl md:rounded-2xl flex items-center justify-center border-2 border-white/30 shadow-2xl overflow-hidden flex-shrink-0"
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-white/20 backdrop-blur-xl rounded-xl md:rounded-2xl flex items-center justify-center border-2 border-white/40 shadow-2xl overflow-hidden flex-shrink-0 group/avatar"
               >
-                <Building2 className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-white" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-white/10 group-hover/avatar:from-white/40 group-hover/avatar:to-white/20 transition-all" />
+                <Building2 className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-white relative z-10 group-hover/avatar:scale-110 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                {/* Glow effect */}
+                <motion.div
+                  className="absolute inset-0 rounded-xl md:rounded-2xl bg-white/20"
+                  animate={{
+                    opacity: [0.3, 0.6, 0.3]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
               </motion.div>
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-display mb-1 truncate">
@@ -376,29 +435,39 @@ export default function ProviderProfilePage() {
             </div>
             <div className="flex flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
               <motion.div
-                whileHover={{ scale: 1.05 }}
+                whileHover={{ scale: 1.08, y: -2 }}
                 whileTap={{ scale: 0.95 }}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-xs backdrop-blur-sm border ${
+                className={`px-3 sm:px-4 py-2 rounded-xl font-bold text-xs backdrop-blur-md border-2 ${
                   profile.verificationStatus === 'VERIFIED'
-                    ? 'bg-accent-green/30 border-accent-green/60 text-white shadow-lg shadow-accent-green/20'
-                    : 'bg-yellow-500/30 border-yellow-500/60 text-white'
-                }`}
+                    ? 'bg-gradient-to-r from-accent-green/40 to-green-600/40 border-accent-green/80 text-white shadow-xl shadow-accent-green/30 glow-hover'
+                    : 'bg-gradient-to-r from-yellow-500/40 to-orange-500/40 border-yellow-500/80 text-white shadow-xl shadow-yellow-500/30'
+                } relative overflow-hidden group/badge`}
               >
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <div className="absolute inset-0 shimmer opacity-0 group-hover/badge:opacity-100 transition-opacity" />
+                <div className="flex items-center gap-2 relative z-10">
+                  <motion.div
+                    animate={profile.verificationStatus === 'VERIFIED' ? {
+                      scale: [1, 1.2, 1],
+                      rotate: [0, 10, -10, 0]
+                    } : {}}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 sm:w-4 sm:h-4" />
+                  </motion.div>
                   <span className="whitespace-nowrap">{profile.verificationStatus}</span>
                 </div>
               </motion.div>
               <motion.div
-                whileHover={{ scale: 1.05 }}
+                whileHover={{ scale: 1.08, y: -2 }}
                 whileTap={{ scale: 0.95 }}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-xs backdrop-blur-sm border whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-xl font-bold text-xs backdrop-blur-md border-2 whitespace-nowrap ${
                   profile.isAvailable
-                    ? 'bg-accent-green/30 border-accent-green/60 text-white shadow-lg shadow-accent-green/20'
-                    : 'bg-gray-500/30 border-gray-500/60 text-white'
-                }`}
+                    ? 'bg-gradient-to-r from-accent-green/40 to-green-600/40 border-accent-green/80 text-white shadow-xl shadow-accent-green/30 glow-hover'
+                    : 'bg-gradient-to-r from-gray-500/40 to-gray-600/40 border-gray-500/80 text-white shadow-xl'
+                } relative overflow-hidden group/badge`}
               >
-                {profile.isAvailable ? '✓ Available' : 'Unavailable'}
+                <div className="absolute inset-0 shimmer opacity-0 group-hover/badge:opacity-100 transition-opacity" />
+                <span className="relative z-10">{profile.isAvailable ? '✓ Available' : 'Unavailable'}</span>
               </motion.div>
             </div>
           </motion.div>

@@ -15,8 +15,10 @@ import com.servichaya.matching.entity.MatchingRuleMaster;
 import com.servichaya.matching.repository.MatchingRuleMasterRepository;
 import com.servichaya.service.entity.ServiceCategoryMaster;
 import com.servichaya.service.entity.ServiceSkillMaster;
+import com.servichaya.service.entity.ServiceSubCategoryMaster;
 import com.servichaya.service.repository.ServiceCategoryMasterRepository;
 import com.servichaya.service.repository.ServiceSkillMasterRepository;
+import com.servichaya.service.repository.ServiceSubCategoryMasterRepository;
 import com.servichaya.user.entity.UserRoleMaster;
 import com.servichaya.user.repository.UserRoleMasterRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +43,7 @@ public class MasterDataService {
     private final StateMasterRepository stateRepository;
     private final CountryMasterRepository countryRepository;
     private final ServiceCategoryMasterRepository categoryRepository;
+    private final ServiceSubCategoryMasterRepository subCategoryRepository;
     private final ServiceSkillMasterRepository skillRepository;
     private final MatchingRuleMasterRepository ruleRepository;
     private final UserRoleMasterRepository roleMasterRepository;
@@ -447,6 +451,104 @@ public class MasterDataService {
                 .isActive(category.getIsActive())
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
+                .build();
+    }
+
+    // ========== Service SubCategory Master ==========
+    public Page<ServiceSubCategoryMasterDto> getAllServiceSubCategories(Pageable pageable) {
+        log.info("Fetching all service subcategories, page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        return subCategoryRepository.findAll(pageable).map(this::mapSubCategoryToDto);
+    }
+
+    public ServiceSubCategoryMasterDto getServiceSubCategoryById(Long id) {
+        log.info("Fetching service subcategory by id: {}", id);
+        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
+        return mapSubCategoryToDto(subCategory);
+    }
+
+    @Transactional
+    public ServiceSubCategoryMasterDto createServiceSubCategory(ServiceSubCategoryMasterDto dto) {
+        log.info("Creating service subcategory: {}", dto.getName());
+        
+        // Validate category exists
+        ServiceCategoryMaster category = categoryRepository.findById(dto.getCategoryId())
+                .orElseThrow(() -> new RuntimeException("Service category not found"));
+        
+        ServiceSubCategoryMaster subCategory = ServiceSubCategoryMaster.builder()
+                .categoryId(dto.getCategoryId())
+                .iconUrl(dto.getIconUrl())
+                .displayOrder(dto.getDisplayOrder())
+                .isFeatured(dto.getIsFeatured() != null ? dto.getIsFeatured() : false)
+                .build();
+        
+        // Set inherited fields from MasterEntity
+        subCategory.setCode(dto.getCode());
+        subCategory.setName(dto.getName());
+        subCategory.setDescription(dto.getDescription());
+        subCategory.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+
+        subCategory = subCategoryRepository.save(subCategory);
+        log.info("Service subcategory created successfully with id: {}", subCategory.getId());
+        return mapSubCategoryToDto(subCategory);
+    }
+
+    @Transactional
+    public ServiceSubCategoryMasterDto updateServiceSubCategory(Long id, ServiceSubCategoryMasterDto dto) {
+        log.info("Updating service subcategory id: {}", id);
+        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
+
+        if (dto.getCategoryId() != null && !dto.getCategoryId().equals(subCategory.getCategoryId())) {
+            // Validate new category exists
+            categoryRepository.findById(dto.getCategoryId())
+                    .orElseThrow(() -> new RuntimeException("Service category not found"));
+            subCategory.setCategoryId(dto.getCategoryId());
+        }
+        if (dto.getName() != null) subCategory.setName(dto.getName());
+        if (dto.getDescription() != null) subCategory.setDescription(dto.getDescription());
+        if (dto.getIconUrl() != null) subCategory.setIconUrl(dto.getIconUrl());
+        if (dto.getDisplayOrder() != null) subCategory.setDisplayOrder(dto.getDisplayOrder());
+        if (dto.getIsFeatured() != null) subCategory.setIsFeatured(dto.getIsFeatured());
+        if (dto.getIsActive() != null) subCategory.setIsActive(dto.getIsActive());
+
+        subCategory = subCategoryRepository.save(subCategory);
+        log.info("Service subcategory updated successfully");
+        return mapSubCategoryToDto(subCategory);
+    }
+
+    @Transactional
+    public void deleteServiceSubCategory(Long id) {
+        log.info("Deleting service subcategory id: {}", id);
+        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
+        subCategory.setIsActive(false);
+        subCategoryRepository.save(subCategory);
+        log.info("Service subcategory deactivated successfully");
+    }
+
+    private ServiceSubCategoryMasterDto mapSubCategoryToDto(ServiceSubCategoryMaster subCategory) {
+        AtomicReference<String> categoryName = new AtomicReference<>();
+        if (subCategory.getCategory() != null) {
+            categoryName.set(subCategory.getCategory().getName());
+        } else if (subCategory.getCategoryId() != null) {
+            categoryRepository.findById(subCategory.getCategoryId())
+                    .ifPresent(cat -> categoryName.set(cat.getName()));
+        }
+        
+        return ServiceSubCategoryMasterDto.builder()
+                .id(subCategory.getId())
+                .code(subCategory.getCode())
+                .name(subCategory.getName())
+                .description(subCategory.getDescription())
+                .categoryId(subCategory.getCategoryId())
+                .categoryName(categoryName.get())
+                .iconUrl(subCategory.getIconUrl())
+                .displayOrder(subCategory.getDisplayOrder())
+                .isFeatured(subCategory.getIsFeatured())
+                .isActive(subCategory.getIsActive())
+                .createdAt(subCategory.getCreatedAt())
+                .updatedAt(subCategory.getUpdatedAt())
                 .build();
     }
 

@@ -39,7 +39,7 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
             isActive
               ? 'bg-gradient-to-r from-primary-main to-primary-dark text-white shadow-md'
-              : 'text-neutral-textSecondary hover:bg-neutral-background hover:text-primary-main'
+              : 'text-slate-300 hover:bg-white/10 hover:text-primary-light'
           }`}
         >
           <Icon className="w-5 h-5" />
@@ -49,7 +49,7 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
           />
         </button>
         {isExpanded && (
-          <div className="ml-4 mt-2 space-y-1 border-l-2 border-neutral-border pl-4">
+          <div className="ml-4 mt-2 space-y-1 border-l-2 border-white/10 pl-4">
             {item.children.map((child) => {
               const isChildActive = pathname === child.href || pathname.startsWith(child.href + '/')
               const ChildIcon = child.icon
@@ -59,8 +59,8 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
                   href={child.href}
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
                     isChildActive
-                      ? 'bg-primary-main/10 text-primary-main border-l-2 border-primary-main'
-                      : 'text-neutral-textSecondary hover:bg-neutral-background hover:text-primary-main'
+                      ? 'bg-primary-main/20 text-primary-light border-l-2 border-primary-main'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-primary-light'
                   }`}
                 >
                   <ChildIcon className="w-4 h-4" />
@@ -80,7 +80,7 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
       className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
         isActive
           ? 'bg-gradient-to-r from-primary-main to-primary-dark text-white shadow-md'
-          : 'text-neutral-textSecondary hover:bg-neutral-background hover:text-primary-main'
+          : 'text-slate-300 hover:bg-white/10 hover:text-primary-light'
       }`}
     >
       <Icon className="w-5 h-5" />
@@ -106,17 +106,17 @@ export default function Sidebar({ items }: SidebarProps) {
   }, [])
 
   return (
-    <aside className="w-64 bg-white border-r border-neutral-border min-h-screen sticky top-0 h-screen overflow-y-auto shadow-sm">
+    <aside className="w-64 glass-dark border-r border-white/10 min-h-screen sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent">
       <div className="p-6">
         {user && (
-          <div className="mb-8">
+          <div className="mb-8 pb-6 border-b border-white/10">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary-main to-primary-dark rounded-xl flex items-center justify-center text-white font-bold text-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-primary-main to-primary-dark rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
                 {(user?.name || user?.mobileNumber || 'U').charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="text-sm font-semibold text-neutral-textPrimary">{user?.name || user?.mobileNumber || 'User'}</p>
-                <p className="text-xs text-neutral-textSecondary capitalize">{user?.role?.toLowerCase().replace('_', ' ') || 'User'}</p>
+                <p className="text-sm font-semibold text-white">{user?.name || user?.mobileNumber || 'User'}</p>
+                <p className="text-xs text-slate-400 capitalize">{user?.role?.toLowerCase().replace('_', ' ') || 'User'}</p>
               </div>
             </div>
           </div>

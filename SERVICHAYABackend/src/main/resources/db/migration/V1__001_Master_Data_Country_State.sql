@@ -1,5 +1,11 @@
+-- ============================================
+-- Flyway Migration: Master Data Only
+-- ============================================
+-- IMPORTANT: This file contains ONLY master data (INSERT/UPDATE statements)
+-- Schema changes (CREATE TABLE, ALTER TABLE, etc.) are NOT allowed here
+-- Schema is managed by JPA/Hibernate (ddl-auto: update)
+-- ============================================
 -- Master Data: Country and State
--- This migration contains only master data, schema is managed by JPA
 
 -- Country Master Data
 INSERT INTO country_master (code, name, description, country_code, currency_code, phone_code, is_active, created_at, updated_at)

@@ -1,5 +1,11 @@
+-- ============================================
+-- Flyway Migration: Master Data Only
+-- ============================================
+-- IMPORTANT: This file contains ONLY master data (INSERT/UPDATE statements)
+-- Schema changes (CREATE TABLE, ALTER TABLE, etc.) are NOT allowed here
+-- Schema is managed by JPA/Hibernate (ddl-auto: update)
+-- ============================================
 -- Master Data: Cities in Madhya Pradesh (Launch Cities)
--- Schema managed by JPA, only data here
 
 -- Indore
 INSERT INTO city_master (code, name, description, state_id, city_code, latitude, longitude, timezone, is_serviceable, is_active, created_at, updated_at)

@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getAllCategories, type ServiceCategory } from '@/lib/services/service'
+import { getAllCategories, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { toast } from 'react-hot-toast'
 import { SkeletonCard } from '@/components/ui/Skeleton'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function ServicesPage() {
   const [categories, setCategories] = useState<ServiceCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [featuredOnly, setFeaturedOnly] = useState(false)
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetchCategories()
@@ -157,17 +159,74 @@ export default function ServicesPage() {
                         <span className="text-xs font-bold text-primary-main">
                           {category.providerCount || 0}+ providers
                         </span>
-                        <motion.svg
-                          initial={{ opacity: 0, x: -10 }}
-                          whileHover={{ opacity: 1, x: 0 }}
-                          className="w-5 h-5 text-primary-main transition-all duration-300"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </motion.svg>
+                        {category.subCategories && category.subCategories.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              const newExpanded = new Set(expandedCategories)
+                              if (newExpanded.has(category.id)) {
+                                newExpanded.delete(category.id)
+                              } else {
+                                newExpanded.add(category.id)
+                              }
+                              setExpandedCategories(newExpanded)
+                            }}
+                            className="text-xs text-primary-main hover:text-primary-dark font-semibold flex items-center gap-1"
+                          >
+                            {expandedCategories.has(category.id) ? (
+                              <>
+                                <ChevronUp className="w-3 h-3" />
+                                Hide ({category.subCategories.length})
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-3 h-3" />
+                                View ({category.subCategories.length})
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
+                      {category.subCategories && category.subCategories.length > 0 && (
+                        <AnimatePresence>
+                          {expandedCategories.has(category.id) && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden mt-4 pt-4 border-t border-neutral-border/50"
+                            >
+                              <p className="text-xs font-semibold text-neutral-textSecondary mb-2 uppercase tracking-wide">
+                                Subcategories
+                              </p>
+                              <div className="grid grid-cols-1 gap-2">
+                                {category.subCategories.map((subCat: ServiceSubCategory) => (
+                                  <Link
+                                    key={subCat.id}
+                                    href={`/services/${category.code.toLowerCase()}/${subCat.code.toLowerCase()}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="group/subcat flex items-center justify-between p-2 rounded-lg bg-neutral-background hover:bg-primary-main/5 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {subCat.iconUrl && (
+                                        <span className="text-lg">{subCat.iconUrl}</span>
+                                      )}
+                                      <span className="text-xs font-medium text-neutral-textPrimary group-hover/subcat:text-primary-main">
+                                        {subCat.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-neutral-textSecondary">
+                                      {subCat.providerCount || 0}+
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      )}
                     </div>
                     
                     {/* Shine Effect */}

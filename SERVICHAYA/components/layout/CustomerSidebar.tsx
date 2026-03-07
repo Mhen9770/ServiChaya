@@ -1,13 +1,16 @@
 'use client'
 
 import Sidebar from './Sidebar'
-import { LayoutDashboard, Plus, Briefcase, User } from 'lucide-react'
+import { Bell, Briefcase, CircleHelp, LayoutDashboard, Plus, Sparkles, User } from 'lucide-react'
 
 export default function CustomerSidebar() {
   const items = [
     { label: 'Dashboard', href: '/customer/dashboard', icon: LayoutDashboard },
-    { label: 'Create Job', href: '/customer/jobs/create', icon: Plus },
-    { label: 'My Jobs', href: '/customer/jobs', icon: Briefcase },
+    { label: 'Book Service', href: '/customer/jobs/create', icon: Plus },
+    { label: 'My Requests', href: '/customer/jobs', icon: Briefcase },
+    { label: 'Notifications', href: '/customer/notifications', icon: Bell },
+    { label: 'Help Center', href: '/customer/help', icon: CircleHelp },
+    { label: 'About Us', href: '/customer/about', icon: Sparkles },
     { label: 'Profile', href: '/customer/profile', icon: User },
   ]
 

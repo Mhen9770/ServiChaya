@@ -1,3 +1,10 @@
+-- ============================================
+-- Flyway Migration: Master Data Only
+-- ============================================
+-- IMPORTANT: This file contains ONLY master data (INSERT/UPDATE statements)
+-- Schema changes (CREATE TABLE, ALTER TABLE, etc.) are NOT allowed here
+-- Schema is managed by JPA/Hibernate (ddl-auto: update)
+-- ============================================
 -- Service Category Master Data
 INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) VALUES
 ('AC_REPAIR', 'AC Repair & Service', 'Air conditioner installation, repair, and maintenance services', '❄️', 1, true, true, NOW(), NOW()),

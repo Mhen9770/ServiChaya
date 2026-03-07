@@ -234,6 +234,52 @@ public class MasterDataController {
         return ResponseEntity.ok(ApiResponse.success("Service category deleted successfully", "Deleted"));
     }
 
+    // ========== Service SubCategory Master ==========
+    @GetMapping("/service-subcategories")
+    public ResponseEntity<ApiResponse<Page<ServiceSubCategoryMasterDto>>> getAllServiceSubCategories(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDir) {
+        log.info("Fetching all service subcategories, page: {}, size: {}", page, size);
+        Sort sort = Sort.unsorted();
+        if (sortBy != null && !sortBy.isEmpty()) {
+            Sort.Direction direction = (sortDir != null && sortDir.equalsIgnoreCase("desc")) ? Sort.Direction.DESC : Sort.Direction.ASC;
+            sort = Sort.by(direction, sortBy);
+        }
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<ServiceSubCategoryMasterDto> subCategories = masterDataService.getAllServiceSubCategories(pageable);
+        return ResponseEntity.ok(ApiResponse.success("Service subcategories fetched successfully", subCategories));
+    }
+
+    @GetMapping("/service-subcategories/{id}")
+    public ResponseEntity<ApiResponse<ServiceSubCategoryMasterDto>> getServiceSubCategoryById(@PathVariable Long id) {
+        log.info("Fetching service subcategory by id: {}", id);
+        ServiceSubCategoryMasterDto subCategory = masterDataService.getServiceSubCategoryById(id);
+        return ResponseEntity.ok(ApiResponse.success("Service subcategory fetched successfully", subCategory));
+    }
+
+    @PostMapping("/service-subcategories")
+    public ResponseEntity<ApiResponse<ServiceSubCategoryMasterDto>> createServiceSubCategory(@RequestBody ServiceSubCategoryMasterDto dto) {
+        log.info("Creating service subcategory: {}", dto.getName());
+        ServiceSubCategoryMasterDto subCategory = masterDataService.createServiceSubCategory(dto);
+        return ResponseEntity.ok(ApiResponse.success("Service subcategory created successfully", subCategory));
+    }
+
+    @PutMapping("/service-subcategories/{id}")
+    public ResponseEntity<ApiResponse<ServiceSubCategoryMasterDto>> updateServiceSubCategory(@PathVariable Long id, @RequestBody ServiceSubCategoryMasterDto dto) {
+        log.info("Updating service subcategory id: {}", id);
+        ServiceSubCategoryMasterDto subCategory = masterDataService.updateServiceSubCategory(id, dto);
+        return ResponseEntity.ok(ApiResponse.success("Service subcategory updated successfully", subCategory));
+    }
+
+    @DeleteMapping("/service-subcategories/{id}")
+    public ResponseEntity<ApiResponse<String>> deleteServiceSubCategory(@PathVariable Long id) {
+        log.info("Deleting service subcategory id: {}", id);
+        masterDataService.deleteServiceSubCategory(id);
+        return ResponseEntity.ok(ApiResponse.success("Service subcategory deleted successfully", "Deleted"));
+    }
+
     // ========== Matching Rule Master ==========
     @GetMapping("/matching-rules")
     public ResponseEntity<ApiResponse<Page<MatchingRuleMasterDto>>> getAllMatchingRules(

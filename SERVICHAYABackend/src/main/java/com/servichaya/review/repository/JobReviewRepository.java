@@ -24,4 +24,7 @@ public interface JobReviewRepository extends JpaRepository<JobReview, Long> {
 
     @Query("SELECT COUNT(r) FROM JobReview r WHERE r.providerId = :providerId AND r.isVisible = true")
     Long getReviewCountByProviderId(@Param("providerId") Long providerId);
+
+    @Query("SELECT AVG(r.rating) FROM JobReview r WHERE r.isVisible = true AND r.rating IS NOT NULL")
+    BigDecimal calculateAverageRating();
 }
