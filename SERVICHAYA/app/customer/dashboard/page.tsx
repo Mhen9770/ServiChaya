@@ -4,189 +4,139 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import {
-  ArrowRight,
-  Bell,
-  Briefcase,
-  CalendarClock,
-  CheckCircle2,
-  IndianRupee,
-  MapPin,
-  Plus,
-  Sparkles,
-  Star,
-} from 'lucide-react'
+import { Bell, CheckCircle2, CircleDollarSign, ClipboardList, Compass, Plus, ShieldCheck, Sparkles } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { getCurrentUser } from '@/lib/auth'
 import { getCustomerJobs, type JobDto } from '@/lib/services/job'
 import { getUnreadCount } from '@/lib/services/notification'
 import { getCustomerProfile } from '@/lib/services/customer'
-import { getAllCategories, type ServiceCategory } from '@/lib/services/service'
-import { SkeletonCard } from '@/components/ui/Skeleton'
 
 export default function CustomerDashboard() {
   const router = useRouter()
-  const [jobs, setJobs] = useState<JobDto[]>([])
-  const [categories, setCategories] = useState<ServiceCategory[]>([])
-  const [unreadNotifications, setUnreadNotifications] = useState(0)
-  const [stats, setStats] = useState({ activeJobs: 0, completedJobs: 0, totalSpent: 0 })
   const [loading, setLoading] = useState(true)
+  const [jobs, setJobs] = useState<JobDto[]>([])
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, spent: 0 })
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
+    const user = getCurrentUser()
+    if (!user) {
       router.push('/login?redirect=/customer/dashboard')
       return
     }
-    if (currentUser.role !== 'CUSTOMER') {
+    if (user.role !== 'CUSTOMER') {
       router.push('/dashboard')
       return
     }
-    fetchData(currentUser.userId)
+    loadDashboard(user.userId)
   }, [router])
 
-  const fetchData = async (customerId: number) => {
+  const loadDashboard = async (userId: number) => {
     try {
       setLoading(true)
-      const [profile, jobsResult, notifications, featuredCategories] = await Promise.all([
-        getCustomerProfile(customerId).catch(() => null),
-        getCustomerJobs(customerId, 0, 5).catch(() => ({ content: [] })),
-        getUnreadCount(customerId, 'CUSTOMER').catch(() => 0),
-        getAllCategories(true).catch(() => []),
+      const [profile, jobRes, unread] = await Promise.all([
+        getCustomerProfile(userId).catch(() => null),
+        getCustomerJobs(userId, 0, 6).catch(() => ({ content: [] })),
+        getUnreadCount(userId, 'CUSTOMER').catch(() => 0),
       ])
-
-      const currentJobs = jobsResult.content || []
-      const activeJobs = currentJobs.filter((job) => ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS'].includes(job.status)).length
-      const completedJobs = profile?.completedJobs || currentJobs.filter((job) => job.status === 'COMPLETED').length
-      const totalSpent = profile?.totalSpent || currentJobs.reduce((sum, job) => sum + (job.finalPrice || 0), 0)
-
-      setStats({ activeJobs, completedJobs, totalSpent })
-      setJobs(currentJobs)
-      setUnreadNotifications(notifications || 0)
-      setCategories(featuredCategories.slice(0, 6))
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Unable to load dashboard')
+      const data = jobRes.content || []
+      const active = data.filter((j) => ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS'].includes(j.status)).length
+      const completed = profile?.completedJobs ?? data.filter((j) => j.status === 'COMPLETED').length
+      const spent = profile?.totalSpent ?? data.reduce((acc, j) => acc + (j.finalPrice || 0), 0)
+      setStats({ total: profile?.totalJobs || data.length, active, completed, spent })
+      setJobs(data)
+      setUnreadNotifications(unread || 0)
+    } catch {
+      toast.error('Failed to load dashboard')
     } finally {
       setLoading(false)
     }
   }
 
-  const activeRate = useMemo(() => {
-    const total = stats.activeJobs + stats.completedJobs
-    return total ? Math.round((stats.activeJobs / total) * 100) : 0
+  const completionRatio = useMemo(() => {
+    if (!stats.total) return 0
+    return Math.round((stats.completed / stats.total) * 100)
   }, [stats])
 
   if (loading) {
-    return (
-      <div className="px-6 py-6">
-        <div className="grid md:grid-cols-3 gap-4 mb-6">{[1, 2, 3].map((i) => <SkeletonCard key={i} />)}</div>
-      </div>
-    )
+    return <div className="px-6 py-8 text-sm text-neutral-textSecondary">Loading customer experience...</div>
   }
 
   return (
     <div className="px-6 py-6 space-y-6">
-      <section className="rounded-3xl bg-gradient-to-r from-primary-dark via-primary-main to-primary-light text-white p-7">
-        <div className="flex items-start justify-between gap-4">
+      <section className="rounded-3xl text-white bg-gradient-to-r from-slate-900 via-primary-dark to-primary-main p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-blue-100 mb-2">Customer experience portal</p>
-            <h1 className="text-3xl font-bold mb-2">Plan, book & track every home service</h1>
-            <p className="text-sm text-blue-100 max-w-2xl">
-              ServiChaya connects you with verified professionals for electrician, plumbing, cleaning and emergency support.
-            </p>
+            <p className="text-xs uppercase tracking-wide text-blue-100 mb-2">Customer command center</p>
+            <h1 className="text-3xl font-bold mb-2">Everything about your services, in one place.</h1>
+            <p className="text-sm text-blue-100 max-w-2xl">Create requests, monitor progress, and keep all details transparent from booking to completion.</p>
           </div>
-          <Link href="/customer/notifications" className="relative bg-white/20 rounded-xl p-2.5 hover:bg-white/30 transition">
+          <Link href="/customer/notifications" className="relative rounded-xl p-2.5 bg-white/15 border border-white/20 hover:bg-white/20 transition">
             <Bell className="w-5 h-5" />
-            {unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-accent-orange text-xs font-bold flex items-center justify-center">
-                {unreadNotifications > 9 ? '9+' : unreadNotifications}
-              </span>
-            )}
+            {unreadNotifications > 0 && <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-accent-orange text-[10px] flex items-center justify-center font-bold">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
           </Link>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/customer/jobs/create" className="inline-flex items-center gap-2 bg-white text-primary-main px-4 py-2 rounded-xl font-semibold">
-            <Plus className="w-4 h-4" /> New Service Request
-          </Link>
-          <Link href="/customer/about" className="inline-flex items-center gap-2 border border-white/40 px-4 py-2 rounded-xl font-semibold hover:bg-white/10">
-            <Sparkles className="w-4 h-4" /> Why ServiChaya
-          </Link>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href="/customer/jobs/create" className="inline-flex items-center gap-2 bg-white text-primary-main px-4 py-2 rounded-xl font-semibold"><Plus className="w-4 h-4" /> Create Job</Link>
+          <Link href="/customer/jobs" className="inline-flex items-center gap-2 border border-white/35 px-4 py-2 rounded-xl font-semibold">Track My Jobs</Link>
         </div>
       </section>
 
-      <section className="grid md:grid-cols-3 gap-4">
-        {[
-          { label: 'Active Jobs', value: stats.activeJobs, icon: Briefcase },
-          { label: 'Completed Jobs', value: stats.completedJobs, icon: CheckCircle2 },
-          { label: 'Total Spend', value: `₹${stats.totalSpent.toLocaleString()}`, icon: IndianRupee },
-        ].map((item) => (
-          <div key={item.label} className="bg-white border border-neutral-border rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-xl bg-primary-main/10 flex items-center justify-center text-primary-main"><item.icon className="w-5 h-5" /></div>
-              <div>
-                <p className="text-xs text-neutral-textSecondary">{item.label}</p>
-                <p className="text-2xl font-bold text-neutral-textPrimary">{item.value}</p>
-              </div>
-            </div>
-            {item.label === 'Active Jobs' && (
-              <>
-                <div className="w-full h-2 rounded-full bg-neutral-background overflow-hidden">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${activeRate}%` }} className="h-full bg-gradient-to-r from-primary-main to-primary-light" />
-                </div>
-                <p className="text-xs text-neutral-textSecondary mt-2">{activeRate}% of your jobs are currently live.</p>
-              </>
-            )}
-          </div>
-        ))}
+      <section className="grid md:grid-cols-4 gap-4">
+        <Metric icon={ClipboardList} label="Total Jobs" value={stats.total} />
+        <Metric icon={Compass} label="Active Jobs" value={stats.active} />
+        <Metric icon={CheckCircle2} label="Completed" value={stats.completed} />
+        <Metric icon={CircleDollarSign} label="Total Spent" value={`₹${stats.spent.toLocaleString()}`} />
       </section>
 
-      <section className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-neutral-border rounded-2xl p-6 shadow-sm">
+      <section className="grid lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 bg-white border border-neutral-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Recent Requests</h2>
-            <Link href="/customer/jobs" className="text-sm text-primary-main font-semibold inline-flex items-center gap-1">View all <ArrowRight className="w-4 h-4" /></Link>
+            <h2 className="font-bold text-lg">Recent service requests</h2>
+            <Link href="/customer/jobs" className="text-sm text-primary-main font-semibold">View all</Link>
           </div>
           {jobs.length === 0 ? (
-            <div className="text-sm text-neutral-textSecondary bg-neutral-background rounded-xl p-4">No jobs yet. Create your first service request.</div>
+            <p className="text-sm text-neutral-textSecondary">No jobs yet. Your journey starts with a new service request.</p>
           ) : (
             <div className="space-y-3">
               {jobs.map((job) => (
-                <Link key={job.id} href={`/customer/jobs/${job.id}`} className="block border border-neutral-border rounded-xl p-4 hover:border-primary-main/30 hover:bg-primary-main/[0.03] transition">
-                  <p className="font-semibold text-sm text-neutral-textPrimary">{job.title}</p>
-                  <div className="mt-2 text-xs text-neutral-textSecondary flex flex-wrap gap-3">
-                    <span className="inline-flex items-center gap-1"><CalendarClock className="w-3 h-3" />{new Date(job.createdAt).toLocaleDateString()}</span>
-                    <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{job.cityId ? `City #${job.cityId}` : 'Location TBD'}</span>
-                    <span className="font-medium text-primary-main">{job.status}</span>
+                <Link key={job.id} href={`/customer/jobs/${job.id}`} className="block rounded-xl border border-neutral-border p-4 hover:border-primary-main/40 transition">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-sm">{job.title}</p>
+                    <span className="text-xs px-2 py-1 rounded-full bg-primary-main/10 text-primary-main font-semibold">{job.status}</span>
                   </div>
+                  <p className="text-xs text-neutral-textSecondary mt-1 line-clamp-2">{job.description}</p>
+                  <div className="mt-2 text-xs text-neutral-textSecondary">{new Date(job.createdAt).toLocaleString()}</div>
                 </Link>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-white border border-neutral-border rounded-2xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold mb-4">Popular service categories</h2>
-          <div className="grid sm:grid-cols-2 gap-3 mb-5">
-            {categories.length > 0 ? categories.map((category) => (
-              <div key={category.id} className="rounded-xl border border-neutral-border p-3">
-                <p className="text-sm font-semibold text-neutral-textPrimary">{category.name}</p>
-                <p className="text-xs text-neutral-textSecondary mt-1 line-clamp-2">{category.description || 'Trusted partners available in your area.'}</p>
-              </div>
-            )) : (
-              <div className="text-sm text-neutral-textSecondary">Categories will appear when loaded from the master data.</div>
-            )}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white border border-neutral-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-bold mb-3">Progress snapshot</h3>
+          <div className="rounded-xl bg-neutral-background p-4 mb-4">
+            <p className="text-sm font-semibold">Completion rate: {completionRatio}%</p>
+            <div className="mt-2 h-2 rounded-full bg-white overflow-hidden"><div className="h-full bg-gradient-to-r from-primary-main to-primary-light" style={{ width: `${completionRatio}%` }} /></div>
           </div>
-          <div className="rounded-xl bg-neutral-background p-4">
-            <h3 className="font-semibold text-sm mb-2 inline-flex items-center gap-2"><Star className="w-4 h-4 text-accent-orange" />Customer promise</h3>
-            <ul className="text-xs text-neutral-textSecondary space-y-1 list-disc list-inside">
-              <li>Verified & background-checked professionals</li>
-              <li>Transparent pricing and real-time updates</li>
-              <li>Easy support and quick issue resolution</li>
-            </ul>
-          </div>
-        </div>
+          <ul className="space-y-2 text-xs text-neutral-textSecondary mb-5">
+            <li className="inline-flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5 text-accent-green" /> Verified professionals in network</li>
+            <li className="inline-flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-accent-orange" /> Transparent pricing and timeline visibility</li>
+          </ul>
+          <Link href="/customer/about" className="inline-flex text-sm font-semibold text-primary-main">Learn more about ServiChaya</Link>
+        </motion.div>
       </section>
     </div>
+  )
+}
+
+function Metric({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string | number }) {
+  return (
+    <article className="bg-white border border-neutral-border rounded-2xl p-4 shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-primary-main/10 text-primary-main flex items-center justify-center mb-2"><Icon className="w-5 h-5" /></div>
+      <p className="text-xs text-neutral-textSecondary">{label}</p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+    </article>
   )
 }
