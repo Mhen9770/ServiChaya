@@ -1,5 +1,6 @@
 package com.servichaya.service.service;
 
+import com.servichaya.job.repository.JobMasterRepository;
 import com.servichaya.service.dto.ServiceCategoryDto;
 import com.servichaya.service.dto.ServiceSubCategoryDto;
 import com.servichaya.service.entity.ServiceCategoryMaster;
@@ -22,6 +23,7 @@ public class ServiceCategoryService {
 
     private final ServiceCategoryMasterRepository categoryRepository;
     private final ServiceSubCategoryService subCategoryService;
+    private final JobMasterRepository jobRepository;
 
     public List<ServiceCategoryDto> getAllActiveCategories() {
         log.debug("Getting all active service categories");
@@ -91,6 +93,15 @@ public class ServiceCategoryService {
             log.warn("Error fetching subcategories for categoryId: {}", category.getId(), e);
         }
         
+        // Calculate provider count: distinct providers who have completed jobs in this category
+        Long providerCount = 0L;
+        try {
+            Long count = jobRepository.countDistinctProvidersByCategoryId(category.getId());
+            providerCount = count != null ? count : 0L;
+        } catch (Exception e) {
+            log.warn("Error calculating provider count for categoryId: {}", category.getId(), e);
+        }
+        
         return ServiceCategoryDto.builder()
                 .id(category.getId())
                 .code(category.getCode())
@@ -99,7 +110,7 @@ public class ServiceCategoryService {
                 .iconUrl(category.getIconUrl())
                 .displayOrder(category.getDisplayOrder())
                 .isFeatured(category.getIsFeatured())
-                .providerCount(0L) // TODO: Calculate actual provider count
+                .providerCount(providerCount)
                 .subCategories(subCategories)
                 .build();
     }

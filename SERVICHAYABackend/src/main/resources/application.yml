@@ -1,7 +1,6 @@
 spring:
   application:
     name: servichaya-backend
-  
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/servichaya?createDatabaseIfNotExist=true
     username: ${MYSQL_USER:root}
@@ -24,7 +23,7 @@ spring:
     open-in-view: false
   
   flyway:
-    enabled: false
+    enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true

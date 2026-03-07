@@ -86,4 +86,20 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
             @Param("budgetMin") java.math.BigDecimal budgetMin,
             @Param("budgetMax") java.math.BigDecimal budgetMax,
             Pageable pageable);
+
+    // Count distinct providers who have completed jobs in a category
+    @Query("SELECT COUNT(DISTINCT j.providerId) FROM JobMaster j " +
+           "WHERE j.serviceCategoryId = :categoryId " +
+           "AND j.providerId IS NOT NULL " +
+           "AND j.status = 'COMPLETED' " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Long countDistinctProvidersByCategoryId(@Param("categoryId") Long categoryId);
+
+    // Count distinct providers who have completed jobs in a subcategory
+    @Query("SELECT COUNT(DISTINCT j.providerId) FROM JobMaster j " +
+           "WHERE j.serviceSubCategoryId = :subCategoryId " +
+           "AND j.providerId IS NOT NULL " +
+           "AND j.status = 'COMPLETED' " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Long countDistinctProvidersBySubCategoryId(@Param("subCategoryId") Long subCategoryId);
 }
