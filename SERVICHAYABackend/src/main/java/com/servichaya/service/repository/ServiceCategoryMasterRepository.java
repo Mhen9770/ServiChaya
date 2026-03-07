@@ -1,0 +1,21 @@
+package com.servichaya.service.repository;
+
+import com.servichaya.service.entity.ServiceCategoryMaster;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface ServiceCategoryMasterRepository extends JpaRepository<ServiceCategoryMaster, Long> {
+
+    Optional<ServiceCategoryMaster> findByCode(String code);
+
+    @Query("SELECT s FROM ServiceCategoryMaster s WHERE s.isActive = true ORDER BY s.displayOrder ASC, s.name ASC")
+    List<ServiceCategoryMaster> findAllActiveOrdered();
+
+    @Query("SELECT s FROM ServiceCategoryMaster s WHERE s.isActive = true AND s.isFeatured = true ORDER BY s.displayOrder ASC")
+    List<ServiceCategoryMaster> findFeaturedCategories();
+}

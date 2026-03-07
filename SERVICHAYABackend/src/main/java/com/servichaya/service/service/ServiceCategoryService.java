@@ -1,0 +1,94 @@
+package com.servichaya.service.service;
+
+import com.servichaya.service.dto.ServiceCategoryDto;
+import com.servichaya.service.entity.ServiceCategoryMaster;
+import com.servichaya.service.repository.ServiceCategoryMasterRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+@Slf4j
+public class ServiceCategoryService {
+
+    private final ServiceCategoryMasterRepository categoryRepository;
+
+    public List<ServiceCategoryDto> getAllActiveCategories() {
+        log.debug("Getting all active service categories");
+        try {
+            List<ServiceCategoryMaster> categories = categoryRepository.findAllActiveOrdered();
+            log.info("Retrieved {} active service categories", categories.size());
+            return categories.stream()
+                    .map(this::mapToDto)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error getting all active categories", e);
+            throw e;
+        }
+    }
+
+    public List<ServiceCategoryDto> getFeaturedCategories() {
+        log.debug("Getting featured service categories");
+        try {
+            List<ServiceCategoryMaster> categories = categoryRepository.findFeaturedCategories();
+            log.info("Retrieved {} featured service categories", categories.size());
+            return categories.stream()
+                    .map(this::mapToDto)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error getting featured categories", e);
+            throw e;
+        }
+    }
+
+    public ServiceCategoryDto getCategoryById(Long id) {
+        log.debug("Getting service category by id: {}", id);
+        try {
+            ServiceCategoryMaster category = categoryRepository.findById(id)
+                    .orElseThrow(() -> {
+                        log.error("Category not found for id: {}", id);
+                        return new RuntimeException("Category not found");
+                    });
+            log.debug("Category found, id: {}, name: {}", id, category.getName());
+            return mapToDto(category);
+        } catch (Exception e) {
+            log.error("Error getting category by id: {}", id, e);
+            throw e;
+        }
+    }
+
+    public ServiceCategoryDto getCategoryByCode(String code) {
+        log.debug("Getting service category by code: {}", code);
+        try {
+            ServiceCategoryMaster category = categoryRepository.findByCode(code)
+                    .orElseThrow(() -> {
+                        log.error("Category not found for code: {}", code);
+                        return new RuntimeException("Category not found");
+                    });
+            log.debug("Category found, code: {}, name: {}", code, category.getName());
+            return mapToDto(category);
+        } catch (Exception e) {
+            log.error("Error getting category by code: {}", code, e);
+            throw e;
+        }
+    }
+
+    private ServiceCategoryDto mapToDto(ServiceCategoryMaster category) {
+        return ServiceCategoryDto.builder()
+                .id(category.getId())
+                .code(category.getCode())
+                .name(category.getName())
+                .description(category.getDescription())
+                .iconUrl(category.getIconUrl())
+                .displayOrder(category.getDisplayOrder())
+                .isFeatured(category.getIsFeatured())
+                .providerCount(0L) // TODO: Calculate actual provider count
+                .build();
+    }
+}

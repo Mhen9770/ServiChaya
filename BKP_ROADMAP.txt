@@ -1,0 +1,5575 @@
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 1 / 10
+SYSTEM VISION, ARCHITECTURE, AND GLOBAL DEVELOPMENT RULES
+
+------------------------------------------------------------
+1. PLATFORM OVERVIEW
+------------------------------------------------------------
+
+Platform Name: SERVIXA
+
+Meaning:
+Service + Nexus (A connected ecosystem of services and workforce)
+
+Platform Goal:
+To build a trusted ecosystem where customers can:
+
+1) Book instant services (repair, maintenance etc.)
+2) Hire workforce (maid, gardener, driver, etc.)
+3) Manage home service history
+4) Interact with verified service professionals
+5) Track service lifecycle
+
+The platform will support three primary user groups:
+
+CUSTOMER
+SERVICE PROVIDER
+PLATFORM ADMIN
+
+Future users may include:
+
+SUPPLIERS
+WORKFORCE CONTRACTORS
+PARTNERS
+
+The platform must remain scalable and generic so that
+new services, workforce types, and cities can be added
+without code changes.
+
+------------------------------------------------------------
+2. DOMAIN STRUCTURE
+------------------------------------------------------------
+
+All applications share the SAME CODE BASE.
+
+Different domains activate different features using RBAC.
+
+Domains:
+
+customer.servixa.com
+partner.servixa.com
+admin.servixa.com
+
+Each domain loads the same backend but UI components and features are controlled by ROLE.
+
+------------------------------------------------------------
+3. CUSTOMER ACCESS MODEL
+------------------------------------------------------------
+
+Customer application must remain PUBLIC.
+
+Users should be able to explore the platform without registration.
+
+Customer registration must only be required when the user performs
+a critical action such as:
+
+Posting a job
+Saving address
+Booking a service
+Hiring workforce
+
+This removes friction and improves onboarding.
+
+Customer exploration features available without login:
+
+Browse services
+View technicians
+View workforce profiles
+View pricing ranges
+View city coverage
+
+Registration flow must appear only when required.
+
+------------------------------------------------------------
+4. TECH STACK
+------------------------------------------------------------
+
+BACKEND
+
+Java 21
+Spring Boot
+Spring Security
+Spring Data JPA
+Feign Client
+MySQL
+Redis
+
+FRONTEND
+
+Next.js
+React
+Tailwind CSS
+Framer Motion
+Shadcn UI
+TypeScript
+
+AI LAYER
+
+LLM
+RAG Knowledge Base
+Vector Storage
+
+INFRASTRUCTURE
+
+Docker
+Nginx
+Cloud Storage
+CDN
+
+------------------------------------------------------------
+5. CORE ARCHITECTURE
+------------------------------------------------------------
+
+Architecture Type:
+
+MODULAR MONOLITH
+
+Must be convertible to MICROSERVICES later.
+
+Every module split into two layers.
+
+API MODULE
+SERVICE MODULE
+
+Example:
+
+org-auth-api
+org-auth-service
+
+user-api
+user-service
+
+booking-api
+booking-service
+
+provider-api
+provider-service
+
+workforce-api
+workforce-service
+
+------------------------------------------------------------
+6. MODULE STRUCTURE
+------------------------------------------------------------
+
+Each module must contain two packages.
+
+API MODULE CONTAINS:
+
+Feign Clients
+Request DTO
+Response DTO
+Interface Controllers
+
+SERVICE MODULE CONTAINS:
+
+Controller Implementation
+Service Implementation
+Repository
+Entity
+Business Logic
+Configuration
+
+------------------------------------------------------------
+7. INTER-MODULE COMMUNICATION RULE
+------------------------------------------------------------
+
+Modules must depend ONLY on API modules.
+
+Example:
+
+booking-service
+depends on
+user-api
+
+Never depend on:
+
+user-service
+
+Feign client defined in API module.
+
+Controller in service module implements same interface.
+
+Example:
+
+UserController (API interface)
+
+@RestController
+UserControllerImpl implements UserController
+
+Feign client calls UserController interface.
+
+------------------------------------------------------------
+8. FEIGN + LOCAL CONTROLLER BEHAVIOR
+------------------------------------------------------------
+
+If only API dependency added:
+
+Feign client used.
+
+If SERVICE dependency added:
+
+Local controller implementation used.
+
+This allows easy migration to microservices.
+
+------------------------------------------------------------
+9. DATABASE
+------------------------------------------------------------
+
+Database: MySQL
+
+Rules:
+
+Avoid hardcoding values.
+
+Use MASTER TABLES.
+
+Example:
+
+SERVICE_TYPE_MASTER
+JOB_STATUS_MASTER
+USER_ROLE_MASTER
+SKILL_MASTER
+WORK_TYPE_MASTER
+CITY_MASTER
+ZONE_MASTER
+POD_MASTER
+
+Master data must be unmodifiable or controlled via admin.
+
+------------------------------------------------------------
+10. GEO LOCATION MODEL
+------------------------------------------------------------
+
+Geo location must be stored for all primary actors.
+
+Customer
+Service Provider
+Workforce Worker
+
+Required fields:
+
+latitude
+longitude
+city_id
+zone_id
+pod_id
+
+This enables location-based matching and data isolation.
+
+------------------------------------------------------------
+11. POD BASED SERVICE MODEL
+------------------------------------------------------------
+
+Technicians and workforce operate in geographic clusters
+called PODS.
+
+Structure:
+
+CITY
+ZONE
+POD
+WORKERS / PROVIDERS
+
+Example:
+
+City: Indore
+Zone: Vijay Nagar
+Pod: Vijay Nagar Pod
+
+Each POD contains:
+
+Service providers
+Workforce workers
+Customer requests
+
+------------------------------------------------------------
+12. POD DATA ACCESS RULE
+------------------------------------------------------------
+
+Users should only see relevant data.
+
+Example:
+
+If Service Provider works in Pod A
+they must not see Pod B data.
+
+If Admin manages City A
+they should not see City B data.
+
+Benefits:
+
+Reduced database load
+Improved performance
+Better data security
+Simplified UI
+
+------------------------------------------------------------
+13. ADMIN PANEL DATA ISOLATION
+------------------------------------------------------------
+
+Admin panel must also follow POD based data access.
+
+Admin roles:
+
+SUPER_ADMIN
+CITY_ADMIN
+ZONE_ADMIN
+SUPPORT_AGENT
+
+Example permissions:
+
+SUPER_ADMIN
+Access all cities
+
+CITY_ADMIN
+Access only assigned city
+
+ZONE_ADMIN
+Access only assigned zones
+
+SUPPORT_AGENT
+Limited support access
+
+------------------------------------------------------------
+14. PERFORMANCE RULES
+------------------------------------------------------------
+
+System must follow strict performance practices.
+
+RULE 1
+
+Load only required fields using Interface Projections.
+
+RULE 2
+
+Use Native Queries for complex joins.
+
+RULE 3
+
+Use database views when query complexity increases.
+
+RULE 4
+
+Avoid N+1 queries.
+
+RULE 5
+
+Use pagination everywhere.
+
+RULE 6
+
+Never load full tables.
+
+RULE 7
+
+Filtering must be done in backend.
+
+UI must never filter datasets locally.
+
+------------------------------------------------------------
+15. SOLID PRINCIPLES
+------------------------------------------------------------
+
+System must follow SOLID principles.
+
+Single Responsibility
+Open Closed
+Liskov Substitution
+Interface Segregation
+Dependency Inversion
+
+Business logic must stay inside SERVICE layer only.
+
+Controllers must remain thin.
+
+------------------------------------------------------------
+16. GENERIC SYSTEM DESIGN
+------------------------------------------------------------
+
+Avoid hardcoding anywhere.
+
+Examples:
+
+Bad:
+
+if serviceType == "AC_REPAIR"
+
+Good:
+
+Fetch service type from SERVICE_MASTER table.
+
+All enums should be database-driven when possible.
+
+------------------------------------------------------------
+17. RBAC SYSTEM
+------------------------------------------------------------
+
+Role Based Access Control required.
+
+Roles:
+
+SUPER_ADMIN
+ADMIN
+CITY_ADMIN
+ZONE_ADMIN
+SUPPORT_AGENT
+CUSTOMER
+SERVICE_PROVIDER
+WORKFORCE
+
+Permissions must be stored in database.
+
+Tables:
+
+ROLE_MASTER
+PERMISSION_MASTER
+ROLE_PERMISSION_MAP
+
+------------------------------------------------------------
+18. FEATURE FLAG SYSTEM
+------------------------------------------------------------
+
+Feature flags required especially for Service Providers.
+
+Examples:
+
+ENABLE_AI_ASSISTANT
+ENABLE_PRIORITY_JOBS
+ENABLE_ANALYTICS
+ENABLE_PREMIUM_LISTING
+
+Feature flags stored in:
+
+FEATURE_FLAG_MASTER
+USER_FEATURE_FLAG
+
+------------------------------------------------------------
+19. AUTHENTICATION
+------------------------------------------------------------
+
+Customer authentication options:
+
+Google Login
+Mobile OTP Login
+
+Customer registration required only when user
+posts their first job.
+
+Service provider authentication:
+
+Email + Password
+Mobile OTP
+
+Admin authentication:
+
+Email + Password
+2FA recommended.
+
+------------------------------------------------------------
+20. SERVICE PROVIDER ONBOARDING
+------------------------------------------------------------
+
+Two onboarding flows.
+
+SELF ONBOARDING
+
+Provider registers
+Uploads documents
+Select skills
+Select service area
+Verification
+Approval
+
+ADMIN ONBOARDING
+
+Admin creates provider profile
+Assign skills
+Assign service areas
+Assign POD
+Activate account
+
+------------------------------------------------------------
+21. WORKFORCE HIRING TYPES
+------------------------------------------------------------
+
+Hourly work
+Daily work
+Weekly work
+Monthly work
+Contract based work
+
+Examples:
+
+Gardener twice weekly
+Maid daily
+Driver monthly
+Security guard contract
+
+------------------------------------------------------------
+22. UI DESIGN PRINCIPLES
+------------------------------------------------------------
+
+Design must feel modern and futuristic.
+
+Rules:
+
+Rounded components
+Soft shadows
+Glass UI effects
+Smooth transitions
+Micro animations
+
+Color system:
+
+Primary Blue
+Secondary Green
+Accent Amber
+Dark background
+
+Font:
+
+Inter
+Poppins
+
+------------------------------------------------------------
+23. ANIMATION RULES
+------------------------------------------------------------
+
+Use Framer Motion.
+
+Animations:
+
+Page transitions
+Hover states
+Card expansion
+Loading skeletons
+Progress bars
+
+Avoid heavy animation.
+
+------------------------------------------------------------
+24. FRONTEND RULES
+------------------------------------------------------------
+
+Frontend must be a pure UI layer.
+
+Rules:
+
+No filtering in frontend.
+No business logic in frontend.
+All operations via backend APIs.
+
+Always use:
+
+Pagination
+Sorting
+Multiple filters
+
+------------------------------------------------------------
+END OF CHUNK 1
+
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 2 / 10
+DETAILED DATABASE DESIGN AND CORE DATA MODEL
+
+====================================================================
+1. DATABASE DESIGN PRINCIPLES
+====================================================================
+
+Database Engine: MySQL
+
+Goals:
+
+1) Avoid schema changes later
+2) Support multi-city scaling
+3) POD based data isolation
+4) High query performance
+5) Flexible master-data driven system
+
+Naming Conventions
+
+table_name -> snake_case
+column_name -> snake_case
+primary_key -> id
+foreign_key -> <entity>_id
+
+All tables must include audit columns.
+
+STANDARD AUDIT COLUMNS
+
+id (BIGINT PRIMARY KEY AUTO_INCREMENT)
+created_at (DATETIME)
+updated_at (DATETIME)
+created_by (BIGINT)
+updated_by (BIGINT)
+is_deleted (BOOLEAN DEFAULT FALSE)
+
+====================================================================
+2. GEO LOCATION STRUCTURE
+====================================================================
+
+Hierarchy
+
+COUNTRY
+STATE
+CITY
+ZONE
+POD
+
+Example
+
+India
+Madhya Pradesh
+Indore
+Vijay Nagar
+Pod A
+
+--------------------------------------------------------------------
+
+TABLE: country_master
+
+id
+country_code
+country_name
+currency_code
+phone_code
+is_active
+
+--------------------------------------------------------------------
+
+TABLE: state_master
+
+id
+country_id
+state_code
+state_name
+is_active
+
+--------------------------------------------------------------------
+
+TABLE: city_master
+
+id
+state_id
+city_code
+city_name
+latitude
+longitude
+timezone
+population
+is_serviceable
+is_active
+
+INDEXES
+
+(state_id)
+(city_code)
+
+--------------------------------------------------------------------
+
+TABLE: zone_master
+
+id
+city_id
+zone_code
+zone_name
+latitude
+longitude
+service_priority
+is_active
+
+INDEXES
+
+(city_id)
+
+--------------------------------------------------------------------
+
+TABLE: pod_master
+
+id
+city_id
+zone_id
+pod_code
+pod_name
+latitude
+longitude
+service_radius_km
+max_providers
+max_workforce
+is_active
+
+INDEXES
+
+(city_id, zone_id)
+
+====================================================================
+3. USER ACCOUNT SYSTEM
+====================================================================
+
+TABLE: user_account
+
+id
+first_name
+last_name
+full_name
+email
+mobile_number
+password_hash
+profile_image_url
+gender
+date_of_birth
+account_status
+last_login_at
+email_verified
+mobile_verified
+registration_source
+is_active
+
+registration_source examples
+
+GOOGLE
+MOBILE_OTP
+ADMIN_CREATED
+
+INDEXES
+
+(mobile_number)
+(email)
+
+--------------------------------------------------------------------
+
+TABLE: user_role_master
+
+id
+role_code
+role_name
+description
+is_system_role
+is_active
+
+VALUES
+
+SUPER_ADMIN
+ADMIN
+CITY_ADMIN
+ZONE_ADMIN
+SUPPORT_AGENT
+CUSTOMER
+SERVICE_PROVIDER
+WORKFORCE
+
+--------------------------------------------------------------------
+
+TABLE: user_role_map
+
+id
+user_id
+role_id
+assigned_at
+assigned_by
+
+INDEXES
+
+(user_id)
+(role_id)
+
+--------------------------------------------------------------------
+
+TABLE: permission_master
+
+id
+permission_code
+permission_name
+module_name
+description
+is_active
+
+--------------------------------------------------------------------
+
+TABLE: role_permission_map
+
+id
+role_id
+permission_id
+
+INDEXES
+
+(role_id)
+(permission_id)
+
+====================================================================
+4. USER LOCATION SYSTEM
+====================================================================
+
+TABLE: user_address
+
+id
+user_id
+address_label
+address_line1
+address_line2
+landmark
+pincode
+city_id
+zone_id
+pod_id
+latitude
+longitude
+is_primary
+is_verified
+
+INDEXES
+
+(user_id)
+(city_id)
+(pod_id)
+
+====================================================================
+5. FEATURE FLAG SYSTEM
+====================================================================
+
+TABLE: feature_flag_master
+
+id
+feature_code
+feature_name
+description
+default_enabled
+is_active
+
+EXAMPLES
+
+ENABLE_AI_ASSISTANT
+ENABLE_PRIORITY_JOBS
+ENABLE_PREMIUM_PROVIDER
+ENABLE_ANALYTICS
+
+--------------------------------------------------------------------
+
+TABLE: user_feature_flag
+
+id
+user_id
+feature_flag_id
+is_enabled
+activated_at
+
+====================================================================
+6. SERVICE CATEGORY SYSTEM
+====================================================================
+
+TABLE: service_category_master
+
+id
+category_code
+category_name
+description
+icon_url
+display_order
+is_active
+
+EXAMPLES
+
+AC_REPAIR
+PLUMBING
+ELECTRICAL
+CLEANING
+APPLIANCE_REPAIR
+
+--------------------------------------------------------------------
+
+TABLE: service_master
+
+id
+category_id
+service_code
+service_name
+description
+service_type
+estimated_duration_minutes
+base_price
+min_price
+max_price
+requires_parts
+requires_diagnosis
+is_emergency_service
+is_active
+
+INDEXES
+
+(category_id)
+(service_code)
+
+--------------------------------------------------------------------
+
+TABLE: service_skill_master
+
+id
+skill_code
+skill_name
+description
+is_active
+
+EXAMPLES
+
+AC_TECHNICIAN
+PLUMBER
+ELECTRICIAN
+CARPENTER
+APPLIANCE_TECHNICIAN
+
+--------------------------------------------------------------------
+
+TABLE: service_skill_map
+
+id
+service_id
+skill_id
+
+====================================================================
+7. SERVICE PROVIDER SYSTEM
+====================================================================
+
+TABLE: service_provider_profile
+
+id
+user_id
+provider_code
+business_name
+provider_type
+experience_years
+rating
+rating_count
+total_jobs_completed
+verification_status
+is_available
+is_online
+background_verified
+police_verified
+avg_response_time_minutes
+profile_status
+
+provider_type examples
+
+INDIVIDUAL
+BUSINESS
+
+--------------------------------------------------------------------
+
+TABLE: provider_skill_map
+
+id
+provider_id
+skill_id
+experience_years
+certification_name
+certification_document_url
+
+INDEXES
+
+(provider_id)
+
+--------------------------------------------------------------------
+
+TABLE: provider_pod_map
+
+id
+provider_id
+city_id
+zone_id
+pod_id
+service_radius_km
+is_primary
+
+INDEXES
+
+(provider_id)
+(pod_id)
+
+====================================================================
+8. WORKFORCE SYSTEM
+====================================================================
+
+TABLE: workforce_profile
+
+id
+user_id
+worker_code
+worker_type
+experience_years
+rating
+rating_count
+availability_status
+expected_salary_min
+expected_salary_max
+background_verified
+police_verified
+profile_status
+
+worker_type examples
+
+MAID
+GARDENER
+DRIVER
+SECURITY_GUARD
+COOK
+
+--------------------------------------------------------------------
+
+TABLE: workforce_skill_map
+
+id
+workforce_id
+skill_id
+experience_years
+
+--------------------------------------------------------------------
+
+TABLE: workforce_pod_map
+
+id
+workforce_id
+city_id
+zone_id
+pod_id
+service_radius_km
+
+INDEXES
+
+(workforce_id)
+(pod_id)
+
+====================================================================
+9. JOB SYSTEM
+====================================================================
+
+TABLE: job_type_master
+
+id
+job_type_code
+job_type_name
+description
+
+VALUES
+
+INSTANT_SERVICE
+WORKFORCE_HIRING
+
+--------------------------------------------------------------------
+
+TABLE: job_status_master
+
+id
+status_code
+status_name
+description
+display_order
+
+VALUES
+
+REQUESTED
+MATCHING
+ASSIGNED
+ACCEPTED
+ON_THE_WAY
+STARTED
+COMPLETED
+CANCELLED
+FAILED
+
+--------------------------------------------------------------------
+
+TABLE: job_request
+
+id
+job_code
+job_type_id
+customer_id
+service_id
+city_id
+zone_id
+pod_id
+address_id
+description
+preferred_schedule_time
+scheduled_time
+estimated_price
+final_price
+currency
+job_status_id
+is_emergency
+attachments
+ai_diagnosis
+priority_level
+
+INDEXES
+
+(customer_id)
+(service_id)
+(pod_id)
+(job_status_id)
+
+--------------------------------------------------------------------
+
+TABLE: job_assignment
+
+id
+job_id
+provider_id
+assignment_status
+assigned_at
+accepted_at
+started_at
+completed_at
+cancelled_at
+rejection_reason
+
+INDEXES
+
+(job_id)
+(provider_id)
+
+====================================================================
+10. WORKFORCE HIRING SYSTEM
+====================================================================
+
+TABLE: workforce_job
+
+id
+job_code
+customer_id
+worker_type
+job_title
+job_description
+work_type
+salary_offer
+salary_currency
+city_id
+zone_id
+pod_id
+job_status_id
+start_date
+end_date
+working_hours
+contract_duration_months
+
+work_type examples
+
+HOURLY
+DAILY
+WEEKLY
+MONTHLY
+CONTRACT
+
+--------------------------------------------------------------------
+
+TABLE: workforce_application
+
+id
+job_id
+worker_id
+application_status
+expected_salary
+cover_message
+applied_at
+
+--------------------------------------------------------------------
+
+TABLE: workforce_contract
+
+id
+job_id
+worker_id
+contract_start_date
+contract_end_date
+salary_amount
+payment_cycle
+working_days
+working_hours
+contract_status
+
+====================================================================
+11. PAYMENT SYSTEM
+====================================================================
+
+TABLE: payment_transaction
+
+id
+payment_reference
+job_id
+customer_id
+provider_id
+amount
+platform_fee
+tax_amount
+currency
+payment_method
+payment_status
+payment_gateway
+transaction_time
+
+INDEXES
+
+(job_id)
+(customer_id)
+
+====================================================================
+12. RATING SYSTEM
+====================================================================
+
+TABLE: review_rating
+
+id
+job_id
+customer_id
+provider_id
+rating
+review_text
+review_status
+created_at
+
+====================================================================
+13. SERVICE HISTORY
+====================================================================
+
+TABLE: home_service_history
+
+id
+customer_id
+service_id
+provider_id
+job_id
+service_date
+notes
+attachments
+
+====================================================================
+14. PERFORMANCE INDEX RULES
+====================================================================
+
+Create indexes for
+
+city_id
+zone_id
+pod_id
+provider_id
+customer_id
+job_id
+status_id
+
+Composite indexes
+
+(city_id, pod_id)
+(provider_id, job_status_id)
+(customer_id, job_status_id)
+
+====================================================================
+END OF CHUNK 2
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 3 / 10
+CUSTOMER APPLICATION, UI NAVIGATION, AND JOB CREATION WORKFLOW
+
+====================================================================
+1. CUSTOMER APPLICATION OVERVIEW
+====================================================================
+
+Customer application is accessible without registration.
+
+Users can explore the platform freely.
+
+Registration is required only when the user performs critical actions.
+
+Examples:
+
+Posting a job
+Hiring workforce
+Saving address
+Making payments
+
+Customer Application Domains
+
+customer.servixa.com
+
+Core Customer Features
+
+Browse services
+Explore technicians
+Explore workforce
+AI problem assistant
+Post service job
+Hire workforce
+Track job progress
+View service history
+Manage addresses
+Profile management
+
+====================================================================
+2. CUSTOMER APPLICATION NAVIGATION
+====================================================================
+
+Main Navigation Menu
+
+Home
+Explore Services
+Hire Workers
+Emergency Service
+My Jobs
+Service History
+Profile
+
+Navigation Rules
+
+All data filtering must be handled by backend APIs.
+
+Frontend should not apply any filtering logic.
+
+All tables must support:
+
+Pagination
+Sorting
+Multiple filters
+
+====================================================================
+3. CUSTOMER HOME PAGE
+====================================================================
+
+UI Sections
+
+1) Search Bar
+2) AI Assistant
+3) Popular Services
+4) Workforce Hiring
+5) Nearby Technicians
+6) Emergency Services
+7) Recent Jobs
+
+Search Bar
+
+Allows customers to search services.
+
+Example search queries
+
+AC repair
+plumber near me
+maid
+gardener
+
+Backend API
+
+GET /services/search
+
+====================================================================
+4. AI ASSISTANT ENTRY POINT
+====================================================================
+
+Primary entry point for job creation.
+
+Customer can interact using:
+
+Text
+Voice
+Image upload
+
+Example conversation
+
+Customer
+
+"My AC is not cooling."
+
+AI analyzes problem.
+
+AI may ask follow-up questions.
+
+Example
+
+AI
+
+"Is the AC turning on?"
+
+Customer
+
+"Yes"
+
+AI
+
+"Is there any unusual noise?"
+
+Customer
+
+"No"
+
+AI builds structured job data.
+
+====================================================================
+5. AI PROBLEM ANALYSIS WORKFLOW
+====================================================================
+
+Step 1
+
+Customer describes problem.
+
+Step 2
+
+AI performs classification using RAG knowledge.
+
+Example output
+
+service_category: AC_REPAIR
+service_type: GAS_REFILL
+estimated_price_range: 800-1500
+estimated_duration: 45 minutes
+
+Step 3
+
+AI asks clarifying questions if needed.
+
+Step 4
+
+AI generates structured job data.
+
+Step 5
+
+System opens verification form.
+
+====================================================================
+6. AI GENERATED JOB FORM
+====================================================================
+
+Once AI finishes conversation, system generates
+a pre-filled job form.
+
+Fields automatically filled by AI.
+
+Example
+
+Service Category
+Service Type
+Problem Description
+Suggested Technician Type
+Estimated Price Range
+Estimated Duration
+
+User must verify and edit if necessary.
+
+Fields in form
+
+Service Category (dropdown)
+Service Type (dropdown)
+Problem Description
+Attachments
+Preferred Time
+Address
+Emergency Toggle
+
+Buttons
+
+Edit
+Confirm
+Cancel
+
+Backend API
+
+POST /jobs/create
+
+====================================================================
+7. JOB CREATION DATA FLOW
+====================================================================
+
+Customer → AI Assistant
+AI → Problem classification
+AI → Structured job draft
+System → Pre-filled form
+Customer → Verify fields
+Customer → Submit job
+Backend → Job created
+System → Matching algorithm starts
+
+====================================================================
+8. JOB MATCHING PROCESS
+====================================================================
+
+Matching based on
+
+Skill match
+Distance
+Provider rating
+Provider availability
+Success rate
+Pod location
+
+Matching flow
+
+1) Identify POD
+2) Fetch providers in POD
+3) Score providers
+4) Notify top providers
+
+====================================================================
+9. JOB TRACKING SCREEN
+====================================================================
+
+Customer can track job lifecycle.
+
+Job states
+
+REQUESTED
+MATCHING
+ASSIGNED
+TECHNICIAN_ACCEPTED
+ON_THE_WAY
+STARTED
+COMPLETED
+
+UI Sections
+
+Job Details
+Technician Profile
+Live Status
+Chat
+Payment
+
+Backend API
+
+GET /jobs/{jobId}
+
+====================================================================
+10. HIRE WORKERS FEATURE
+====================================================================
+
+Customer can hire workforce.
+
+Examples
+
+Maid
+Driver
+Gardener
+Cook
+Security guard
+
+Navigation
+
+Home → Hire Workers
+
+Filters
+
+Worker Type
+Experience
+Salary Range
+Availability
+Location
+
+Backend API
+
+GET /workforce/search
+
+====================================================================
+11. WORKFORCE JOB POSTING FLOW
+====================================================================
+
+Customer creates hiring request.
+
+Fields
+
+Worker Type
+Job Title
+Description
+Work Type
+Salary
+Location
+Schedule
+
+Work Types
+
+Hourly
+Daily
+Weekly
+Monthly
+Contract
+
+Backend API
+
+POST /workforce/job/create
+
+====================================================================
+12. WORKFORCE APPLICATION FLOW
+====================================================================
+
+Worker applies to job.
+
+Customer sees applications.
+
+Customer can
+
+View worker profile
+Chat with worker
+Accept worker
+
+Backend API
+
+GET /workforce/job/{jobId}/applications
+
+====================================================================
+13. CUSTOMER PROFILE PAGE
+====================================================================
+
+Sections
+
+Personal Info
+Saved Addresses
+Payment Methods
+Notification Settings
+Account Security
+
+Backend APIs
+
+GET /customer/profile
+PUT /customer/profile
+
+====================================================================
+14. ADDRESS MANAGEMENT
+====================================================================
+
+Customer can store multiple addresses.
+
+Address Fields
+
+Address Label
+Address Line
+City
+Zone
+Pod
+Latitude
+Longitude
+Pincode
+
+Backend APIs
+
+POST /address
+GET /address/list
+
+====================================================================
+15. SERVICE HISTORY
+====================================================================
+
+Customer can view previous service records.
+
+Example
+
+AC repair
+Pipe replacement
+Washing machine repair
+
+Backend API
+
+GET /customer/service-history
+
+====================================================================
+16. CUSTOMER NOTIFICATIONS
+====================================================================
+
+Notifications include
+
+Job accepted
+Technician on the way
+Job completed
+Payment confirmation
+
+Notification channels
+
+Push notification
+SMS
+Email
+
+====================================================================
+17. UI DESIGN RULES
+====================================================================
+
+Use modern UI design.
+
+Components
+
+Rounded cards
+Glass backgrounds
+Soft shadows
+Gradient highlights
+
+Typography
+
+Inter
+Poppins
+
+Animations
+
+Framer Motion
+
+Transitions
+
+Fade
+Slide
+Scale
+
+====================================================================
+18. UI COMPONENT SYSTEM
+====================================================================
+
+Use reusable UI components.
+
+Examples
+
+Service Card
+Technician Card
+Worker Card
+Job Timeline
+AI Chat Widget
+Form Components
+
+All components must be modular.
+
+====================================================================
+END OF CHUNK 3
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 4 / 10
+SERVICE PROVIDER APPLICATION, ONBOARDING, DASHBOARD, AND JOB EXECUTION WORKFLOW
+
+====================================================================
+1. SERVICE PROVIDER APPLICATION OVERVIEW
+====================================================================
+
+Service Provider application is used by technicians and service
+businesses to receive and execute jobs.
+
+Domain
+
+partner.servixa.com
+
+User types in this application
+
+SERVICE_PROVIDER (Technician / Individual)
+SERVICE_PROVIDER_BUSINESS (Company)
+WORKFORCE (For contract workers like maid, gardener, driver)
+
+The application must allow providers to:
+
+Receive jobs
+Manage service areas
+Update availability
+Track earnings
+Manage profile and skills
+Communicate with customers
+Track job performance
+
+====================================================================
+2. PROVIDER REGISTRATION ENTRY
+====================================================================
+
+Service Providers can join platform in two ways.
+
+SELF ONBOARDING
+ADMIN ONBOARDING
+
+SELF ONBOARDING FLOW
+
+Step 1
+Open partner.servixa.com
+
+Step 2
+Register using:
+
+Mobile OTP
+Email + Password
+
+Step 3
+Basic profile creation.
+
+Step 4
+Upload documents.
+
+Step 5
+Select skills.
+
+Step 6
+Select service areas (PODS).
+
+Step 7
+Verification.
+
+Step 8
+Admin approval.
+
+====================================================================
+3. PROVIDER PROFILE CREATION
+====================================================================
+
+Fields collected during onboarding
+
+Basic Information
+
+First Name
+Last Name
+Mobile Number
+Email
+Profile Image
+
+Professional Information
+
+Provider Type
+Experience Years
+Primary Skill
+Secondary Skills
+Business Name (optional)
+
+Verification
+
+Government ID
+Police Verification (optional)
+Certification Documents
+
+Service Capability
+
+Service Categories
+Skill Tags
+Emergency Service Capability
+
+====================================================================
+4. SERVICE AREA SELECTION
+====================================================================
+
+Provider must select service areas.
+
+Selection Hierarchy
+
+City
+Zone
+Pod
+
+Example
+
+City: Indore
+Zone: Vijay Nagar
+Pod: Pod A
+
+Provider can select multiple pods.
+
+Table Mapping
+
+provider_pod_map
+
+This controls job matching.
+
+====================================================================
+5. PROVIDER DASHBOARD
+====================================================================
+
+Main navigation
+
+Dashboard
+Available Jobs
+My Jobs
+Calendar
+Earnings
+Ratings
+Profile
+Settings
+
+Dashboard widgets
+
+Today's Jobs
+Upcoming Jobs
+Pending Requests
+Total Earnings
+Customer Ratings
+
+Backend API
+
+GET /provider/dashboard
+
+====================================================================
+6. AVAILABLE JOBS SCREEN
+====================================================================
+
+Shows nearby jobs from provider pods.
+
+Filters
+
+Service Type
+Distance
+Estimated Price
+Urgency
+
+Displayed information
+
+Job Title
+Customer Location
+Estimated Price
+Distance
+Time Requested
+
+Provider actions
+
+View Job
+Accept Job
+Reject Job
+
+Backend API
+
+GET /provider/jobs/available
+
+====================================================================
+7. JOB ACCEPTANCE FLOW
+====================================================================
+
+Step 1
+
+Provider receives job notification.
+
+Step 2
+
+Provider reviews job details.
+
+Step 3
+
+Provider accepts job.
+
+Step 4
+
+System assigns provider.
+
+Job status changes
+
+REQUESTED -> ASSIGNED -> ACCEPTED
+
+Backend API
+
+POST /provider/job/accept
+
+====================================================================
+8. JOB EXECUTION FLOW
+====================================================================
+
+Provider job lifecycle.
+
+ACCEPTED
+ON_THE_WAY
+STARTED
+COMPLETED
+
+Provider actions
+
+Mark On The Way
+Start Job
+Upload work photos
+Complete Job
+
+Completion form
+
+Final price
+Parts used
+Notes
+
+Backend API
+
+POST /provider/job/start
+POST /provider/job/complete
+
+====================================================================
+9. PROVIDER JOB SCREEN
+====================================================================
+
+Sections
+
+Customer Details
+Job Description
+Location Map
+Chat
+Timeline
+Payment Info
+
+Features
+
+Navigation to customer location
+Chat with customer
+Upload work images
+Update job status
+
+====================================================================
+10. PROVIDER CALENDAR
+====================================================================
+
+Providers can manage their schedule.
+
+Calendar views
+
+Daily
+Weekly
+Monthly
+
+Provider can
+
+Block dates
+Set working hours
+Manage availability
+
+Backend APIs
+
+POST /provider/availability
+GET /provider/calendar
+
+====================================================================
+11. PROVIDER EARNINGS
+====================================================================
+
+Provider earnings dashboard.
+
+Metrics
+
+Daily earnings
+Weekly earnings
+Monthly earnings
+Total earnings
+
+Tables
+
+Completed Jobs
+Payment History
+Platform Fees
+
+Backend API
+
+GET /provider/earnings
+
+====================================================================
+12. PROVIDER RATINGS
+====================================================================
+
+Providers receive ratings from customers.
+
+Metrics
+
+Average rating
+Total reviews
+Response time
+Completion rate
+
+Backend API
+
+GET /provider/reviews
+
+====================================================================
+13. PROVIDER PROFILE MANAGEMENT
+====================================================================
+
+Editable fields
+
+Profile picture
+Skills
+Service categories
+Experience
+Service areas
+
+Verification fields editable only by admin.
+
+Backend API
+
+PUT /provider/profile
+
+====================================================================
+14. PROVIDER NOTIFICATIONS
+====================================================================
+
+Providers receive notifications for
+
+New job requests
+Job cancellations
+Payment updates
+Customer messages
+
+Notification channels
+
+Push notification
+SMS
+In-app notification
+
+====================================================================
+15. WORKFORCE PROVIDER MODE
+====================================================================
+
+If provider role = WORKFORCE
+
+Dashboard includes
+
+Available contracts
+My contracts
+Applications
+Work schedule
+
+Workers can
+
+Apply for jobs
+Track contract work
+Update availability
+
+Backend API
+
+GET /workforce/jobs
+POST /workforce/apply
+
+====================================================================
+16. PROVIDER PERFORMANCE METRICS
+====================================================================
+
+System must track provider performance.
+
+Metrics
+
+Job completion rate
+Acceptance rate
+Cancellation rate
+Average rating
+Average response time
+
+These metrics affect job matching.
+
+====================================================================
+17. AI TECHNICIAN ASSISTANT
+====================================================================
+
+Providers can ask AI for repair guidance.
+
+Example
+
+Provider asks
+
+"AC outdoor unit making noise"
+
+AI responds with possible causes.
+
+Possible responses
+
+Loose fan
+Compressor issue
+Mounting problem
+
+AI assistant uses RAG knowledge base.
+
+====================================================================
+18. PROVIDER UI DESIGN RULES
+====================================================================
+
+UI should focus on speed.
+
+Technicians must be able to update job status quickly.
+
+Use large buttons for actions
+
+Start Job
+Complete Job
+Navigate
+
+Design principles
+
+Minimal clicks
+Clear status indicators
+Color coded job states
+
+====================================================================
+19. PROVIDER DATA ACCESS CONTROL
+====================================================================
+
+Providers must only see jobs in their pods.
+
+Query filters must include
+
+city_id
+zone_id
+pod_id
+
+This ensures
+
+Performance
+Security
+Relevant job visibility
+
+====================================================================
+20. PROVIDER ANALYTICS
+====================================================================
+
+Advanced analytics for providers.
+
+Metrics
+
+Peak job hours
+Popular services
+Customer repeat rate
+
+These insights help providers improve performance.
+
+Backend API
+
+GET /provider/analytics
+
+====================================================================
+END OF CHUNK 4
+
+
+
+
+
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 5 / 10
+WORKFORCE HIRING SYSTEM (MAID, GARDENER, DRIVER, SECURITY, ETC.)
+
+====================================================================
+1. WORKFORCE HIRING SYSTEM OVERVIEW
+====================================================================
+
+The workforce hiring system allows customers to hire workers for
+recurring or contract-based work.
+
+This feature expands the platform beyond instant services.
+
+Examples of workforce roles
+
+Maid
+Gardener
+Cook
+Driver
+Security Guard
+Caretaker
+Cleaner
+Office Helper
+Shop Assistant
+
+The workforce system is different from instant services.
+
+Instant service example
+
+Fix AC
+Repair plumbing
+Electric wiring
+
+Workforce hiring example
+
+Hire maid for daily work
+Hire gardener twice per week
+Hire driver monthly
+Hire security guard for contract
+
+====================================================================
+2. WORKFORCE USER TYPES
+====================================================================
+
+There are two primary roles in this module.
+
+WORKFORCE WORKER
+
+Individuals looking for jobs.
+
+Examples
+
+Maid
+Driver
+Cook
+Gardener
+
+CUSTOMER
+
+People hiring workers.
+
+====================================================================
+3. WORKFORCE REGISTRATION
+====================================================================
+
+Workforce workers can register using
+
+Mobile OTP
+Admin Onboarding
+
+Fields collected during registration
+
+Basic Information
+
+First Name
+Last Name
+Mobile Number
+Profile Photo
+Gender
+Age
+
+Professional Information
+
+Worker Type
+Experience Years
+Languages Spoken
+Skills
+
+Verification
+
+Government ID
+Police Verification
+Reference Contacts
+
+Location
+
+City
+Zone
+Pod
+
+====================================================================
+4. WORKER PROFILE PAGE
+====================================================================
+
+Worker profile must display
+
+Profile Photo
+Worker Type
+Experience
+Languages
+Skills
+Ratings
+Previous Work History
+
+Availability
+
+Full Time
+Part Time
+Contract
+
+Expected Salary Range
+
+Minimum Salary
+Maximum Salary
+
+====================================================================
+5. WORKFORCE SKILL SYSTEM
+====================================================================
+
+Skills must be stored in master table.
+
+Examples
+
+COOKING
+HOUSE_CLEANING
+BABY_CARE
+GARDEN_MAINTENANCE
+DRIVING
+SECURITY
+
+Workers may have multiple skills.
+
+Table
+
+workforce_skill_map
+
+====================================================================
+6. WORKFORCE DISCOVERY SYSTEM
+====================================================================
+
+Customers can search workers.
+
+Navigation
+
+Home -> Hire Workers
+
+Filters
+
+Worker Type
+Experience
+Rating
+Expected Salary
+Location
+Availability
+
+Backend API
+
+GET /workforce/search
+
+Search results show
+
+Worker name
+Experience
+Ratings
+Salary expectation
+Distance
+
+====================================================================
+7. WORKFORCE JOB POSTING
+====================================================================
+
+Customers create hiring request.
+
+Fields
+
+Worker Type
+Job Title
+Description
+Work Type
+Salary Offered
+Work Location
+Working Hours
+Start Date
+
+Work Types
+
+HOURLY
+DAILY
+WEEKLY
+MONTHLY
+CONTRACT
+
+Example
+
+Worker Type: Gardener
+Work Type: Weekly
+Salary: ₹300 per visit
+
+Backend API
+
+POST /workforce/job/create
+
+====================================================================
+8. WORKFORCE JOB MATCHING
+====================================================================
+
+Matching algorithm uses
+
+Worker skill
+Distance
+Experience
+Rating
+Pod location
+Salary expectation
+
+Matching Flow
+
+1) Identify POD
+2) Fetch workers in POD
+3) Rank workers
+4) Show workers to customer
+
+====================================================================
+9. WORKFORCE APPLICATION SYSTEM
+====================================================================
+
+Workers can apply to jobs.
+
+Worker actions
+
+View job
+Apply for job
+Send message
+
+Application includes
+
+Expected salary
+Short message
+
+Backend API
+
+POST /workforce/job/apply
+
+====================================================================
+10. CUSTOMER REVIEW APPLICATIONS
+====================================================================
+
+Customer sees applications list.
+
+Information displayed
+
+Worker name
+Experience
+Rating
+Expected salary
+Message
+
+Customer actions
+
+View profile
+Chat with worker
+Accept worker
+Reject worker
+
+Backend API
+
+GET /workforce/job/{jobId}/applications
+
+====================================================================
+11. WORKFORCE CONTRACT SYSTEM
+====================================================================
+
+Once customer selects worker a contract is created.
+
+Contract fields
+
+Worker ID
+Customer ID
+Salary
+Payment Cycle
+Working Days
+Working Hours
+Start Date
+End Date
+
+Payment cycles
+
+Weekly
+Monthly
+
+====================================================================
+12. WORKFORCE CONTRACT DASHBOARD
+====================================================================
+
+Workers can see their contracts.
+
+Sections
+
+Active contracts
+Upcoming contracts
+Completed contracts
+
+Information displayed
+
+Customer name
+Location
+Salary
+Schedule
+
+Backend API
+
+GET /workforce/contracts
+
+====================================================================
+13. WORKER SCHEDULE SYSTEM
+====================================================================
+
+Workers manage availability.
+
+Fields
+
+Working days
+Working hours
+Vacation days
+
+Calendar view
+
+Weekly schedule
+Monthly schedule
+
+====================================================================
+14. WORKFORCE PAYMENTS
+====================================================================
+
+Payment options
+
+Customer pays directly
+Platform managed payments
+
+Platform commission may apply.
+
+Payment tracking includes
+
+Salary amount
+Platform fee
+Payment status
+
+====================================================================
+15. WORKER PERFORMANCE TRACKING
+====================================================================
+
+Metrics tracked
+
+Attendance
+Completion rate
+Customer ratings
+Contract completion
+
+These affect worker visibility in search results.
+
+====================================================================
+16. WORKFORCE RATING SYSTEM
+====================================================================
+
+Customers rate workers after contract periods.
+
+Rating scale
+
+1 to 5 stars
+
+Feedback includes
+
+Work quality
+Punctuality
+Communication
+
+====================================================================
+17. SAFETY FEATURES
+====================================================================
+
+Workforce verification options
+
+Government ID verification
+Police verification
+Reference checks
+
+Customers must see verification badges.
+
+====================================================================
+18. POD BASED WORKFORCE ACCESS
+====================================================================
+
+Workers only appear in jobs within their pods.
+
+Example
+
+Worker in Pod A
+Cannot see jobs in Pod B.
+
+Queries must always filter by
+
+city_id
+zone_id
+pod_id
+
+====================================================================
+19. WORKFORCE NOTIFICATIONS
+====================================================================
+
+Workers receive notifications for
+
+New job opportunities
+Application updates
+Contract approvals
+Payment updates
+
+Channels
+
+Push notification
+SMS
+In-app notification
+
+====================================================================
+20. WORKFORCE UI DESIGN
+====================================================================
+
+Worker dashboard must be simple.
+
+Main navigation
+
+Dashboard
+Available Jobs
+My Contracts
+Schedule
+Earnings
+Profile
+
+Design goals
+
+Minimal complexity
+Large action buttons
+Quick job application
+
+====================================================================
+END OF CHUNK 5
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 6 / 10
+JOB ENGINE, MATCHING SYSTEM, POD LOGIC, AND COMPLETE JOB LIFECYCLE
+
+====================================================================
+1. JOB ENGINE OVERVIEW
+====================================================================
+
+The Job Engine is the core orchestration system of the platform.
+
+Responsibilities
+
+Create jobs
+Match providers
+Track job lifecycle
+Manage job state transitions
+Handle cancellations
+Handle reassignment
+Trigger notifications
+Record service history
+
+The job engine must be designed as a reusable module
+so that it supports both:
+
+Instant Service Jobs
+Workforce Hiring Jobs
+
+--------------------------------------------------------------------
+
+JOB TYPES
+
+INSTANT_SERVICE
+
+Example
+
+AC repair
+Plumbing repair
+Electric work
+
+WORKFORCE_HIRING
+
+Example
+
+Maid
+Driver
+Gardener
+Security guard
+
+Both job types share some core structures but
+have different execution logic.
+
+====================================================================
+2. JOB CREATION FLOW (AI FIRST DESIGN)
+====================================================================
+
+The job creation flow is AI assisted.
+
+Step 1
+
+Customer opens AI Assistant.
+
+Step 2
+
+Customer describes problem.
+
+Example
+
+"My AC is not cooling."
+
+Step 3
+
+AI uses RAG knowledge base to classify problem.
+
+Step 4
+
+AI asks clarifying questions.
+
+Example
+
+Is AC turning on?
+Is there any noise?
+
+Step 5
+
+AI generates structured job draft.
+
+Step 6
+
+System opens a verification form prefilled with AI data.
+
+Step 7
+
+Customer reviews and edits fields.
+
+Step 8
+
+Customer submits job.
+
+Backend API
+
+POST /jobs/create
+
+====================================================================
+3. JOB DATA STRUCTURE
+====================================================================
+
+Job fields include
+
+job_code
+job_type
+customer_id
+service_id
+city_id
+zone_id
+pod_id
+address_id
+problem_description
+preferred_schedule_time
+scheduled_time
+estimated_price
+final_price
+priority_level
+attachments
+ai_diagnosis
+
+priority levels
+
+NORMAL
+HIGH
+EMERGENCY
+
+====================================================================
+4. POD BASED JOB DISTRIBUTION
+====================================================================
+
+Jobs must be distributed based on POD.
+
+Process
+
+Step 1
+
+Identify customer pod using location.
+
+Step 2
+
+Find providers mapped to that pod.
+
+Step 3
+
+Calculate provider score.
+
+Step 4
+
+Notify top providers.
+
+Providers outside the pod must not receive the job.
+
+Benefits
+
+Faster response
+Lower travel time
+Reduced system load
+
+====================================================================
+5. PROVIDER MATCHING ALGORITHM
+====================================================================
+
+Matching score is calculated using weighted parameters.
+
+Parameters
+
+Skill match
+Distance
+Provider rating
+Acceptance rate
+Completion rate
+Availability
+
+Example formula
+
+score =
+(skill_match * 40) +
+(distance_score * 20) +
+(rating_score * 20) +
+(availability_score * 20)
+
+Providers sorted by highest score.
+
+====================================================================
+6. PROVIDER NOTIFICATION SYSTEM
+====================================================================
+
+Top ranked providers receive job notifications.
+
+Notification channels
+
+Push notification
+SMS
+In-app notification
+
+Notification includes
+
+Job title
+Location
+Estimated price
+Distance
+
+Provider actions
+
+Accept job
+Reject job
+
+Timeout logic
+
+If provider does not respond in defined time,
+system moves to next provider.
+
+====================================================================
+7. JOB ASSIGNMENT
+====================================================================
+
+When provider accepts job.
+
+System performs
+
+Lock job
+Assign provider
+Update job status
+
+State transition
+
+REQUESTED -> ASSIGNED -> ACCEPTED
+
+Backend API
+
+POST /provider/job/accept
+
+====================================================================
+8. JOB STATUS STATE MACHINE
+====================================================================
+
+Job must follow strict lifecycle.
+
+States
+
+REQUESTED
+MATCHING
+ASSIGNED
+ACCEPTED
+ON_THE_WAY
+STARTED
+COMPLETED
+CANCELLED
+FAILED
+
+State transitions must be validated in backend.
+
+Invalid transitions must be blocked.
+
+Example
+
+STARTED cannot move back to ACCEPTED.
+
+====================================================================
+9. PROVIDER JOB EXECUTION
+====================================================================
+
+Provider actions during job.
+
+Mark On The Way
+Start Job
+Upload work photos
+Add service notes
+Complete job
+
+Completion form fields
+
+Final price
+Parts used
+Work notes
+Attachments
+
+Backend API
+
+POST /provider/job/start
+POST /provider/job/complete
+
+====================================================================
+10. JOB CANCELLATION SYSTEM
+====================================================================
+
+Jobs can be cancelled by
+
+Customer
+Provider
+Admin
+System timeout
+
+Cancellation reasons stored.
+
+Examples
+
+Customer not available
+Incorrect job description
+Provider unavailable
+
+Cancellation fees may apply.
+
+====================================================================
+11. JOB REASSIGNMENT
+====================================================================
+
+If provider cancels job.
+
+System must reassign.
+
+Process
+
+Mark provider as rejected
+Recalculate matching score
+Notify next provider
+
+This prevents job failure.
+
+====================================================================
+12. JOB CHAT SYSTEM
+====================================================================
+
+Customer and provider can communicate.
+
+Chat types
+
+Text messages
+Image sharing
+Voice notes
+
+Chat stored in database.
+
+Chat linked with job_id.
+
+====================================================================
+13. JOB LOCATION TRACKING
+====================================================================
+
+Provider location updates required.
+
+Use mobile GPS.
+
+Customer sees
+
+Provider location
+Estimated arrival time
+
+Location updates every defined interval.
+
+====================================================================
+14. JOB MEDIA SYSTEM
+====================================================================
+
+Providers can upload photos.
+
+Examples
+
+Before repair
+During repair
+After repair
+
+Stored in cloud storage.
+
+Media linked to job_id.
+
+====================================================================
+15. JOB PAYMENT FLOW
+====================================================================
+
+Payment occurs after job completion.
+
+Flow
+
+Provider completes job
+Customer reviews final price
+Customer makes payment
+Platform deducts commission
+Provider receives payout
+
+Payment status
+
+PENDING
+PAID
+FAILED
+REFUNDED
+
+====================================================================
+16. JOB REVIEW SYSTEM
+====================================================================
+
+After payment customer is prompted for review.
+
+Fields
+
+Rating (1 to 5)
+Review text
+Service feedback
+
+Review affects provider rating.
+
+====================================================================
+17. JOB HISTORY SYSTEM
+====================================================================
+
+All jobs recorded in service history.
+
+Fields
+
+Service type
+Provider name
+Date
+Price
+Notes
+
+Customer can view full repair history.
+
+====================================================================
+18. EMERGENCY SERVICE MODE
+====================================================================
+
+Emergency jobs bypass standard queue.
+
+Matching criteria
+
+Closest provider
+Online provider only
+
+Emergency services include
+
+Electrical faults
+Water leaks
+Gas leakage
+
+====================================================================
+19. JOB ANALYTICS
+====================================================================
+
+Platform must track job metrics.
+
+Metrics
+
+Total jobs per city
+Average completion time
+Most requested services
+Provider performance
+
+Analytics helps improve operations.
+
+====================================================================
+20. JOB ENGINE PERFORMANCE RULES
+====================================================================
+
+Always filter queries by
+
+city_id
+zone_id
+pod_id
+
+Use pagination for job lists.
+
+Use interface projections for job summaries.
+
+Avoid loading full job objects unless required.
+
+====================================================================
+END OF CHUNK 6
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 7 / 10
+AI SYSTEM ARCHITECTURE, RAG KNOWLEDGE BASE, AND INTELLIGENT FEATURES
+
+====================================================================
+1. AI SYSTEM OVERVIEW
+====================================================================
+
+AI is a support layer for the Servixa platform.
+
+AI must not control the system directly.
+
+AI must only assist with:
+
+Problem understanding
+Job classification
+Technician recommendations
+Price estimation
+Troubleshooting guidance
+Customer support
+Provider support
+Fraud detection
+Demand prediction
+
+Final system decisions must always remain deterministic
+and handled by backend services.
+
+AI should operate as a separate module so it can be
+replaced or upgraded without affecting the core platform.
+
+--------------------------------------------------------------------
+
+AI MODULE RESPONSIBILITIES
+
+Problem classification
+Conversation management
+Knowledge retrieval
+Recommendation generation
+Structured data extraction
+
+--------------------------------------------------------------------
+
+AI LAYER ARCHITECTURE
+
+Customer App / Provider App
+        |
+        v
+Spring Boot Backend
+        |
+        v
+AI Orchestrator Service
+        |
+        +--- RAG Knowledge Store
+        |
+        +--- LLM API
+        |
+        +--- Vector Database
+        |
+        +--- Domain Knowledge Data
+
+====================================================================
+2. AI ORCHESTRATION SERVICE
+====================================================================
+
+Create a dedicated module.
+
+ai-api
+ai-service
+
+Responsibilities
+
+Manage AI prompts
+Manage RAG retrieval
+Process AI responses
+Convert AI output into structured objects
+
+All AI interactions must pass through this layer.
+
+Example APIs
+
+POST /ai/analyze-problem
+POST /ai/generate-job
+POST /ai/provider-assist
+POST /ai/customer-support
+
+====================================================================
+3. RAG (RETRIEVAL AUGMENTED GENERATION)
+====================================================================
+
+RAG allows AI to use platform-specific knowledge.
+
+Without RAG
+
+AI responses may be generic or inaccurate.
+
+With RAG
+
+AI responses use Servixa domain knowledge.
+
+Sources for knowledge
+
+Service troubleshooting guides
+Pricing guidelines
+Repair manuals
+Skill mappings
+Technician procedures
+
+====================================================================
+4. VECTOR DATABASE
+====================================================================
+
+Vector database stores knowledge embeddings.
+
+Each document converted into embeddings.
+
+Customer query converted into embedding.
+
+Vector similarity search retrieves relevant documents.
+
+Possible technologies
+
+pgvector
+Weaviate
+Pinecone
+
+Recommended
+
+pgvector (since MySQL is used for primary data,
+vector store can run separately or via PostgreSQL).
+
+====================================================================
+5. KNOWLEDGE DOCUMENT STRUCTURE
+====================================================================
+
+Each knowledge document must contain
+
+document_id
+document_type
+title
+content
+service_category
+tags
+embedding_vector
+
+Document types
+
+TROUBLESHOOTING_GUIDE
+PRICE_GUIDE
+REPAIR_PROCEDURE
+SERVICE_DESCRIPTION
+SAFETY_GUIDE
+
+====================================================================
+6. AI PROBLEM CLASSIFICATION
+====================================================================
+
+AI analyzes customer messages.
+
+Example input
+
+"My washing machine is shaking violently."
+
+AI output
+
+service_category: APPLIANCE_REPAIR
+service_type: WASHING_MACHINE_REPAIR
+possible_issue: drum imbalance
+estimated_duration: 60 minutes
+
+This data is used to generate job draft.
+
+====================================================================
+7. AI CONVERSATION MANAGEMENT
+====================================================================
+
+AI conversation must be multi-step.
+
+Example flow
+
+Customer
+
+"My AC is not cooling."
+
+AI
+
+"Is the AC turning on?"
+
+Customer
+
+"Yes"
+
+AI
+
+"Is there any noise?"
+
+Customer
+
+"No"
+
+AI builds structured job data.
+
+Conversation state stored in database.
+
+Tables
+
+ai_conversation
+ai_message_log
+
+====================================================================
+8. AI GENERATED JOB FORM
+====================================================================
+
+After AI conversation ends
+
+System generates job draft.
+
+Fields generated
+
+Service category
+Service type
+Problem description
+Estimated price
+Estimated duration
+Technician skill required
+
+System then opens verification form.
+
+Customer confirms or edits fields.
+
+After confirmation
+
+Job is created in job engine.
+
+====================================================================
+9. AI PRICE ESTIMATION
+====================================================================
+
+AI estimates price using
+
+Historical job prices
+Service complexity
+City price variation
+
+Example output
+
+Estimated price range
+
+₹700 – ₹1200
+
+Final price decided by provider.
+
+====================================================================
+10. AI TECHNICIAN ASSISTANT
+====================================================================
+
+Providers can ask AI questions during jobs.
+
+Example
+
+Provider asks
+
+"AC outdoor unit vibrating heavily."
+
+AI response
+
+Possible causes
+
+Loose fan blade
+Compressor mount issue
+Improper installation
+
+AI retrieves relevant troubleshooting guide.
+
+====================================================================
+11. AI IMAGE ANALYSIS
+====================================================================
+
+Customers and providers can upload images.
+
+AI analyzes image to detect possible problems.
+
+Examples
+
+AC leak
+Pipe leakage
+Broken wiring
+Appliance damage
+
+AI suggests possible diagnosis.
+
+====================================================================
+12. AI FRAUD DETECTION
+====================================================================
+
+AI can monitor suspicious behavior.
+
+Examples
+
+Unusually high pricing
+Repeated job cancellations
+Fake reviews
+Fake job completions
+
+Suspicious patterns flagged for admin review.
+
+====================================================================
+13. AI DEMAND PREDICTION
+====================================================================
+
+AI analyzes historical job data.
+
+Example
+
+AC repair demand increases in summer.
+
+AI predicts upcoming demand.
+
+Platform can prepare provider supply accordingly.
+
+====================================================================
+14. AI MAINTENANCE PREDICTION
+====================================================================
+
+AI uses service history.
+
+Example
+
+AC serviced 12 months ago.
+
+AI suggests maintenance.
+
+Customer receives notification.
+
+====================================================================
+15. AI CUSTOMER SUPPORT BOT
+====================================================================
+
+AI handles common customer queries.
+
+Examples
+
+Where is my technician?
+How much will repair cost?
+How to cancel job?
+
+AI reduces load on support agents.
+
+====================================================================
+16. AI PROMPT MANAGEMENT
+====================================================================
+
+Prompts must be stored in database.
+
+Table
+
+ai_prompt_template
+
+Fields
+
+prompt_name
+prompt_content
+version
+is_active
+
+Allows prompt updates without redeploying system.
+
+====================================================================
+17. AI RESPONSE VALIDATION
+====================================================================
+
+AI responses must always be validated.
+
+Example
+
+AI suggests service category.
+
+Backend verifies service exists in master table.
+
+Invalid outputs must be rejected.
+
+====================================================================
+18. AI DATA PRIVACY
+====================================================================
+
+AI must not expose sensitive information.
+
+Do not send:
+
+Customer personal data
+Payment details
+Internal system data
+
+Only send minimal required context.
+
+====================================================================
+19. AI PERFORMANCE RULES
+====================================================================
+
+Cache AI responses when possible.
+
+Example
+
+Repeated troubleshooting queries.
+
+Use Redis caching.
+
+Timeout AI requests after defined time.
+
+Fallback to default logic if AI fails.
+
+====================================================================
+20. FUTURE AI CAPABILITIES
+====================================================================
+
+Voice-based service booking
+Predictive technician routing
+Dynamic pricing optimization
+Smart technician training assistant
+Service quality monitoring
+
+AI will gradually evolve with platform data.
+
+====================================================================
+END OF CHUNK 7
+
+
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 8 / 10
+ADMIN PANEL, PERMISSION SYSTEM, POD BASED DATA CONTROL, AND PLATFORM OPERATIONS
+
+====================================================================
+1. ADMIN PANEL OVERVIEW
+====================================================================
+
+The Admin Panel manages the entire platform.
+
+Domain
+
+admin.servixa.com
+
+The admin panel controls
+
+Users
+Service Providers
+Workforce Workers
+Cities, Zones, Pods
+Services and Skills
+Bookings and Jobs
+Payments
+Feature Flags
+AI configuration
+Reports
+System settings
+User Access Management
+
+Admin panel must implement a PERMISSION BASED ACCESS SYSTEM.
+
+--------------------------------------------------------------------
+
+Admin panel will NOT use role-based access.
+
+Instead it uses:
+
+USER
+USER GROUP
+USER ACTION (PERMISSION)
+
+Users can belong to multiple groups.
+
+Groups contain sets of actions.
+
+UI and backend access must depend on actions.
+
+====================================================================
+2. ACCESS CONTROL DESIGN
+====================================================================
+
+Entities
+
+USER
+USER_GROUP
+USER_ACTION
+
+Relationships
+
+User -> belongs to multiple groups
+
+Group -> contains multiple actions
+
+Action -> represents a permission
+
+Example
+
+USER
+   ↓
+GROUPS
+   ↓
+ACTIONS
+
+Example
+
+User: Rajesh
+
+Groups
+
+Support Team
+City Operations
+
+Permissions inherited
+
+VIEW_JOB
+EDIT_JOB
+REASSIGN_PROVIDER
+VIEW_CUSTOMER
+
+====================================================================
+3. USER ACTION (PERMISSION) SYSTEM
+====================================================================
+
+User actions represent permissions.
+
+Examples
+
+CREATE_PROVIDER
+EDIT_PROVIDER
+APPROVE_PROVIDER
+VIEW_USERS
+EDIT_USERS
+VIEW_PAYMENTS
+REFUND_PAYMENT
+CREATE_SERVICE
+EDIT_SERVICE
+DELETE_SERVICE
+VIEW_REPORTS
+EXPORT_REPORTS
+
+Actions must be stored in database.
+
+Table
+
+user_action_master
+
+Fields
+
+action_code
+action_name
+module_name
+description
+is_active
+
+====================================================================
+4. USER GROUP SYSTEM
+====================================================================
+
+User groups define permission sets.
+
+Examples
+
+SUPPORT_TEAM
+CITY_OPERATIONS
+FINANCE_TEAM
+PROVIDER_APPROVAL_TEAM
+SYSTEM_ADMIN
+
+Table
+
+user_group_master
+
+Fields
+
+group_code
+group_name
+description
+is_active
+
+--------------------------------------------------------------------
+
+TABLE
+
+user_group_action_map
+
+Fields
+
+group_id
+action_id
+
+This table defines permissions for groups.
+
+====================================================================
+5. USER GROUP MEMBERSHIP
+====================================================================
+
+Admin users belong to groups.
+
+Table
+
+admin_user_group_map
+
+Fields
+
+user_id
+group_id
+
+A user can belong to multiple groups.
+
+Permissions are union of all groups.
+
+====================================================================
+6. USER ACTION EVALUATION
+====================================================================
+
+Permission check flow.
+
+User logs in.
+
+System fetches
+
+User Groups
+Group Actions
+
+System builds permission list.
+
+Example
+
+User permissions
+
+CREATE_PROVIDER
+APPROVE_PROVIDER
+VIEW_USERS
+
+UI must render elements based on permissions.
+
+Example
+
+Add Button visible only if
+
+CREATE_PROVIDER
+
+Edit Button visible only if
+
+EDIT_PROVIDER
+
+Approve Button visible only if
+
+APPROVE_PROVIDER
+
+Backend must validate permissions for every API.
+
+====================================================================
+7. ROLE SYSTEM FOR CUSTOMER AND PROVIDERS
+====================================================================
+
+Customer and Service Provider platforms remain ROLE BASED.
+
+Roles
+
+CUSTOMER
+SERVICE_PROVIDER
+WORKFORCE
+
+These roles determine application behavior.
+
+Example
+
+CUSTOMER
+
+Access customer UI
+Create jobs
+Hire workers
+
+SERVICE_PROVIDER
+
+Accept jobs
+Execute jobs
+
+WORKFORCE
+
+Apply for contracts
+
+Role table
+
+user_role_master
+
+Role mapping
+
+user_role_map
+
+====================================================================
+8. ADMIN USER CREATION
+====================================================================
+
+Admin users must only be created through admin panel.
+
+Fields
+
+First Name
+Last Name
+Email
+Mobile Number
+Assigned Groups
+City Scope
+Zone Scope
+Pod Scope
+
+Admin cannot register publicly.
+
+Backend APIs
+
+POST /admin/user/create
+PUT /admin/user/update
+
+====================================================================
+9. POD BASED DATA ACCESS
+====================================================================
+
+Admin data access must also follow POD rules.
+
+Scopes
+
+City Scope
+Zone Scope
+Pod Scope
+
+Example
+
+City Admin
+
+Access only assigned city.
+
+Zone Admin
+
+Access only assigned zones.
+
+Support Agent
+
+Access limited support modules.
+
+All admin queries must filter by
+
+city_id
+zone_id
+pod_id
+
+====================================================================
+10. ADMIN DASHBOARD
+====================================================================
+
+Dashboard widgets
+
+Total Jobs Today
+Total Active Providers
+Total Workforce Workers
+Revenue Today
+Pending Approvals
+Active Emergency Jobs
+
+Graphs
+
+Jobs per city
+Service category distribution
+Provider performance
+Customer growth
+
+Backend API
+
+GET /admin/dashboard
+
+====================================================================
+11. USER MANAGEMENT
+====================================================================
+
+Admin manages platform users.
+
+Sections
+
+Customers
+Service Providers
+Workforce
+Admin Users
+
+Actions
+
+View profile
+Edit profile
+Deactivate account
+Reset password
+View history
+
+Backend APIs
+
+GET /admin/users
+GET /admin/user/{id}
+PUT /admin/user/update
+
+====================================================================
+12. PROVIDER MANAGEMENT
+====================================================================
+
+Admin manages service providers.
+
+Sections
+
+Pending approval
+Active providers
+Suspended providers
+
+Actions
+
+Approve provider
+Reject provider
+Suspend provider
+Assign pods
+Update skills
+
+Backend APIs
+
+GET /admin/providers
+POST /admin/provider/approve
+POST /admin/provider/reject
+
+====================================================================
+13. WORKFORCE MANAGEMENT
+====================================================================
+
+Admin manages workforce workers.
+
+Sections
+
+Registered workers
+Pending verification
+Active contracts
+
+Actions
+
+Approve worker
+Suspend worker
+Update skills
+Assign pods
+
+Backend APIs
+
+GET /admin/workforce
+PUT /admin/workforce/update
+
+====================================================================
+14. CITY / ZONE / POD MANAGEMENT
+====================================================================
+
+Admin manages geographic hierarchy.
+
+Country
+State
+City
+Zone
+Pod
+
+Actions
+
+Create city
+Create zone
+Create pod
+Update pod radius
+Assign providers to pods
+
+Backend APIs
+
+POST /admin/city/create
+POST /admin/zone/create
+POST /admin/pod/create
+
+====================================================================
+15. SERVICE MANAGEMENT
+====================================================================
+
+Admin manages service catalog.
+
+Sections
+
+Service categories
+Services
+Skills
+
+Actions
+
+Create category
+Create service
+Update pricing
+Assign skill requirements
+
+Backend APIs
+
+GET /admin/services
+POST /admin/service/create
+
+====================================================================
+16. JOB MANAGEMENT
+====================================================================
+
+Admin monitors jobs.
+
+Sections
+
+Active jobs
+Completed jobs
+Cancelled jobs
+Emergency jobs
+
+Actions
+
+Reassign provider
+Cancel job
+Update job status
+
+Backend APIs
+
+GET /admin/jobs
+POST /admin/job/reassign
+
+====================================================================
+17. PAYMENT MANAGEMENT
+====================================================================
+
+Admin monitors payments.
+
+Sections
+
+Customer payments
+Provider payouts
+Refunds
+
+Fields
+
+Transaction ID
+Job ID
+Customer ID
+Provider ID
+Amount
+Platform fee
+
+Backend APIs
+
+GET /admin/payments
+
+====================================================================
+18. FEATURE FLAG MANAGEMENT
+====================================================================
+
+Admin manages feature flags.
+
+Examples
+
+AI Assistant
+Priority Booking
+Premium Providers
+Advanced Analytics
+
+Flags can be enabled
+
+Globally
+Per User
+
+Backend APIs
+
+GET /admin/feature-flags
+POST /admin/feature-flag/update
+
+====================================================================
+19. SYSTEM SETTINGS
+====================================================================
+
+Admin manages platform configuration.
+
+Examples
+
+Platform commission
+Emergency multiplier
+Matching weights
+Timeout durations
+
+Backend APIs
+
+GET /admin/settings
+PUT /admin/settings/update
+
+====================================================================
+20. ADMIN SECURITY
+====================================================================
+
+Security rules
+
+Two factor authentication
+IP restrictions
+Session expiration
+Permission validation
+
+All APIs must verify permissions.
+
+====================================================================
+END OF CHUNK 8
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 9 / 10
+EDGE CASES, FAILURE HANDLING, SYSTEM SAFETY, AND OPERATIONAL RESILIENCE
+
+====================================================================
+1. PURPOSE OF THIS SECTION
+====================================================================
+
+Real-world platforms fail not because of features but because
+edge cases and operational failures are not handled properly.
+
+This section defines:
+
+Failure scenarios
+Retry mechanisms
+Fallback flows
+Fraud protection
+Data consistency rules
+Operational safeguards
+
+Every workflow in the platform must be able to recover from
+unexpected situations.
+
+====================================================================
+2. JOB CREATION EDGE CASES
+====================================================================
+
+Scenario 1
+Customer submits incomplete information.
+
+Solution
+
+AI verification form ensures mandatory fields exist.
+
+Validation must happen at backend.
+
+--------------------------------------------------------------------
+
+Scenario 2
+Customer posts duplicate jobs repeatedly.
+
+Solution
+
+System checks recent jobs by same customer.
+
+If duplicate service and location detected within time window,
+system warns user.
+
+--------------------------------------------------------------------
+
+Scenario 3
+Customer location cannot be mapped to POD.
+
+Solution
+
+Fallback options
+
+Nearest pod assignment
+Manual admin review
+Job marked as UNASSIGNED_ZONE
+
+====================================================================
+3. PROVIDER MATCHING FAILURES
+====================================================================
+
+Scenario 1
+No providers available in POD.
+
+Solution
+
+Expand search radius.
+
+Order of expansion
+
+Pod -> Zone -> City
+
+--------------------------------------------------------------------
+
+Scenario 2
+Providers do not respond.
+
+Solution
+
+Matching engine notifies next provider.
+
+Retry count must be limited.
+
+Example
+
+Max retries: 5 providers.
+
+If no provider accepts
+
+Job status
+
+MATCHING_FAILED
+
+Admin notification triggered.
+
+--------------------------------------------------------------------
+
+Scenario 3
+Provider accepts but cancels immediately.
+
+Solution
+
+Provider cancellation rate tracked.
+
+Frequent cancellations reduce provider ranking.
+
+====================================================================
+4. PROVIDER NO SHOW
+====================================================================
+
+Scenario
+
+Provider accepts job but never arrives.
+
+Detection
+
+Provider fails to mark "On The Way" within defined time.
+
+Solution
+
+System triggers reminder notification.
+
+If still inactive
+
+Job reassigned.
+
+Provider penalty applied.
+
+====================================================================
+5. CUSTOMER NOT AVAILABLE
+====================================================================
+
+Scenario
+
+Provider arrives but customer not present.
+
+Solution
+
+Provider marks
+
+CUSTOMER_NOT_AVAILABLE
+
+Evidence required
+
+Photo
+Notes
+
+Admin review may apply.
+
+Cancellation fee may apply.
+
+====================================================================
+6. JOB CANCELLATION EDGE CASES
+====================================================================
+
+Cancellation sources
+
+Customer
+Provider
+Admin
+System timeout
+
+Rules
+
+Customer cancellation before provider accepts
+
+No penalty.
+
+Customer cancellation after provider started travel
+
+Possible cancellation fee.
+
+Provider cancellation after acceptance
+
+Provider rating penalty.
+
+====================================================================
+7. PAYMENT FAILURE
+====================================================================
+
+Scenario
+
+Payment gateway failure.
+
+Solution
+
+Retry payment attempt.
+
+Customer receives payment pending notification.
+
+Job status remains
+
+PAYMENT_PENDING
+
+Provider payout blocked until payment success.
+
+--------------------------------------------------------------------
+
+Scenario
+
+Customer refuses to pay.
+
+Solution
+
+Admin dispute process initiated.
+
+Job marked
+
+PAYMENT_DISPUTED
+
+====================================================================
+8. FRAUD DETECTION
+====================================================================
+
+Fraud patterns to monitor
+
+Fake job completion
+Artificial rating inflation
+Price manipulation
+Repeated cancellations
+
+Detection methods
+
+AI anomaly detection
+Statistical pattern analysis
+
+Suspicious accounts flagged.
+
+Admin receives alerts.
+
+====================================================================
+9. REVIEW MANIPULATION
+====================================================================
+
+Scenario
+
+Provider creates fake customer accounts to post reviews.
+
+Solution
+
+Review eligibility rules
+
+Only verified completed jobs can produce reviews.
+
+Multiple reviews from same device flagged.
+
+====================================================================
+10. LOCATION SPOOFING
+====================================================================
+
+Scenario
+
+Provider manipulates GPS location.
+
+Solution
+
+Location validation
+
+Speed validation
+Distance validation
+
+Example
+
+Provider jumps 10 km in 5 seconds.
+
+Flag as suspicious.
+
+====================================================================
+11. JOB MEDIA VALIDATION
+====================================================================
+
+Providers upload job photos.
+
+Possible issues
+
+Stock images
+Repeated images
+
+Solution
+
+AI image analysis
+Duplicate detection
+
+====================================================================
+12. CHAT ABUSE
+====================================================================
+
+Scenario
+
+Customer or provider uses abusive language.
+
+Solution
+
+Chat moderation.
+
+AI content filtering.
+
+Repeated abuse triggers account warnings.
+
+====================================================================
+13. SYSTEM TIMEOUTS
+====================================================================
+
+Timeout rules must exist for all operations.
+
+Examples
+
+Provider response timeout
+Payment timeout
+Chat inactivity timeout
+
+Example values
+
+Provider response timeout
+
+120 seconds
+
+Payment timeout
+
+15 minutes
+
+====================================================================
+14. JOB STATE CONSISTENCY
+====================================================================
+
+Jobs must follow strict state transitions.
+
+Example
+
+REQUESTED -> MATCHING -> ASSIGNED -> ACCEPTED -> STARTED -> COMPLETED
+
+Invalid transitions must be blocked.
+
+Example
+
+COMPLETED -> STARTED (not allowed)
+
+====================================================================
+15. DATA CONSISTENCY RULES
+====================================================================
+
+Critical operations must be transactional.
+
+Examples
+
+Job assignment
+Payment creation
+Contract creation
+
+Use database transactions.
+
+Ensure atomic operations.
+
+====================================================================
+16. DUPLICATE REQUEST PROTECTION
+====================================================================
+
+Customer may submit same request multiple times.
+
+Use idempotency keys.
+
+Example
+
+job_request_token
+
+System must reject duplicate requests.
+
+====================================================================
+17. PROVIDER PERFORMANCE DEGRADATION
+====================================================================
+
+Providers with poor performance must be downgraded.
+
+Metrics
+
+Low rating
+High cancellation rate
+Slow response time
+
+Actions
+
+Lower job priority
+Temporary suspension
+
+====================================================================
+18. ADMIN INTERVENTION WORKFLOW
+====================================================================
+
+Certain situations require admin action.
+
+Examples
+
+Disputes
+Fraud cases
+Provider misconduct
+
+Admin actions
+
+Investigate job logs
+Review chat history
+Review media uploads
+
+====================================================================
+19. SYSTEM LOGGING
+====================================================================
+
+All critical operations must generate logs.
+
+Examples
+
+Job state changes
+Payment transactions
+Provider assignment
+AI decisions
+
+Log storage must support search and analysis.
+
+====================================================================
+20. SYSTEM HEALTH MONITORING
+====================================================================
+
+Platform must monitor system health.
+
+Metrics
+
+API response times
+Database load
+AI response latency
+Error rates
+
+Alerts must trigger when thresholds exceeded.
+
+====================================================================
+END OF CHUNK 9
+
+
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 10 / 10
+FINAL DEVELOPMENT GUIDELINES, CODING STANDARDS, AND SYSTEM RULES
+
+====================================================================
+1. PURPOSE OF THIS SECTION
+====================================================================
+
+This section defines the final development rules for the Servixa
+platform to ensure:
+
+Code consistency
+High performance
+Scalability
+Maintainability
+Clear development workflow
+
+All developers and AI tools such as Cursor AI must follow these
+rules while generating code.
+
+====================================================================
+2. MODULAR MONOLITH STRUCTURE
+====================================================================
+
+Backend must follow modular monolith architecture.
+
+Each module contains two parts.
+
+API MODULE
+SERVICE MODULE
+
+Example modules
+
+org-auth-api
+org-auth-service
+
+user-api
+user-service
+
+service-api
+service-service
+
+booking-api
+booking-service
+
+provider-api
+provider-service
+
+workforce-api
+workforce-service
+
+payment-api
+payment-service
+
+notification-api
+notification-service
+
+ai-api
+ai-service
+
+--------------------------------------------------------------------
+
+API MODULE CONTAINS
+
+Feign Clients
+DTO Request classes
+DTO Response classes
+Controller Interfaces
+Constants
+Enums
+
+SERVICE MODULE CONTAINS
+
+Controller Implementations
+Service Classes
+Repository Interfaces
+Entities
+Configurations
+Business Logic
+
+====================================================================
+3. MODULE DEPENDENCY RULE
+====================================================================
+
+Modules must depend ONLY on API modules.
+
+Correct
+
+booking-service -> user-api
+
+Incorrect
+
+booking-service -> user-service
+
+Feign clients defined in API modules.
+
+Controller implementation exists only in service module.
+
+====================================================================
+4. FEIGN CLIENT BEHAVIOR
+====================================================================
+
+System must support two execution modes.
+
+Mode 1
+
+Monolith mode
+
+Controller implementation invoked locally.
+
+Mode 2
+
+Microservice mode
+
+Feign client invoked remotely.
+
+This design allows smooth migration to microservices.
+
+====================================================================
+5. PACKAGE STRUCTURE
+====================================================================
+
+Every service module must follow standard structure.
+
+controller
+service
+repository
+entity
+dto
+mapper
+config
+util
+
+Example
+
+booking-service
+
+controller
+service
+repository
+entity
+dto
+mapper
+config
+
+====================================================================
+6. DATABASE ACCESS RULES
+====================================================================
+
+All database operations must use repositories.
+
+Avoid writing database queries in services unless necessary.
+
+Use:
+
+Spring Data JPA
+Interface projections
+Native queries where required.
+
+====================================================================
+7. PERFORMANCE OPTIMIZATION RULES
+====================================================================
+
+Rule 1
+
+Never fetch unnecessary columns.
+
+Use interface projections.
+
+--------------------------------------------------------------------
+
+Rule 2
+
+Use pagination for large datasets.
+
+Example
+
+Pageable queries.
+
+--------------------------------------------------------------------
+
+Rule 3
+
+Avoid N+1 queries.
+
+Use JOIN FETCH or custom queries.
+
+--------------------------------------------------------------------
+
+Rule 4
+
+Use database indexes properly.
+
+Indexes required for
+
+city_id
+zone_id
+pod_id
+provider_id
+customer_id
+job_id
+status_id
+
+--------------------------------------------------------------------
+
+Rule 5
+
+Use native queries for complex filtering.
+
+--------------------------------------------------------------------
+
+Rule 6
+
+Use database views for heavy analytical queries.
+
+====================================================================
+8. MASTER DATA RULE
+====================================================================
+
+Avoid hardcoding values.
+
+All system constants must come from master tables.
+
+Examples
+
+SERVICE_CATEGORY_MASTER
+SERVICE_MASTER
+SKILL_MASTER
+WORK_TYPE_MASTER
+JOB_STATUS_MASTER
+
+Admin panel must manage master data.
+
+====================================================================
+9. API DESIGN RULES
+====================================================================
+
+All APIs must follow REST standards.
+
+Naming rules
+
+GET /resource
+POST /resource
+PUT /resource
+DELETE /resource
+
+Examples
+
+GET /providers
+GET /jobs
+POST /jobs
+POST /workforce/job
+
+--------------------------------------------------------------------
+
+All APIs must return standard response structure.
+
+Example
+
+{
+  "success": true,
+  "data": {},
+  "message": "",
+  "timestamp": ""
+}
+
+====================================================================
+10. ERROR HANDLING
+====================================================================
+
+Use global exception handler.
+
+All exceptions must be mapped to meaningful responses.
+
+Examples
+
+Validation errors
+Authentication errors
+Authorization errors
+System errors
+
+Never expose internal stack traces.
+
+====================================================================
+11. LOGGING RULES
+====================================================================
+
+Logging must follow structured logging.
+
+Important logs
+
+Job creation
+Job assignment
+Provider acceptance
+Payment transactions
+Admin actions
+
+Use correlation ID for request tracing.
+
+====================================================================
+12. SECURITY RULES
+====================================================================
+
+All APIs must require authentication.
+
+Use JWT tokens.
+
+Authorization checks must be applied at controller or service layer.
+
+Admin APIs must check permissions.
+
+====================================================================
+13. FRONTEND DEVELOPMENT RULES
+====================================================================
+
+Frontend must not contain business logic.
+
+Frontend responsibilities
+
+UI rendering
+API calls
+Input validation
+
+Backend responsibilities
+
+Filtering
+Sorting
+Business logic
+Matching algorithms
+
+====================================================================
+14. PAGINATION AND FILTERING
+====================================================================
+
+All list APIs must support
+
+Pagination
+Sorting
+Multiple filters
+
+Example
+
+GET /providers?page=1&size=20&city_id=5&skill=PLUMBER
+
+====================================================================
+15. POD BASED QUERY RULE
+====================================================================
+
+All operational queries must include location filters.
+
+Required filters
+
+city_id
+zone_id
+pod_id
+
+This ensures
+
+Better performance
+Data isolation
+Relevant results
+
+====================================================================
+16. CURSOR AI DEVELOPMENT WORKFLOW
+====================================================================
+
+Cursor AI will assist in development.
+
+To ensure accurate code generation:
+
+Always provide
+
+Module name
+Entity definition
+API specification
+Repository requirements
+
+Cursor AI must generate
+
+Entity
+Repository
+Service
+Controller
+DTO classes
+
+Manual review required after generation.
+
+====================================================================
+17. CODE CONSISTENCY RULES
+====================================================================
+
+Naming conventions
+
+Entities -> PascalCase
+Tables -> snake_case
+Fields -> snake_case
+APIs -> lowercase with hyphen
+
+Example
+
+ServiceProviderProfile
+service_provider_profile
+
+--------------------------------------------------------------------
+
+Service class naming
+
+BookingService
+BookingServiceImpl
+
+Repository naming
+
+BookingRepository
+
+Controller naming
+
+BookingController
+
+====================================================================
+18. CONFIGURATION MANAGEMENT
+====================================================================
+
+System configuration must be stored in database.
+
+Examples
+
+Commission percentage
+Emergency multiplier
+Matching algorithm weights
+
+Table
+
+system_configuration
+
+Admin panel must allow editing configurations.
+
+====================================================================
+19. NOTIFICATION SYSTEM RULE
+====================================================================
+
+Notification system must be event driven.
+
+Events
+
+JOB_CREATED
+JOB_ASSIGNED
+JOB_STARTED
+JOB_COMPLETED
+PAYMENT_SUCCESS
+
+Notification channels
+
+Push
+SMS
+Email
+
+====================================================================
+20. SYSTEM DESIGN PRINCIPLE
+====================================================================
+
+The system must remain
+
+Generic
+Extensible
+Performance oriented
+Modular
+
+Future expansion areas
+
+Supplier marketplace
+Spare parts marketplace
+Training platform
+Service subscriptions
+IoT device integration
+
+====================================================================
+END OF CHUNK 10
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT COMPLETE
+
+
+
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT
+VERSION 1.0
+CHUNK 11 / 11
+PLATFORM INFRASTRUCTURE, EVENTS, NOTIFICATIONS, STORAGE, SEARCH, AND SYSTEM OBSERVABILITY
+
+====================================================================
+1. PURPOSE OF THIS SECTION
+====================================================================
+
+This section defines the infrastructure-level systems required
+to make the Servixa platform production-ready.
+
+These systems support the core platform but operate independently
+from business modules.
+
+Main components covered
+
+Event system
+Notification engine
+Media storage
+Search architecture
+Rate limiting
+Observability
+Data archival
+Feature rollout strategy
+
+These systems must be designed generically so they can evolve
+without changing business logic.
+
+====================================================================
+2. EVENT DRIVEN ARCHITECTURE
+====================================================================
+
+Many platform operations must run asynchronously.
+
+Examples
+
+Send notifications
+Trigger analytics updates
+Update AI learning data
+Trigger payment workflows
+
+These operations must not block main APIs.
+
+Solution
+
+Event driven architecture.
+
+Flow
+
+Service performs action
+↓
+Service publishes event
+↓
+Event consumers process event
+
+Example
+
+JOB_CREATED
+↓
+Notification service
+Analytics service
+AI service
+
+--------------------------------------------------------------------
+
+EVENT TYPES
+
+JOB_CREATED
+JOB_ASSIGNED
+JOB_ACCEPTED
+JOB_STARTED
+JOB_COMPLETED
+JOB_CANCELLED
+PAYMENT_SUCCESS
+PAYMENT_FAILED
+PROVIDER_APPROVED
+WORKFORCE_CONTRACT_CREATED
+
+--------------------------------------------------------------------
+
+EVENT STRUCTURE
+
+event_id
+event_type
+entity_type
+entity_id
+payload
+created_at
+
+--------------------------------------------------------------------
+
+EVENT MODULE STRUCTURE
+
+event-api
+event-service
+
+Responsibilities
+
+Publish events
+Subscribe to events
+Process events asynchronously
+
+Initial implementation
+
+In-memory event dispatcher or Redis streams.
+
+Future scalability
+
+Kafka
+RabbitMQ
+
+====================================================================
+3. NOTIFICATION ENGINE
+====================================================================
+
+Notification engine handles all system notifications.
+
+Notification types
+
+Transactional notifications
+System alerts
+Marketing notifications
+
+Examples
+
+Job assigned
+Provider accepted job
+Payment successful
+Contract created
+
+--------------------------------------------------------------------
+
+NOTIFICATION CHANNELS
+
+Push notifications
+SMS
+Email
+Future
+
+WhatsApp
+
+--------------------------------------------------------------------
+
+NOTIFICATION TEMPLATE SYSTEM
+
+Table
+
+notification_template
+
+Fields
+
+template_code
+title_template
+message_template
+channel
+language
+is_active
+
+--------------------------------------------------------------------
+
+NOTIFICATION LOG TABLE
+
+notification_log
+
+Fields
+
+user_id
+notification_type
+channel
+message_content
+status
+sent_at
+
+--------------------------------------------------------------------
+
+NOTIFICATION PREFERENCES
+
+Users must control notification preferences.
+
+Example fields
+
+enable_push
+enable_sms
+enable_email
+
+Table
+
+user_notification_preference
+
+====================================================================
+4. MEDIA STORAGE SYSTEM
+====================================================================
+
+Platform must store many types of media.
+
+Examples
+
+Provider verification documents
+Profile images
+Job photos
+Customer attachments
+Worker documents
+
+Media must not be stored inside database.
+
+Files must be stored in object storage.
+
+Examples
+
+S3 compatible storage
+Cloud object storage
+Self hosted object storage
+
+--------------------------------------------------------------------
+
+MEDIA FILE TABLE
+
+media_file
+
+Fields
+
+file_id
+file_url
+file_type
+file_size
+file_extension
+uploaded_by
+upload_source
+created_at
+
+--------------------------------------------------------------------
+
+MEDIA OWNER MAPPING
+
+media_owner_map
+
+Fields
+
+entity_type
+entity_id
+media_file_id
+
+Example
+
+entity_type = JOB
+entity_id = job_id
+
+====================================================================
+5. SEARCH SYSTEM ARCHITECTURE
+====================================================================
+
+Platform search queries include
+
+Provider search
+Workforce search
+Service search
+Job search
+
+Initial implementation
+
+SQL queries with indexes.
+
+Future scalability
+
+Dedicated search engine.
+
+Recommended engines
+
+OpenSearch
+Elasticsearch
+
+--------------------------------------------------------------------
+
+SEARCH SERVICE LAYER
+
+Create abstraction layer.
+
+Example services
+
+ProviderSearchService
+WorkforceSearchService
+ServiceSearchService
+
+This ensures SQL queries can later be replaced
+with search engine queries.
+
+====================================================================
+6. RATE LIMITING SYSTEM
+====================================================================
+
+Public APIs must implement rate limiting.
+
+Prevent abuse of
+
+OTP requests
+AI chat
+Search APIs
+Job creation
+
+--------------------------------------------------------------------
+
+RATE LIMIT EXAMPLES
+
+OTP request
+
+Max 5 per hour.
+
+AI messages
+
+Max 30 per minute.
+
+Job creation
+
+Max 10 per hour.
+
+--------------------------------------------------------------------
+
+RATE LIMIT STORAGE
+
+Use Redis.
+
+Keys
+
+user_id
+ip_address
+
+====================================================================
+7. FEATURE ROLLOUT STRATEGY
+====================================================================
+
+Feature flags allow gradual rollout.
+
+Feature flags must support scope.
+
+Scopes
+
+GLOBAL
+CITY
+ZONE
+POD
+USER
+GROUP
+
+Examples
+
+Enable AI only in Indore city.
+
+Enable workforce hiring only in specific pods.
+
+Enable premium providers only for verified providers.
+
+--------------------------------------------------------------------
+
+FEATURE FLAG TABLE
+
+feature_flag_scope
+
+Fields
+
+feature_flag_id
+scope_type
+scope_value
+is_enabled
+
+====================================================================
+8. API VERSIONING
+====================================================================
+
+All APIs must support versioning.
+
+Example
+
+/api/v1/jobs
+/api/v1/providers
+/api/v1/workforce
+
+Future versions
+
+/api/v2/jobs
+
+Mobile apps will depend on stable APIs.
+
+Versioning prevents breaking changes.
+
+====================================================================
+9. DATA ARCHIVAL STRATEGY
+====================================================================
+
+Platform will generate large amounts of data.
+
+Examples
+
+Job logs
+Chat messages
+Location tracking
+Notification logs
+
+Old data must be archived.
+
+Example tables
+
+job_archive
+chat_archive
+notification_archive
+
+Archival policy
+
+Move records older than defined period.
+
+Example
+
+12 months.
+
+====================================================================
+10. SYSTEM OBSERVABILITY
+====================================================================
+
+Platform must monitor system health.
+
+Metrics
+
+API response time
+Error rate
+Database latency
+AI response time
+Notification failures
+
+Monitoring dashboards required.
+
+--------------------------------------------------------------------
+
+APPLICATION LOGGING
+
+All logs must include
+
+request_id
+user_id
+job_id
+timestamp
+
+Structured logging required.
+
+--------------------------------------------------------------------
+
+ALERTS
+
+Alerts must trigger when
+
+API latency exceeds threshold
+Error rate increases
+Database slow queries detected
+
+====================================================================
+11. INTERNAL ADMIN OPERATIONS
+====================================================================
+
+Platform must support internal operations tools.
+
+Examples
+
+Bulk provider import
+Bulk workforce import
+Bulk pod creation
+Bulk service creation
+
+These tools simplify operational scaling.
+
+====================================================================
+END OF CHUNK 11
+SERVIXA PLATFORM DEVELOPMENT DOCUMENT COMPLETE

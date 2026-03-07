@@ -1,0 +1,1212 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { getCurrentUser } from '@/lib/auth'
+import { getOnboardingStatus, completeStep1, completeStep2, completeStep3, completeStep4, completeStep5, type OnboardingStatus, getAllServiceSkills, getServiceSkillsByCategory, getProviderProfile, getOnboardingData, type OnboardingDataDto } from '@/lib/services/provider'
+import { getAllCategories } from '@/lib/services/service'
+import { getAllActiveCities, getZonesByCity, getPodsByZone } from '@/lib/services/admin'
+import { toast } from 'react-hot-toast'
+import Loader from '@/components/ui/Loader'
+import { User, FileText, Wrench, MapPin, Sparkles, CheckCircle2, Plus, X, Star, Award, Trash2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+
+export default function ProviderOnboardingPage() {
+  const router = useRouter()
+  const [currentStep, setCurrentStep] = useState(1)
+  const [status, setStatus] = useState<OnboardingStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [user, setUser] = useState<any>(null)
+
+  // Dropdown data
+  const [categories, setCategories] = useState<any[]>([])
+  const [skills, setSkills] = useState<any[]>([])
+  const [cities, setCities] = useState<any[]>([])
+  const [zones, setZones] = useState<any[]>([])
+  const [pods, setPods] = useState<any[]>([])
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false)
+
+  // Step 1 Data
+  const [step1Data, setStep1Data] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    businessName: '',
+    providerType: 'INDIVIDUAL',
+  })
+
+  // Step 2 Data
+  const [step2Data, setStep2Data] = useState({
+    aadhaarNumber: '',
+    panNumber: '',
+    aadhaarUrl: '',
+    panUrl: '',
+    addressProofUrl: '',
+    profilePhotoUrl: '',
+  })
+
+  // Step 3 Data
+  const [step3Data, setStep3Data] = useState<Array<{
+    skillId: number
+    isPrimary: boolean
+    experienceYears: number
+    certificationName: string
+    certificationDocumentUrl: string
+  }>>([])
+
+  // Step 4 Data
+  const [step4Data, setStep4Data] = useState<Array<{
+    cityId: number
+    zoneId: number
+    podId: number
+    serviceRadiusKm: number
+    isPrimary: boolean
+  }>>([])
+
+  // Step 5 Data
+  const [step5Data, setStep5Data] = useState({
+    bio: '',
+    profileImageUrl: '',
+    experienceYears: 0,
+  })
+
+  useEffect(() => {
+    // Small delay to ensure localStorage is available after redirect
+    const timer = setTimeout(() => {
+      checkOnboardingStatus()
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [router])
+
+  // Load dropdown data when step changes
+  useEffect(() => {
+    if (currentStep === 3) {
+      loadSkillsData()
+    } else if (currentStep === 4) {
+      loadLocationData()
+    }
+  }, [currentStep])
+
+  const loadSkillsData = async () => {
+    try {
+      setLoadingDropdowns(true)
+      const [catsData, skillsData] = await Promise.all([
+        getAllCategories(),
+        getAllServiceSkills()
+      ])
+      setCategories(catsData)
+      setSkills(skillsData)
+    } catch (error) {
+      console.error('Failed to load skills data:', error)
+      toast.error('Failed to load skills data')
+    } finally {
+      setLoadingDropdowns(false)
+    }
+  }
+
+  const loadLocationData = async () => {
+    try {
+      setLoadingDropdowns(true)
+      const citiesData = await getAllActiveCities()
+      setCities(citiesData)
+    } catch (error) {
+      console.error('Failed to load location data:', error)
+      toast.error('Failed to load location data')
+    } finally {
+      setLoadingDropdowns(false)
+    }
+  }
+
+  const handleCityChange = async (cityId: number, index: number) => {
+    try {
+      const zonesData = await getZonesByCity(cityId)
+      const newStep4Data = [...step4Data]
+      newStep4Data[index] = { ...newStep4Data[index], cityId, zoneId: 0, podId: 0 }
+      setStep4Data(newStep4Data)
+      setZones(zonesData)
+    } catch (error) {
+      console.error('Failed to load zones:', error)
+      toast.error('Failed to load zones')
+    }
+  }
+
+  const handleZoneChange = async (zoneId: number, index: number) => {
+    try {
+      const podsData = await getPodsByZone(zoneId)
+      const newStep4Data = [...step4Data]
+      newStep4Data[index] = { ...newStep4Data[index], zoneId, podId: 0 }
+      setStep4Data(newStep4Data)
+      setPods(podsData)
+    } catch (error) {
+      console.error('Failed to load pods:', error)
+      toast.error('Failed to load pods')
+    }
+  }
+
+  const loadOnboardingDataFromDto = (data: OnboardingDataDto) => {
+    try {
+      // Load Step 1 data
+      if (data.step1) {
+        setStep1Data({
+          firstName: data.step1.firstName || '',
+          lastName: data.step1.lastName || '',
+          email: data.step1.email || '',
+          businessName: data.step1.businessName || '',
+          providerType: data.step1.providerType || 'INDIVIDUAL',
+        })
+      }
+
+      // Load Step 2 data (Documents)
+      if (data.step2 && data.step2.documents && data.step2.documents.length > 0) {
+        const docs = data.step2.documents
+        const aadhaarDoc = docs.find(d => d.documentType === 'AADHAAR')
+        const panDoc = docs.find(d => d.documentType === 'PAN')
+        const addressDoc = docs.find(d => d.documentType === 'ADDRESS_PROOF')
+        const photoDoc = docs.find(d => d.documentType === 'PROFILE_PHOTO')
+        
+        setStep2Data({
+          aadhaarNumber: aadhaarDoc?.documentNumber || '',
+          panNumber: panDoc?.documentNumber || '',
+          aadhaarUrl: aadhaarDoc?.documentUrl || '',
+          panUrl: panDoc?.documentUrl || '',
+          addressProofUrl: addressDoc?.documentUrl || '',
+          profilePhotoUrl: photoDoc?.documentUrl || '',
+        })
+      }
+
+      // Load Step 3 data (Skills)
+      if (data.step3 && data.step3.skills && data.step3.skills.length > 0) {
+        const skillsData = data.step3.skills.map(skill => ({
+          skillId: skill.skillId,
+          isPrimary: skill.isPrimary || false,
+          experienceYears: skill.experienceYears || 0,
+          certificationName: skill.certificationName || '',
+          certificationDocumentUrl: skill.certificationDocumentUrl || '',
+        }))
+        setStep3Data(skillsData)
+      }
+
+      // Load Step 4 data (Service Areas)
+      if (data.step4 && data.step4.serviceAreas && data.step4.serviceAreas.length > 0) {
+        const areasData = data.step4.serviceAreas.map(area => ({
+          cityId: area.cityId,
+          zoneId: area.zoneId,
+          podId: area.podId,
+          serviceRadiusKm: area.serviceRadiusKm || 5,
+          isPrimary: area.isPrimary || false,
+        }))
+        setStep4Data(areasData)
+      }
+
+      // Load Step 5 data
+      if (data.step5) {
+        setStep5Data({
+          bio: data.step5.bio || '',
+          profileImageUrl: data.step5.profileImageUrl || '',
+          experienceYears: data.step5.experienceYears || 0,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load onboarding data from DTO:', error)
+      // Don't show error toast as this is optional
+    }
+  }
+
+  const checkOnboardingStatus = async () => {
+    try {
+      // Wait a bit for localStorage to be available after page load
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        // Redirect to login with onboarding page as redirect target
+        const currentPath = '/provider/onboarding'
+        router.push(`/login?redirect=${encodeURIComponent(currentPath)}`)
+        return
+      }
+
+      setUser(currentUser)
+
+      // Allow any authenticated user to access onboarding (they might be CUSTOMER wanting to become provider)
+      // The backend will handle creating the provider profile
+
+      // Get complete onboarding data in one call
+      const onboardingData = await getOnboardingData(currentUser.userId)
+      setStatus(onboardingData.status)
+      setCurrentStep(onboardingData.status.currentStep || 1)
+      
+      // Load all existing data from the comprehensive DTO
+      loadOnboardingDataFromDto(onboardingData)
+    } catch (error: any) {
+      console.error('Failed to fetch onboarding status:', error)
+      // If error (e.g., no provider profile exists yet), start from step 1
+      setCurrentStep(1)
+      setStatus({
+        currentStep: 1,
+        onboardingCompleted: false,
+        profileStatus: 'NOT_STARTED',
+        verificationStatus: 'PENDING',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStep1Submit = async () => {
+    if (!step1Data.firstName || !step1Data.lastName) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        toast.error('Please login first')
+        return
+      }
+      const status = await completeStep1(currentUser.userId, step1Data)
+      setStatus(status)
+      setCurrentStep(2)
+      
+      // Update user role in localStorage after Step 1 (user is now SERVICE_PROVIDER)
+      const updatedUser = getCurrentUser()
+      if (updatedUser) {
+        updatedUser.role = 'SERVICE_PROVIDER'
+        localStorage.setItem('user', JSON.stringify(updatedUser))
+      }
+      
+      toast.success('Step 1 completed! You are now registered as a Service Provider.')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save step 1')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleStep2Submit = async () => {
+    const documents = []
+    if (step2Data.aadhaarUrl) {
+      documents.push({
+        documentType: 'AADHAAR',
+        documentNumber: step2Data.aadhaarNumber,
+        documentUrl: step2Data.aadhaarUrl,
+      })
+    }
+    if (step2Data.panUrl) {
+      documents.push({
+        documentType: 'PAN',
+        documentNumber: step2Data.panNumber,
+        documentUrl: step2Data.panUrl,
+      })
+    }
+    if (step2Data.addressProofUrl) {
+      documents.push({
+        documentType: 'ADDRESS_PROOF',
+        documentUrl: step2Data.addressProofUrl,
+      })
+    }
+    if (step2Data.profilePhotoUrl) {
+      documents.push({
+        documentType: 'PROFILE_PHOTO',
+        documentUrl: step2Data.profilePhotoUrl,
+      })
+    }
+
+    if (documents.length === 0) {
+      toast.error('Please upload at least one document')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        toast.error('Please login first')
+        return
+      }
+      const status = await completeStep2(currentUser.userId, { documents })
+      setStatus(status)
+      setCurrentStep(3)
+      toast.success('Step 2 completed!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save step 2')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleStep3Submit = async () => {
+    if (step3Data.length === 0) {
+      toast.error('Please select at least one skill')
+      return
+    }
+
+    const hasPrimary = step3Data.some(s => s.isPrimary)
+    if (!hasPrimary) {
+      toast.error('Please mark at least one skill as primary')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        toast.error('Please login first')
+        return
+      }
+      const status = await completeStep3(currentUser.userId, { skills: step3Data })
+      setStatus(status)
+      setCurrentStep(4)
+      toast.success('Step 3 completed!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save step 3')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleStep4Submit = async () => {
+    if (step4Data.length === 0) {
+      toast.error('Please select at least one service area')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        toast.error('Please login first')
+        return
+      }
+      const status = await completeStep4(currentUser.userId, { serviceAreas: step4Data })
+      setStatus(status)
+      setCurrentStep(5)
+      toast.success('Step 4 completed!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save step 4')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleStep5Submit = async () => {
+    if (!step5Data.bio || step5Data.experienceYears === 0) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        toast.error('Please login first')
+        return
+      }
+      const status = await completeStep5(currentUser.userId, step5Data)
+      setStatus(status)
+      setCurrentStep(6)
+      toast.success('Onboarding completed! Waiting for admin verification.')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save step 5')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-background to-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-main"></div>
+      </div>
+    )
+  }
+
+  // Step 6: Verification Pending
+  if (currentStep === 6) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-neutral-background to-white">
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-white rounded-3xl p-8 md:p-12 shadow-xl text-center border border-neutral-border">
+              <div className="w-20 h-20 bg-primary-main/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-primary-main" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h1 className="text-3xl font-bold mb-4 text-neutral-textPrimary font-display">Onboarding Complete!</h1>
+              <p className="text-lg text-neutral-textSecondary mb-6">
+                Your profile is under review. We'll notify you once it's verified.
+              </p>
+              <div className="bg-primary-main/5 rounded-2xl p-6 mb-6">
+                <p className="text-sm text-neutral-textSecondary">
+                  Status: <span className="font-semibold text-primary-main">Pending Verification</span>
+                </p>
+              </div>
+              <Link
+                href="/provider/dashboard"
+                className="inline-block px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
+              >
+                Go to Dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Step 7: Approved (handled in dashboard)
+  if (status?.profileStatus === 'ACTIVE') {
+    router.push('/provider/dashboard')
+    return null
+  }
+
+  const steps = [
+    { number: 1, title: 'Basic Info', icon: User, description: 'Personal details' },
+    { number: 2, title: 'Documents', icon: FileText, description: 'ID & certificates' },
+    { number: 3, title: 'Skills', icon: Wrench, description: 'Your expertise' },
+    { number: 4, title: 'Service Area', icon: MapPin, description: 'Where you serve' },
+    { number: 5, title: 'Profile', icon: Sparkles, description: 'Complete profile' },
+  ]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-neutral-background to-white">
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <div className="max-w-5xl mx-auto">
+          {/* Page Header */}
+          <div className="text-center mb-8 md:mb-12">
+            <h1 className="text-3xl md:text-4xl font-bold mb-3 font-display text-neutral-textPrimary">
+              Become a Service Provider
+            </h1>
+            <p className="text-base md:text-lg text-neutral-textSecondary max-w-2xl mx-auto">
+              Complete your profile to start receiving jobs and grow your business
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="bg-white rounded-3xl p-6 md:p-8 mb-8 shadow-lg border border-neutral-border">
+            <div className="flex items-center justify-between mb-6">
+              {steps.map((step) => (
+                <div key={step.number} className="flex flex-col items-center flex-1 relative">
+                  {/* Connection Line */}
+                  {step.number < steps.length && (
+                    <div className="hidden md:block absolute top-6 left-[60%] w-full h-0.5 bg-neutral-border -z-10">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          step.number < currentStep
+                            ? 'bg-gradient-to-r from-primary-main to-primary-light'
+                            : 'bg-neutral-border'
+                        }`}
+                        style={{ width: step.number < currentStep ? '100%' : '0%' }}
+                      ></div>
+                    </div>
+                  )}
+                  
+                  <div
+                    className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center mb-3 transition-all ${
+                      step.number < currentStep
+                        ? 'bg-accent-green text-white shadow-lg scale-110'
+                        : step.number === currentStep
+                        ? 'bg-primary-main text-white shadow-lg scale-110 ring-4 ring-primary-main/20'
+                        : 'bg-neutral-background text-neutral-textSecondary'
+                    }`}
+                  >
+                    {step.number < currentStep ? (
+                      <CheckCircle2 className="w-6 h-6 md:w-7 md:h-7" />
+                    ) : (
+                      <step.icon className="w-6 h-6 md:w-7 md:h-7" />
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <span className={`text-xs md:text-sm font-semibold block ${
+                      step.number === currentStep ? 'text-primary-main' : 'text-neutral-textSecondary'
+                    }`}>
+                      {step.title}
+                    </span>
+                    <span className="text-xs text-neutral-textSecondary hidden md:block mt-1">
+                      {step.description}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="w-full h-2 bg-neutral-background rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary-main to-primary-dark transition-all duration-500"
+                style={{ width: `${((currentStep - 1) / 4) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {/* Step Content Card */}
+          <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl border border-neutral-border">
+            {/* Step 1: Basic Info */}
+            {currentStep === 1 && (
+              <div>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
+                    Step 1 of 5
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Basic Information</h2>
+                  <p className="text-neutral-textSecondary">Tell us about yourself to get started</p>
+                </div>
+                
+                <div className="space-y-5">
+                  <div className="grid md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={step1Data.firstName}
+                        onChange={(e) => setStep1Data({ ...step1Data, firstName: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        placeholder="Enter first name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                        Last Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={step1Data.lastName}
+                        onChange={(e) => setStep1Data({ ...step1Data, lastName: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        placeholder="Enter last name"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Email</label>
+                    <input
+                      type="email"
+                      value={step1Data.email}
+                      onChange={(e) => setStep1Data({ ...step1Data, email: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                      Provider Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={step1Data.providerType}
+                      onChange={(e) => setStep1Data({ ...step1Data, providerType: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                    >
+                      <option value="INDIVIDUAL">Individual Provider</option>
+                      <option value="BUSINESS">Business/Company</option>
+                    </select>
+                  </div>
+                  {step1Data.providerType === 'BUSINESS' && (
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Business Name</label>
+                      <input
+                        type="text"
+                        value={step1Data.businessName}
+                        onChange={(e) => setStep1Data({ ...step1Data, businessName: e.target.value })}
+                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        placeholder="Enter business name"
+                      />
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-8 flex justify-end">
+                  <button
+                    onClick={handleStep1Submit}
+                    disabled={submitting || !step1Data.firstName || !step1Data.lastName}
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    {submitting ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saving...
+                      </span>
+                    ) : (
+                      'Continue'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Documents */}
+            {currentStep === 2 && (
+              <div>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
+                    Step 2 of 5
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Document Upload</h2>
+                  <p className="text-neutral-textSecondary">Upload your verification documents</p>
+                </div>
+                
+                <div className="space-y-5">
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> For MVP, you can enter document URLs. File upload functionality will be added soon.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Aadhaar Number</label>
+                    <input
+                      type="text"
+                      value={step2Data.aadhaarNumber}
+                      onChange={(e) => setStep2Data({ ...step2Data, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="Enter 12-digit Aadhaar number"
+                      maxLength={12}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Aadhaar Document URL</label>
+                    <input
+                      type="url"
+                      value={step2Data.aadhaarUrl}
+                      onChange={(e) => setStep2Data({ ...step2Data, aadhaarUrl: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="https://example.com/aadhaar.pdf"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">PAN Number</label>
+                    <input
+                      type="text"
+                      value={step2Data.panNumber}
+                      onChange={(e) => setStep2Data({ ...step2Data, panNumber: e.target.value.toUpperCase().slice(0, 10) })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="Enter PAN number"
+                      maxLength={10}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">PAN Document URL</label>
+                    <input
+                      type="url"
+                      value={step2Data.panUrl}
+                      onChange={(e) => setStep2Data({ ...step2Data, panUrl: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="https://example.com/pan.pdf"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Address Proof URL</label>
+                    <input
+                      type="url"
+                      value={step2Data.addressProofUrl}
+                      onChange={(e) => setStep2Data({ ...step2Data, addressProofUrl: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="https://example.com/address-proof.pdf"
+                    />
+                    <p className="text-xs text-neutral-textSecondary mt-1">Utility bill, rental agreement, or any government document with address</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Profile Photo URL</label>
+                    <input
+                      type="url"
+                      value={step2Data.profilePhotoUrl}
+                      onChange={(e) => setStep2Data({ ...step2Data, profilePhotoUrl: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="https://example.com/profile-photo.jpg"
+                    />
+                    {step2Data.profilePhotoUrl && (
+                      <div className="mt-3">
+                        <img 
+                          src={step2Data.profilePhotoUrl} 
+                          alt="Profile preview" 
+                          className="w-24 h-24 rounded-full object-cover border-2 border-neutral-border shadow-md"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-8 flex justify-between">
+                  <button
+                    onClick={() => setCurrentStep(1)}
+                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={handleStep2Submit}
+                    disabled={submitting || (!step2Data.aadhaarUrl && !step2Data.panUrl && !step2Data.addressProofUrl)}
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Saving...' : 'Continue'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Skills Selection */}
+            {currentStep === 3 && (
+              <div>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
+                    Step 3 of 5
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Select Your Skills</h2>
+                  <p className="text-neutral-textSecondary">Choose the skills you offer and mark your primary skill</p>
+                </div>
+
+                {loadingDropdowns ? (
+                  <Loader text="Loading skills..." />
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          setStep3Data([...step3Data, {
+                            skillId: 0,
+                            isPrimary: step3Data.length === 0,
+                            experienceYears: 0,
+                            certificationName: '',
+                            certificationDocumentUrl: ''
+                          }])
+                        }}
+                        className="px-4 py-2 bg-primary-main text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-all flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Skill
+                      </button>
+                    </div>
+
+                    {step3Data.map((skill, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-neutral-background rounded-2xl p-5 border-2 border-neutral-border"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <Wrench className="w-5 h-5 text-primary-main" />
+                            <span className="font-semibold text-neutral-textPrimary">Skill {index + 1}</span>
+                            {skill.isPrimary && (
+                              <span className="px-2 py-1 bg-accent-green/10 text-accent-green rounded-full text-xs font-semibold flex items-center gap-1">
+                                <Star className="w-3 h-3" />
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {step3Data.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const newData = step3Data.filter((_, i) => i !== index)
+                                // If deleted skill was primary, make first one primary
+                                if (skill.isPrimary && newData.length > 0) {
+                                  newData[0].isPrimary = true
+                                }
+                                setStep3Data(newData)
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              Skill <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={skill.skillId}
+                              onChange={(e) => {
+                                const newData = [...step3Data]
+                                newData[index].skillId = Number(e.target.value)
+                                setStep3Data(newData)
+                              }}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                            >
+                              <option value={0}>Select a skill</option>
+                              {skills.map((s) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              Experience (Years) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              value={skill.experienceYears}
+                              onChange={(e) => {
+                                const newData = [...step3Data]
+                                newData[index].experienceYears = Number(e.target.value)
+                                setStep3Data(newData)
+                              }}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              placeholder="Years of experience"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={skill.isPrimary}
+                              onChange={(e) => {
+                                const newData = step3Data.map((s, i) => ({
+                                  ...s,
+                                  isPrimary: i === index ? e.target.checked : false
+                                }))
+                                setStep3Data(newData)
+                              }}
+                              className="w-4 h-4 text-primary-main rounded focus:ring-primary-main"
+                            />
+                            <span className="text-sm font-semibold text-neutral-textPrimary">Mark as Primary Skill</span>
+                          </label>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Certification Name (Optional)</label>
+                            <input
+                              type="text"
+                              value={skill.certificationName}
+                              onChange={(e) => {
+                                const newData = [...step3Data]
+                                newData[index].certificationName = e.target.value
+                                setStep3Data(newData)
+                              }}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              placeholder="e.g., Certified Electrician"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Certification Document URL (Optional)</label>
+                            <input
+                              type="url"
+                              value={skill.certificationDocumentUrl}
+                              onChange={(e) => {
+                                const newData = [...step3Data]
+                                newData[index].certificationDocumentUrl = e.target.value
+                                setStep3Data(newData)
+                              }}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              placeholder="https://example.com/certificate.pdf"
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+
+                    {step3Data.length === 0 && (
+                      <div className="text-center py-8 text-neutral-textSecondary">
+                        <Wrench className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No skills added yet. Click "Add Skill" to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-8 flex justify-between">
+                  <button
+                    onClick={() => setCurrentStep(2)}
+                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={handleStep3Submit}
+                    disabled={submitting || step3Data.length === 0 || step3Data.some(s => !s.skillId || s.experienceYears === 0)}
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Saving...' : 'Continue'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Service Area Selection */}
+            {currentStep === 4 && (
+              <div>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
+                    Step 4 of 5
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Select Service Areas</h2>
+                  <p className="text-neutral-textSecondary">Choose the areas where you provide services</p>
+                </div>
+
+                {loadingDropdowns ? (
+                  <Loader text="Loading locations..." />
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          setStep4Data([...step4Data, {
+                            cityId: 0,
+                            zoneId: 0,
+                            podId: 0,
+                            serviceRadiusKm: 5,
+                            isPrimary: step4Data.length === 0
+                          }])
+                        }}
+                        className="px-4 py-2 bg-primary-main text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-all flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Service Area
+                      </button>
+                    </div>
+
+                    {step4Data.map((area, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-neutral-background rounded-2xl p-5 border-2 border-neutral-border"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-5 h-5 text-primary-main" />
+                            <span className="font-semibold text-neutral-textPrimary">Service Area {index + 1}</span>
+                            {area.isPrimary && (
+                              <span className="px-2 py-1 bg-accent-green/10 text-accent-green rounded-full text-xs font-semibold flex items-center gap-1">
+                                <Star className="w-3 h-3" />
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {step4Data.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const newData = step4Data.filter((_, i) => i !== index)
+                                if (area.isPrimary && newData.length > 0) {
+                                  newData[0].isPrimary = true
+                                }
+                                setStep4Data(newData)
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              City <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={area.cityId}
+                              onChange={(e) => handleCityChange(Number(e.target.value), index)}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                            >
+                              <option value={0}>Select City</option>
+                              {cities.map((city) => (
+                                <option key={city.id} value={city.id}>{city.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              Zone <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={area.zoneId}
+                              onChange={(e) => handleZoneChange(Number(e.target.value), index)}
+                              disabled={!area.cityId}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <option value={0}>Select Zone</option>
+                              {zones.map((zone) => (
+                                <option key={zone.id} value={zone.id}>{zone.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              POD <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={area.podId}
+                              onChange={(e) => {
+                                const newData = [...step4Data]
+                                newData[index].podId = Number(e.target.value)
+                                setStep4Data(newData)
+                              }}
+                              disabled={!area.zoneId}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <option value={0}>Select POD</option>
+                              {pods.map((pod) => (
+                                <option key={pod.id} value={pod.id}>{pod.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                              Service Radius (Km) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="50"
+                              value={area.serviceRadiusKm}
+                              onChange={(e) => {
+                                const newData = [...step4Data]
+                                newData[index].serviceRadiusKm = Number(e.target.value)
+                                setStep4Data(newData)
+                              }}
+                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              placeholder="Service radius in km"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={area.isPrimary}
+                              onChange={(e) => {
+                                const newData = step4Data.map((a, i) => ({
+                                  ...a,
+                                  isPrimary: i === index ? e.target.checked : false
+                                }))
+                                setStep4Data(newData)
+                              }}
+                              className="w-4 h-4 text-primary-main rounded focus:ring-primary-main"
+                            />
+                            <span className="text-sm font-semibold text-neutral-textPrimary">Mark as Primary Service Area</span>
+                          </label>
+                        </div>
+                      </motion.div>
+                    ))}
+
+                    {step4Data.length === 0 && (
+                      <div className="text-center py-8 text-neutral-textSecondary">
+                        <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No service areas added yet. Click "Add Service Area" to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-8 flex justify-between">
+                  <button
+                    onClick={() => setCurrentStep(3)}
+                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={handleStep4Submit}
+                    disabled={submitting || step4Data.length === 0 || step4Data.some(a => !a.cityId || !a.zoneId || !a.podId)}
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Saving...' : 'Continue'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Profile Completion */}
+            {currentStep === 5 && (
+              <div>
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
+                    Step 5 of 5
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Complete Your Profile</h2>
+                  <p className="text-neutral-textSecondary">Add a bio and experience to complete your profile</p>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                      Bio/Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={step5Data.bio}
+                      onChange={(e) => setStep5Data({ ...step5Data, bio: e.target.value })}
+                      rows={6}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all resize-none"
+                      placeholder="Tell customers about yourself, your experience, and what makes you special..."
+                    />
+                    <p className="text-xs text-neutral-textSecondary mt-1">
+                      {step5Data.bio.length}/500 characters
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                      Total Experience (Years) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={step5Data.experienceYears}
+                      onChange={(e) => setStep5Data({ ...step5Data, experienceYears: Number(e.target.value) })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="Total years of experience"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Profile Image URL (Optional)</label>
+                    <input
+                      type="url"
+                      value={step5Data.profileImageUrl}
+                      onChange={(e) => setStep5Data({ ...step5Data, profileImageUrl: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      placeholder="https://example.com/profile.jpg"
+                    />
+                    {step5Data.profileImageUrl && (
+                      <div className="mt-3">
+                        <img src={step5Data.profileImageUrl} alt="Profile preview" className="w-24 h-24 rounded-full object-cover border-2 border-neutral-border" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-8 flex justify-between">
+                  <button
+                    onClick={() => setCurrentStep(4)}
+                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={handleStep5Submit}
+                    disabled={submitting || !step5Data.bio || step5Data.bio.length < 20 || step5Data.experienceYears === 0}
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Submitting...' : 'Complete Onboarding'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

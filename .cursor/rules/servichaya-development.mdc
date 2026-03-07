@@ -1,0 +1,35 @@
+---
+alwaysApply: true
+description: SERVICHAYA Platform Development Rules
+---
+
+# SERVICHAYA Development Rules
+
+## Core Principles
+
+1. **Follow Documentation Strictly**: All implementation must align with:
+   - [MVP_PLAN.md](mdc:MVP_PLAN.md)
+   - [APPLICATION_ARCHITECTURE.md](mdc:APPLICATION_ARCHITECTURE.md)
+   - [USER_JOURNEYS_AND_UI_GUIDE.md](mdc:USER_JOURNEYS_AND_UI_GUIDE.md)
+   - [Roadmap.txt](mdc:Roadmap.txt)
+
+2. **No Modifications to Docs**: Do NOT modify .md files unless explicitly required by user.
+
+3. **Database Schema**: Managed by JPA (ddl-auto: update). Flyway only for master data.
+
+4. **Database Performance**: 
+   - Use Interface Projections (never fetch full entities)
+   - Use Native SQL for complex queries
+   - Avoid N+1 queries (use JOIN FETCH)
+   - NEVER use findAll() - always paginate
+   - POD-based data filtering
+
+5. **Frontend**: 
+   - Role-based routing
+   - Public customer portal (browse without login)
+   - Deep linking (everything clickable)
+   - Mobile-first design
+
+6. **Brand Name**: SERVICHAYA (सर्विचाया) - Use consistently everywhere
+
+7. **Build Testable Features**: Work in flow to make features testable from UI end-to-end.

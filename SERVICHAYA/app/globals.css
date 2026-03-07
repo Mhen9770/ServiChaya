@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: 'Inter', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+  
+  /* Primary Colors */
+  --primary-main: #2563EB;
+  --primary-dark: #1E40AF;
+  --primary-light: #3B82F6;
+  
+  /* Accent Colors */
+  --accent-green: #10B981;
+  --accent-orange: #F59E0B;
+  
+  /* Neutral Colors */
+  --neutral-background: #F9FAFB;
+  --neutral-surface: #FFFFFF;
+  --neutral-border: #E5E7EB;
+  --neutral-text-primary: #111827;
+  --neutral-text-secondary: #6B7280;
+}
+
+@layer base {
+  body {
+    @apply bg-neutral-background text-neutral-textPrimary;
+    font-family: var(--font-inter);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-poppins);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:scale-[1.02];
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-main to-primary-dark text-white px-6 py-3 rounded-xl font-medium shadow-primary-md hover:shadow-lg transition-all duration-300 hover:scale-105;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-primary-main border-2 border-primary-main px-6 py-3 rounded-xl font-medium hover:bg-primary-main hover:text-white transition-all duration-300;
+  }
+}
