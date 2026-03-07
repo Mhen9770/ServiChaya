@@ -1,34 +1,44 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
+import { toast } from 'react-hot-toast'
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
+  CircleDollarSign,
+  CreditCard,
+  MapPin,
+  MessageSquareText,
+  ShieldCheck,
+  Star,
+  User,
+  X,
+} from 'lucide-react'
+import Loader from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
 import { getJobById, type JobDto } from '@/lib/services/job'
 import { cancelJob } from '@/lib/services/jobStatus'
-import { processPayment, getPaymentSchedule, type PaymentScheduleDto } from '@/lib/services/payment'
 import { createReview, getJobReview, type ReviewDto } from '@/lib/services/review'
+import { getPaymentSchedule, processPayment, type PaymentScheduleDto } from '@/lib/services/payment'
 import { getProviderProfile, type ProviderProfileDto } from '@/lib/services/provider'
-import { toast } from 'react-hot-toast'
-import Loader from '@/components/ui/Loader'
-import { 
-  Calendar, MapPin, DollarSign, AlertCircle, CheckCircle2, 
-  X, Clock, User, Star, MessageSquare, ArrowLeft, CreditCard,
-  Building2, Phone, Mail, Shield, TrendingUp, FileText, Image as ImageIcon
-} from 'lucide-react'
-import { motion } from 'framer-motion'
 
-export default function JobDetailsPage() {
+const statusOrder = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED']
+
+export default function CustomerJobDetailsPage() {
   const router = useRouter()
   const params = useParams()
   const jobId = Number(params.id)
-  
-  const [job, setJob] = useState<JobDto | null>(null)
-  const [paymentSchedule, setPaymentSchedule] = useState<PaymentScheduleDto | null>(null)
-  const [review, setReview] = useState<ReviewDto | null>(null)
-  const [provider, setProvider] = useState<ProviderProfileDto | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [job, setJob] = useState<JobDto | null>(null)
+  const [payment, setPayment] = useState<PaymentScheduleDto | null>(null)
+  const [review, setReview] = useState<ReviewDto | null>(null)
+  const [provider, setProvider] = useState<ProviderProfileDto | null>(null)
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [reviewData, setReviewData] = useState({
@@ -37,55 +47,40 @@ export default function JobDetailsPage() {
     punctualityRating: 5,
     communicationRating: 5,
     valueRating: 5,
-    reviewText: ''
+    reviewText: '',
   })
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      router.push('/login?redirect=/customer/jobs/' + jobId)
+    const user = getCurrentUser()
+    if (!user) {
+      router.push(`/login?redirect=/customer/jobs/${jobId}`)
       return
     }
-    fetchJobDetails()
+    if (Number.isNaN(jobId)) return
+    fetchData()
   }, [jobId])
 
-  const fetchJobDetails = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true)
       const jobData = await getJobById(jobId)
       setJob(jobData)
-      
-      // Fetch payment schedule if job is accepted or in progress
-      if (['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(jobData.status)) {
-        try {
-          const schedule = await getPaymentSchedule(jobId)
-          setPaymentSchedule(schedule)
-        } catch (error) {
-          console.log('No payment schedule found for this job')
-        }
-      }
-      
-      // Fetch provider info if provider is assigned
+
       if (jobData.providerId) {
-        try {
-          const providerData = await getProviderProfile(jobData.providerId)
-          setProvider(providerData)
-        } catch (error) {
-          console.log('Could not fetch provider details')
-        }
+        const providerData = await getProviderProfile(jobData.providerId).catch(() => null)
+        setProvider(providerData)
       }
-      
-      // Fetch review if job is completed
+
+      if (['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(jobData.status)) {
+        const paymentData = await getPaymentSchedule(jobData.id).catch(() => null)
+        setPayment(paymentData)
+      }
+
       if (jobData.status === 'COMPLETED') {
-        try {
-          const existingReview = await getJobReview(jobId)
-          setReview(existingReview)
-        } catch (error) {
-          console.log('No review found for this job')
-        }
+        const reviewData = await getJobReview(jobData.id).catch(() => null)
+        setReview(reviewData)
       }
     } catch (error: any) {
-      console.error('Failed to fetch job:', error)
       if (error.response?.status === 404) {
         toast.error('Job not found')
       } else {
@@ -96,564 +91,223 @@ export default function JobDetailsPage() {
     }
   }
 
-  const handleCancelJob = async () => {
-    if (!confirm('Are you sure you want to cancel this job? This action cannot be undone.')) return
-    
-    const currentUser = getCurrentUser()
-    if (!currentUser || !job) return
+  const cancelCurrentJob = async () => {
+    const user = getCurrentUser()
+    if (!user || !job) return
+    if (!confirm('Are you sure you want to cancel this request?')) return
 
     try {
       setActionLoading(true)
-      await cancelJob(jobId, currentUser.userId, 'Customer cancelled', false)
-      toast.success('Job cancelled successfully')
-      await fetchJobDetails()
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to cancel job'
-      toast.error(errorMsg)
-      console.error('Cancel job error:', error)
+      await cancelJob(job.id, user.userId, 'Customer cancelled', false)
+      toast.success('Request cancelled successfully')
+      await fetchData()
+    } catch {
+      toast.error('Unable to cancel request')
     } finally {
       setActionLoading(false)
     }
   }
 
-  const handleSubmitReview = async () => {
-    if (!job) return
-    
-    const currentUser = getCurrentUser()
-    if (!currentUser) return
+  const submitReview = async () => {
+    const user = getCurrentUser()
+    if (!user || !job) return
 
     if (!reviewData.reviewText || reviewData.reviewText.trim().length < 10) {
-      toast.error('Please provide a detailed review (at least 10 characters)')
+      toast.error('Please add a detailed review (min 10 chars)')
       return
     }
 
     try {
       setActionLoading(true)
-      await createReview(currentUser.userId, {
-        jobId: job.id,
-        ...reviewData
-      })
-      toast.success('Review submitted successfully!')
+      await createReview(user.userId, { jobId: job.id, ...reviewData })
+      toast.success('Review submitted')
       setShowReviewModal(false)
       setReviewData({ rating: 5, qualityRating: 5, punctualityRating: 5, communicationRating: 5, valueRating: 5, reviewText: '' })
-      await fetchJobDetails()
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to submit review'
-      toast.error(errorMsg)
-      console.error('Submit review error:', error)
+      await fetchData()
+    } catch {
+      toast.error('Could not submit review')
     } finally {
       setActionLoading(false)
     }
   }
 
-  const handlePayment = async () => {
-    if (!paymentSchedule || !job) return
-    
-    const currentUser = getCurrentUser()
-    if (!currentUser) return
-
-    if (paymentSchedule.finalAmount <= 0) {
-      toast.error('Invalid payment amount')
-      return
-    }
-
+  const submitPayment = async () => {
+    if (!job || !payment) return
     try {
       setActionLoading(true)
-      await processPayment({
-        jobId: job.id,
-        amount: paymentSchedule.finalAmount,
-        paymentMethod: 'UPI'
-      })
-      toast.success('Payment processed successfully!')
+      await processPayment({ jobId: job.id, amount: payment.finalAmount, paymentMethod: 'UPI' })
+      toast.success('Payment processed successfully')
       setShowPaymentModal(false)
-      await fetchJobDetails()
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Payment failed. Please try again.'
-      toast.error(errorMsg)
-      console.error('Payment error:', error)
+      await fetchData()
+    } catch {
+      toast.error('Payment failed')
     } finally {
       setActionLoading(false)
     }
   }
 
-  const getStatusInfo = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return { color: 'bg-yellow-100 text-yellow-800', icon: Clock, text: 'Waiting for Provider' }
-      case 'MATCHED':
-        return { color: 'bg-blue-100 text-blue-800', icon: User, text: 'Provider Matched' }
-      case 'ACCEPTED':
-        return { color: 'bg-green-100 text-green-800', icon: CheckCircle2, text: 'Provider Accepted' }
-      case 'IN_PROGRESS':
-        return { color: 'bg-purple-100 text-purple-800', icon: Clock, text: 'Service In Progress' }
-      case 'COMPLETED':
-        return { color: 'bg-accent-green/20 text-accent-green', icon: CheckCircle2, text: 'Completed' }
-      case 'CANCELLED':
-        return { color: 'bg-red-100 text-red-800', icon: X, text: 'Cancelled' }
-      default:
-        return { color: 'bg-neutral-background text-neutral-textSecondary', icon: Clock, text: status }
-    }
-  }
+  const progressPercentage = useMemo(() => {
+    if (!job) return 0
+    const idx = statusOrder.indexOf(job.status)
+    if (idx < 0) return 0
+    return Math.round((idx / (statusOrder.length - 1)) * 100)
+  }, [job])
 
-  if (loading) {
-    return <Loader fullScreen text="Loading job details..." />
-  }
-
+  if (loading) return <Loader fullScreen text="Loading request details..." />
   if (!job) {
-    return (
-      <div className="px-6 py-6">
-        <div className="text-center py-12">
-          <p className="text-lg text-neutral-textSecondary">Job not found</p>
-          <Link href="/customer/jobs" className="text-primary-main hover:underline mt-4 inline-block">
-            Back to Jobs
-          </Link>
-        </div>
-      </div>
-    )
+    return <div className="px-6 py-6">Request not found. <Link href="/customer/jobs" className="text-primary-main">Back to requests</Link></div>
   }
 
-  const statusInfo = getStatusInfo(job.status)
-  const StatusIcon = statusInfo.icon
   const canCancel = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS'].includes(job.status)
+  const canPay = job.status === 'COMPLETED' && payment && !payment.finalPaid
   const canReview = job.status === 'COMPLETED' && !review
-  const canPay = job.status === 'COMPLETED' && paymentSchedule && !paymentSchedule.finalPaid
 
   return (
-    <div className="px-6 py-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Link href="/customer/jobs" className="inline-flex items-center gap-2 text-sm text-neutral-textSecondary hover:text-primary-main mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Jobs
-        </Link>
-      </motion.div>
+    <div className="px-6 py-6 space-y-6">
+      <Link href="/customer/jobs" className="inline-flex items-center gap-2 text-sm text-neutral-textSecondary hover:text-primary-main">
+        <ArrowLeft className="w-4 h-4" /> Back to requests
+      </Link>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border mb-6"
-      >
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <h1 className="text-2xl font-bold text-neutral-textPrimary">{job.title}</h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${statusInfo.color}`}>
-                <StatusIcon className="w-3 h-3" />
-                {statusInfo.text}
-              </span>
-              {job.isEmergency && (
-                <span className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold">
-                  <AlertCircle className="w-3 h-3" />
-                  Emergency
-                </span>
+      <section className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark text-white border border-slate-800 p-7">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs text-slate-300 uppercase tracking-wide">Request Detail</p>
+            <h1 className="text-3xl font-bold mt-2">{job.title}</h1>
+            <p className="text-sm text-slate-300 mt-2">{job.description}</p>
+            <div className="mt-3 flex gap-2 flex-wrap text-xs">
+              <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/20">Code: {job.jobCode}</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/10 border border-white/20">Status: {job.status}</span>
+              {job.isEmergency && <span className="px-2.5 py-1 rounded-full bg-red-400/20 border border-red-300/30 text-red-100 inline-flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> Emergency</span>}
+            </div>
+          </div>
+          <div className="rounded-xl bg-white/10 border border-white/20 p-4 min-w-[220px]">
+            <p className="text-xs text-slate-300">Workflow progress</p>
+            <p className="text-2xl font-bold mt-1">{progressPercentage}%</p>
+            <div className="h-2 rounded-full bg-white/20 mt-3 overflow-hidden"><div className="h-full bg-white" style={{ width: `${progressPercentage}%` }} /></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-5">
+          <article className="rounded-2xl border border-neutral-border bg-white p-6">
+            <h2 className="font-bold text-lg mb-4">Core details</h2>
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <p className="inline-flex items-center gap-2 text-neutral-textSecondary"><CalendarClock className="w-4 h-4" /> Preferred: {new Date(job.preferredTime).toLocaleString()}</p>
+              <p className="inline-flex items-center gap-2 text-neutral-textSecondary"><MapPin className="w-4 h-4" /> {job.addressLine1}{job.addressLine2 ? `, ${job.addressLine2}` : ''}</p>
+              <p className="inline-flex items-center gap-2 text-neutral-textSecondary"><CircleDollarSign className="w-4 h-4" /> Budget: ₹{(job.estimatedBudget || 0).toLocaleString()}</p>
+              <p className="inline-flex items-center gap-2 text-neutral-textSecondary"><CheckCircle2 className="w-4 h-4" /> Current status: {job.status}</p>
+            </div>
+            {job.specialInstructions && (
+              <div className="mt-4 rounded-xl bg-neutral-background border border-neutral-border p-3 text-sm text-neutral-textSecondary">
+                <p className="font-semibold text-neutral-textPrimary mb-1">Special instructions</p>
+                {job.specialInstructions}
+              </div>
+            )}
+          </article>
+
+          {provider && (
+            <article className="rounded-2xl border border-neutral-border bg-white p-6">
+              <h2 className="font-bold text-lg mb-4">Assigned provider</h2>
+              <div className="grid md:grid-cols-2 gap-3 text-sm text-neutral-textSecondary">
+                <p className="inline-flex items-center gap-2"><User className="w-4 h-4" /> {provider.businessName || provider.providerType}</p>
+                <p className="inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Verification: {provider.verificationStatus}</p>
+                <p className="inline-flex items-center gap-2"><Star className="w-4 h-4" /> Rating: {provider.rating || 0} ({provider.ratingCount || 0})</p>
+                <p className="inline-flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Jobs done: {provider.totalJobsCompleted || 0}</p>
+              </div>
+            </article>
+          )}
+
+          {review && (
+            <article className="rounded-2xl border border-neutral-border bg-white p-6">
+              <h2 className="font-bold text-lg mb-3">Your review</h2>
+              <p className="text-sm text-neutral-textSecondary">Rating: {review.rating}/5</p>
+              {review.reviewText && <p className="text-sm text-neutral-textSecondary mt-2">{review.reviewText}</p>}
+            </article>
+          )}
+        </div>
+
+        <aside className="space-y-5">
+          {payment && (
+            <article className="rounded-2xl border border-neutral-border bg-white p-6">
+              <h2 className="font-bold text-lg mb-3">Payment summary</h2>
+              <p className="text-sm text-neutral-textSecondary">Type: {payment.paymentType}</p>
+              <p className="text-sm text-neutral-textSecondary">Total: ₹{payment.totalAmount.toLocaleString()}</p>
+              <p className="text-sm text-neutral-textSecondary">Final due: ₹{payment.finalAmount.toLocaleString()}</p>
+              <p className="text-sm text-neutral-textSecondary">Status: {payment.paymentStatus}</p>
+            </article>
+          )}
+
+          <article className="rounded-2xl border border-neutral-border bg-white p-6">
+            <h2 className="font-bold text-lg mb-3">Actions</h2>
+            <div className="space-y-2">
+              {canCancel && (
+                <button onClick={cancelCurrentJob} disabled={actionLoading} className="w-full rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
+                  Cancel request
+                </button>
+              )}
+              {canPay && (
+                <button onClick={() => setShowPaymentModal(true)} className="w-full rounded-xl bg-primary-main text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2">
+                  <CreditCard className="w-4 h-4" /> Pay now
+                </button>
+              )}
+              {canReview && (
+                <button onClick={() => setShowReviewModal(true)} className="w-full rounded-xl bg-neutral-background text-neutral-textPrimary px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 border border-neutral-border">
+                  <MessageSquareText className="w-4 h-4" /> Write review
+                </button>
               )}
             </div>
-            <p className="text-sm text-neutral-textSecondary mb-4">{job.description}</p>
-            <div className="text-xs text-neutral-textSecondary">Job Code: {job.jobCode}</div>
-          </div>
-        </div>
+          </article>
+        </aside>
+      </section>
 
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="flex items-center gap-3 text-sm">
-            <Calendar className="w-5 h-5 text-neutral-textSecondary" />
-            <div>
-              <div className="text-neutral-textSecondary">Preferred Time</div>
-              <div className="font-semibold text-neutral-textPrimary">
-                {new Date(job.preferredTime).toLocaleString()}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <MapPin className="w-5 h-5 text-neutral-textSecondary" />
-            <div>
-              <div className="text-neutral-textSecondary">Location</div>
-              <div className="font-semibold text-neutral-textPrimary">{job.addressLine1}</div>
-            </div>
-          </div>
-          {job.estimatedBudget && (
-            <div className="flex items-center gap-3 text-sm">
-              <DollarSign className="w-5 h-5 text-neutral-textSecondary" />
-              <div>
-                <div className="text-neutral-textSecondary">Estimated Budget</div>
-                <div className="font-semibold text-neutral-textPrimary">₹{job.estimatedBudget}</div>
-              </div>
-            </div>
-          )}
-          {job.finalPrice && (
-            <div className="flex items-center gap-3 text-sm">
-              <DollarSign className="w-5 h-5 text-accent-green" />
-              <div>
-                <div className="text-neutral-textSecondary">Final Price</div>
-                <div className="font-semibold text-accent-green">₹{job.finalPrice}</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {job.specialInstructions && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              <div className="text-xs font-semibold text-blue-800">Special Instructions</div>
-            </div>
-            <div className="text-sm text-blue-900">{job.specialInstructions}</div>
-          </div>
-        )}
-
-        {job.attachments && job.attachments.length > 0 && (
-          <div className="mb-6">
-            <div className="text-xs font-semibold text-neutral-textSecondary mb-3 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4" />
-              Attachments
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {job.attachments.map((attachment, idx) => (
-                <a
-                  key={idx}
-                  href={attachment.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative aspect-square bg-neutral-background rounded-xl overflow-hidden border border-neutral-border hover:border-primary-main/30 transition-all"
-                >
-                  <img
-                    src={attachment.fileUrl}
-                    alt={attachment.fileName || 'Attachment'}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                    <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {provider && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-            className="mb-6 bg-gradient-to-br from-white to-blue-50/30 rounded-2xl p-6 border border-blue-100 shadow-sm"
-          >
-            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-              <User className="w-5 h-5 text-primary-main" />
-              Service Provider
-            </h2>
-            <div className="flex items-start gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-primary-main to-primary-dark rounded-2xl flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-8 h-8 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-bold text-neutral-textPrimary">{provider.businessName || 'Service Provider'}</h3>
-                  {provider.verificationStatus === 'VERIFIED' && (
-                    <span className="flex items-center gap-1 px-2.5 py-1 bg-accent-green/20 text-accent-green rounded-full text-xs font-semibold">
-                      <Shield className="w-3 h-3" />
-                      Verified
-                    </span>
-                  )}
-                </div>
-                {provider.rating && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className={`w-4 h-4 ${star <= Math.round(provider.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-neutral-border'}`} />
-                      ))}
-                    </div>
-                    <span className="text-sm font-semibold text-neutral-textPrimary">{provider.rating.toFixed(1)}</span>
-                    {provider.ratingCount && (
-                      <span className="text-xs text-neutral-textSecondary">({provider.ratingCount} reviews)</span>
-                    )}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-4 text-sm text-neutral-textSecondary">
-                  {provider.experienceYears && (
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-4 h-4" />
-                      <span>{provider.experienceYears} years experience</span>
-                    </div>
-                  )}
-                  {provider.totalJobsCompleted !== undefined && (
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{provider.totalJobsCompleted} jobs completed</span>
-                    </div>
-                  )}
-                </div>
-                {provider.bio && (
-                  <p className="text-sm text-neutral-textSecondary mt-3 line-clamp-2">{provider.bio}</p>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-          className="mb-6 bg-white rounded-2xl p-6 border border-neutral-border"
-        >
-          <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary-main" />
-            Job Timeline
-          </h2>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-textPrimary">Job Created</div>
-                <div className="text-xs text-neutral-textSecondary">{new Date(job.createdAt).toLocaleString()}</div>
-              </div>
-            </div>
-            {job.acceptedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">Provider Accepted</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.acceptedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-            {job.startedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-primary-main rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">Service Started</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.startedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-            {job.completedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">Service Completed</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.completedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {paymentSchedule && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-            className="mb-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200"
-          >
-            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-accent-green" />
-              Payment Details
-            </h2>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-neutral-textSecondary">Total Amount</span>
-                <span className="text-lg font-bold text-neutral-textPrimary">₹{paymentSchedule.totalAmount.toLocaleString()}</span>
-              </div>
-              {paymentSchedule.paymentType === 'PARTIAL' && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-neutral-textSecondary">Upfront ({paymentSchedule.upfrontPercentage}%)</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-neutral-textPrimary">₹{paymentSchedule.upfrontAmount.toLocaleString()}</span>
-                      {paymentSchedule.upfrontPaid && (
-                        <CheckCircle2 className="w-4 h-4 text-accent-green" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-neutral-textSecondary">Final Amount</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-neutral-textPrimary">₹{paymentSchedule.finalAmount.toLocaleString()}</span>
-                      {paymentSchedule.finalPaid && (
-                        <CheckCircle2 className="w-4 h-4 text-accent-green" />
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-              <div className="pt-3 border-t border-green-200">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-neutral-textSecondary">Payment Status</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    paymentSchedule.paymentStatus === 'COMPLETED' 
-                      ? 'bg-accent-green/20 text-accent-green'
-                      : paymentSchedule.paymentStatus === 'PARTIAL'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-neutral-background text-neutral-textSecondary'
-                  }`}>
-                    {paymentSchedule.paymentStatus}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="flex gap-3 flex-wrap">
-          {canPay && paymentSchedule && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowPaymentModal(true)}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <CreditCard className="w-4 h-4" />
-              {actionLoading ? 'Processing...' : `Pay ₹${paymentSchedule.finalAmount.toLocaleString()}`}
-            </motion.button>
-          )}
-          {canReview && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowReviewModal(true)}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Star className="w-4 h-4" />
-              Rate Provider
-            </motion.button>
-          )}
-          {canCancel && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleCancelJob}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 border-2 border-red-500 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X className="w-4 h-4" />
-              {actionLoading ? 'Cancelling...' : 'Cancel Job'}
-            </motion.button>
-          )}
-        </div>
-      </motion.div>
-
-      {review && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border"
-        >
-          <h2 className="text-lg font-bold text-neutral-textPrimary mb-4">Your Review</h2>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} className={`w-5 h-5 ${star <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-neutral-border'}`} />
-              ))}
-            </div>
-            <span className="text-sm font-semibold text-neutral-textPrimary">{review.rating}/5</span>
-          </div>
-          {review.reviewText && (
-            <p className="text-sm text-neutral-textSecondary">{review.reviewText}</p>
-          )}
-        </motion.div>
+      {showPaymentModal && payment && (
+        <Modal title="Confirm payment" onClose={() => setShowPaymentModal(false)}>
+          <p className="text-sm text-neutral-textSecondary mb-4">You are about to pay ₹{payment.finalAmount.toLocaleString()} for this completed job.</p>
+          <button onClick={submitPayment} disabled={actionLoading} className="w-full rounded-xl bg-primary-main text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
+            {actionLoading ? 'Processing...' : 'Confirm payment'}
+          </button>
+        </Modal>
       )}
 
       {showReviewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-md w-full"
-          >
-            <h2 className="text-xl font-bold text-neutral-textPrimary mb-4">Rate Your Experience</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-semibold text-neutral-textPrimary mb-2 block">Overall Rating</label>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => setReviewData({ ...reviewData, rating: star })}
-                      className="text-2xl"
-                    >
-                      <Star className={`w-8 h-8 ${star <= reviewData.rating ? 'text-yellow-400 fill-yellow-400' : 'text-neutral-border'}`} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-neutral-textPrimary mb-2 block">Review</label>
-                <textarea
-                  value={reviewData.reviewText}
-                  onChange={(e) => setReviewData({ ...reviewData, reviewText: e.target.value })}
-                  className="w-full p-3 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none"
-                  rows={4}
-                  placeholder="Share your experience..."
-                />
-              </div>
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowReviewModal(false)}
-                  disabled={actionLoading}
-                  className="flex-1 px-4 py-2.5 border-2 border-neutral-border text-neutral-textSecondary rounded-xl font-semibold hover:bg-neutral-background transition-all disabled:opacity-50"
-                >
-                  Cancel
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmitReview}
-                  disabled={actionLoading}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-md transition-all disabled:opacity-50"
-                >
-                  {actionLoading ? 'Submitting...' : 'Submit Review'}
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+        <Modal title="Submit review" onClose={() => setShowReviewModal(false)}>
+          <label className="block text-sm font-semibold mb-1">Overall rating (1-5)</label>
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={reviewData.rating}
+            onChange={(e) => setReviewData((prev) => ({ ...prev, rating: Number(e.target.value) }))}
+            className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm mb-3"
+          />
+          <label className="block text-sm font-semibold mb-1">Feedback</label>
+          <textarea
+            rows={4}
+            value={reviewData.reviewText}
+            onChange={(e) => setReviewData((prev) => ({ ...prev, reviewText: e.target.value }))}
+            className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm mb-4"
+            placeholder="Write your experience with service quality, punctuality and communication"
+          />
+          <button onClick={submitReview} disabled={actionLoading} className="w-full rounded-xl bg-primary-main text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60">
+            {actionLoading ? 'Submitting...' : 'Submit review'}
+          </button>
+        </Modal>
       )}
+    </div>
+  )
+}
 
-      {showPaymentModal && paymentSchedule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-md w-full"
-          >
-            <h2 className="text-xl font-bold text-neutral-textPrimary mb-4">Complete Payment</h2>
-            <div className="space-y-4 mb-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-neutral-textSecondary">Final Amount</span>
-                <span className="font-semibold text-neutral-textPrimary">₹{paymentSchedule.finalAmount}</span>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowPaymentModal(false)}
-                disabled={actionLoading}
-                className="flex-1 px-4 py-2.5 border-2 border-neutral-border text-neutral-textSecondary rounded-xl font-semibold hover:bg-neutral-background transition-all disabled:opacity-50"
-              >
-                Cancel
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handlePayment}
-                disabled={actionLoading}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl font-semibold hover:shadow-md transition-all disabled:opacity-50"
-              >
-                {actionLoading ? 'Processing...' : `Pay ₹${paymentSchedule.finalAmount.toLocaleString()}`}
-              </motion.button>
-            </div>
-          </motion.div>
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white border border-neutral-border p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-neutral-background"><X className="w-4 h-4" /></button>
         </div>
-      )}
+        {children}
+      </div>
     </div>
   )
 }
