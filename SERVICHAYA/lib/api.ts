@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // Direct backend API calls
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://servichaya-production.up.railway.app/api'
 
 const api = axios.create({
   baseURL: BACKEND_URL, // Direct backend URL
