@@ -1,247 +1,156 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth'
-import { getCustomerProfile, updateCustomerProfile, type CustomerProfileDto } from '@/lib/services/customer'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'react-hot-toast'
+import { BadgeCheck, Mail, MapPin, Phone, Save, UserCircle2 } from 'lucide-react'
+import { getCurrentUser } from '@/lib/auth'
+import { getCustomerProfile, type CustomerProfileDto, updateCustomerProfile } from '@/lib/services/customer'
 import Loader from '@/components/ui/Loader'
-import { User, Mail, Phone, MapPin, Calendar, DollarSign, ClipboardList, CheckCircle2, XCircle, Star } from 'lucide-react'
-import { motion } from 'framer-motion'
 
 export default function CustomerProfilePage() {
-  const router = useRouter()
-  const [profile, setProfile] = useState<CustomerProfileDto | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
-  const [formData, setFormData] = useState({ name: '', profileImageUrl: '' })
+  const [saving, setSaving] = useState(false)
+  const [profile, setProfile] = useState<CustomerProfileDto | null>(null)
+  const [name, setName] = useState('')
+  const [image, setImage] = useState('')
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      router.push('/login?redirect=/customer/profile')
-      return
-    }
-    fetchProfile(currentUser.userId)
-  }, [router])
+    const user = getCurrentUser()
+    if (!user) return
+    load(user.userId)
+  }, [])
 
-  const fetchProfile = async (customerId: number) => {
+  const load = async (customerId: number) => {
     try {
       setLoading(true)
-      const data = await getCustomerProfile(customerId)
-      setProfile(data)
-      // Use name or fullName for compatibility
-      const displayName = data.name || (data as any).fullName || ''
-      setFormData({ name: displayName, profileImageUrl: data.profileImageUrl || '' })
-    } catch (error: any) {
-      console.error('Failed to fetch profile:', error)
-      const errorMsg = error.response?.data?.message || 'Failed to load profile'
-      toast.error(errorMsg)
+      const res = await getCustomerProfile(customerId)
+      setProfile(res)
+      setName(res.name || res.fullName || '')
+      setImage(res.profileImageUrl || '')
+    } catch {
+      toast.error('Unable to load profile')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSave = async () => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) return
-
+  const save = async () => {
+    const user = getCurrentUser()
+    if (!user) return
     try {
-      const updated = await updateCustomerProfile(currentUser.userId, formData)
+      setSaving(true)
+      const updated = await updateCustomerProfile(user.userId, { name, profileImageUrl: image })
       setProfile(updated)
-      setEditing(false)
-      toast.success('Profile updated successfully')
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to update profile')
+      toast.success('Profile saved')
+    } catch {
+      toast.error('Failed to save profile')
+    } finally {
+      setSaving(false)
     }
   }
 
-  if (loading) {
-    return <Loader fullScreen text="Loading profile..." />
-  }
+  const completion = useMemo(() => {
+    if (!profile) return 0
+    let points = 40
+    if (name.trim()) points += 20
+    if (image.trim()) points += 20
+    if (profile.addresses?.length) points += 20
+    return Math.min(100, points)
+  }, [profile, name, image])
 
-  if (!profile) {
-    return (
-      <div className="px-6 py-6">
-        <p className="text-neutral-textSecondary">Profile not found</p>
-      </div>
-    )
-  }
+  if (loading) return <Loader fullScreen text="Loading profile" />
+  if (!profile) return <div className="px-6 py-6">No profile data.</div>
 
   return (
-    <div className="px-6 py-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-textPrimary font-display">My Profile</h1>
-            <p className="text-sm text-neutral-textSecondary mt-1">Manage your profile information</p>
+    <div className="px-6 py-6 space-y-6">
+      <section className="rounded-3xl bg-slate-900 text-white border border-slate-800 p-7">
+        <h1 className="text-3xl font-bold">Your Profile</h1>
+        <p className="text-sm text-slate-300 mt-1">Manage identity details, track account completeness and keep addresses current.</p>
+      </section>
+
+      <section className="grid lg:grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-neutral-border p-6">
+          <div className="flex flex-col items-center text-center">
+            {image ? (
+              <img src={image} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-primary-main/20" />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-primary-main/10 text-primary-main flex items-center justify-center">
+                <UserCircle2 className="w-10 h-10" />
+              </div>
+            )}
+            <p className="mt-3 font-bold text-lg">{name || 'Customer'}</p>
+            <p className="text-xs text-neutral-textSecondary">Customer ID: {profile.userId}</p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full"><BadgeCheck className="w-3.5 h-3.5" /> Verified profile</span>
           </div>
-          {!editing && (
-            <button
-              onClick={() => setEditing(true)}
-              className="px-5 py-2.5 bg-primary-main text-white rounded-xl text-sm font-semibold hover:bg-primary-dark transition-all"
-            >
-              Edit Profile
-            </button>
-          )}
+
+          <div className="mt-6 text-sm space-y-2 text-neutral-textSecondary">
+            <p className="inline-flex items-center gap-2"><Mail className="w-4 h-4" />{profile.email}</p>
+            <p className="inline-flex items-center gap-2"><Phone className="w-4 h-4" />{profile.mobileNumber}</p>
+          </div>
         </div>
-      </motion.div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-          className="md:col-span-1"
-        >
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
-            <div className="text-center mb-6">
-              <div className="w-24 h-24 bg-gradient-to-br from-primary-main to-primary-dark rounded-full flex items-center justify-center mx-auto mb-4">
-                {profile.profileImageUrl ? (
-                  <img src={profile.profileImageUrl} alt={profile.name || (profile as any).fullName || 'Customer'} className="w-24 h-24 rounded-full object-cover" />
-                ) : (
-                  <User className="w-12 h-12 text-white" />
-                )}
-              </div>
-              {editing ? (
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-neutral-border rounded-xl text-sm focus:ring-2 focus:ring-primary-main focus:border-transparent"
-                    placeholder="Name"
-                  />
-                  <input
-                    type="url"
-                    value={formData.profileImageUrl}
-                    onChange={(e) => setFormData({ ...formData, profileImageUrl: e.target.value })}
-                    className="w-full px-4 py-2 border border-neutral-border rounded-xl text-sm focus:ring-2 focus:ring-primary-main focus:border-transparent"
-                    placeholder="Profile Image URL"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSave}
-                      className="flex-1 px-4 py-2 bg-accent-green text-white rounded-xl text-sm font-semibold hover:bg-green-600 transition-all"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditing(false)
-                        const displayName = profile.name || (profile as any).fullName || ''
-                        setFormData({ name: displayName, profileImageUrl: profile.profileImageUrl || '' })
-                      }}
-                      className="flex-1 px-4 py-2 bg-neutral-background text-neutral-textSecondary rounded-xl text-sm font-semibold hover:bg-neutral-border transition-all"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h2 className="text-xl font-bold text-neutral-textPrimary mb-2">{profile.name || (profile as any).fullName || 'Customer'}</h2>
-                  <p className="text-xs text-neutral-textSecondary">
-                    Member since {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'}
-                  </p>
-                </div>
-              )}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-border p-6 space-y-6">
+          <div>
+            <h2 className="font-bold text-lg">Edit details</h2>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              <Field label="Display name" value={name} onChange={setName} />
+              <Field label="Profile image URL" value={image} onChange={setImage} />
             </div>
-
-            <div className="space-y-3 pt-6 border-t border-neutral-border">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="w-4 h-4 text-neutral-textSecondary" />
-                <span className="text-neutral-textSecondary">{profile.email}</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="w-4 h-4 text-neutral-textSecondary" />
-                <span className="text-neutral-textSecondary">{profile.mobileNumber}</span>
-              </div>
-            </div>
+            <button onClick={save} disabled={saving} className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-main text-white font-semibold disabled:opacity-60">
+              <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save profile'}
+            </button>
           </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-          className="md:col-span-2 space-y-6"
-        >
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-border">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-primary-main/10 rounded-xl flex items-center justify-center">
-                  <ClipboardList className="w-5 h-5 text-primary-main" />
-                </div>
-                <div>
-                  <div className="text-xs text-neutral-textSecondary">Total Jobs</div>
-                  <div className="text-2xl font-bold text-primary-main">{profile.totalJobs || 0}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-border">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-accent-green/10 rounded-xl flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-accent-green" />
-                </div>
-                <div>
-                  <div className="text-xs text-neutral-textSecondary">Completed</div>
-                  <div className="text-2xl font-bold text-accent-green">{profile.completedJobs || 0}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-border">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-accent-green/10 rounded-xl flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-accent-green" />
-                </div>
-                <div>
-                  <div className="text-xs text-neutral-textSecondary">Total Spent</div>
-                  <div className="text-2xl font-bold text-accent-green">₹{(profile.totalSpent || 0).toLocaleString()}</div>
-                </div>
-              </div>
+          <div className="rounded-xl bg-neutral-background border border-neutral-border p-4">
+            <p className="text-sm font-semibold">Profile completion: {completion}%</p>
+            <div className="mt-2 h-2 bg-white rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-primary-main to-primary-light" style={{ width: `${completion}%` }} />
             </div>
           </div>
 
-          {profile.addresses && profile.addresses.length > 0 && (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
-              <h3 className="text-lg font-bold text-neutral-textPrimary mb-4 flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Saved Addresses
-              </h3>
-              <div className="space-y-3">
-                {profile.addresses.map((address) => (
-                  <div key={address.id} className="p-4 bg-neutral-background rounded-xl border border-neutral-border">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-neutral-textPrimary mb-1">{address.addressLine1}</p>
-                        {address.addressLine2 && (
-                          <p className="text-xs text-neutral-textSecondary mb-1">{address.addressLine2}</p>
-                        )}
-                        <p className="text-xs text-neutral-textSecondary">
-                          {address.cityName} {address.pincode && `- ${address.pincode}`}
-                        </p>
-                      </div>
-                      {address.isDefault && (
-                        <span className="px-2 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold">
-                          Default
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Stat label="Total Jobs" value={profile.totalJobs || 0} />
+            <Stat label="Completed" value={profile.completedJobs || 0} />
+            <Stat label="Total Spend" value={`₹${(profile.totalSpent || 0).toLocaleString()}`} />
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-neutral-border p-6">
+        <h3 className="font-bold text-lg mb-4">Saved addresses</h3>
+        {profile.addresses?.length ? (
+          <div className="grid md:grid-cols-2 gap-3">
+            {profile.addresses.map((address) => (
+              <div key={address.id} className="rounded-xl border border-neutral-border p-4">
+                <p className="font-semibold text-sm inline-flex items-center gap-1"><MapPin className="w-4 h-4" />{address.addressLine1}</p>
+                {address.addressLine2 && <p className="text-xs text-neutral-textSecondary mt-1">{address.addressLine2}</p>}
+                <p className="text-xs text-neutral-textSecondary mt-1">{address.cityName} {address.pincode ? `- ${address.pincode}` : ''}</p>
+                {address.isDefault && <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-primary-main/10 text-primary-main">Default</span>}
               </div>
-            </div>
-          )}
-        </motion.div>
-      </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-neutral-textSecondary">No addresses saved yet.</p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold mb-1">{label}</label>
+      <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm" />
+    </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-neutral-border p-4">
+      <p className="text-xs text-neutral-textSecondary">{label}</p>
+      <p className="text-xl font-bold mt-1">{value}</p>
     </div>
   )
 }
