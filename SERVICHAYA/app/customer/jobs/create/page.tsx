@@ -1,542 +1,228 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { AlertCircle, ArrowLeft, CalendarClock, CheckCircle2, Home, Layers, MapPin, Send } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import { getCurrentUser } from '@/lib/auth'
 import { createJob, type CreateJobDto } from '@/lib/services/job'
 import { getAllCategories, type ServiceCategory } from '@/lib/services/service'
-import { getAllServiceSkills, getServiceSkillsByCategory } from '@/lib/services/provider'
-import { getAllActiveCities, getZonesByCity, getPodsByZone } from '@/lib/services/admin'
-import { toast } from 'react-hot-toast'
-import Loader from '@/components/ui/Loader'
-import { Plus, Calendar, MapPin, DollarSign, FileText, AlertCircle, ArrowLeft, Sparkles, CheckCircle2, Loader2, Wrench } from 'lucide-react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
+import { getServiceSkillsByCategory, type ServiceSkillDto } from '@/lib/services/provider'
+import { getAllActiveCities, getZonesByCity, getPodsByZone, type CityMasterDto, type ZoneMasterDto, type PodMasterDto } from '@/lib/services/admin'
+
+const initialState: CreateJobDto = {
+  serviceCategoryId: 0,
+  serviceSkillId: undefined,
+  title: '',
+  description: '',
+  preferredTime: '',
+  isEmergency: false,
+  estimatedBudget: undefined,
+  cityId: 0,
+  zoneId: undefined,
+  podId: undefined,
+  addressLine1: '',
+  addressLine2: '',
+  pincode: '',
+  specialInstructions: '',
+}
 
 export default function CreateJobPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState<CreateJobDto>(initialState)
   const [categories, setCategories] = useState<ServiceCategory[]>([])
-  const [loadingCategories, setLoadingCategories] = useState(true)
-  const [availableSkills, setAvailableSkills] = useState<any[]>([])
-  const [loadingSkills, setLoadingSkills] = useState(false)
-  const [cities, setCities] = useState<any[]>([])
-  const [zones, setZones] = useState<any[]>([])
-  const [pods, setPods] = useState<any[]>([])
-  const [loadingLocation, setLoadingLocation] = useState(false)
-
-  const [formData, setFormData] = useState<CreateJobDto>({
-    serviceCategoryId: 0,
-    serviceSkillId: undefined,
-    title: '',
-    description: '',
-    preferredTime: '',
-    isEmergency: false,
-    estimatedBudget: undefined,
-    cityId: 0,
-    zoneId: undefined,
-    podId: undefined,
-    addressLine1: '',
-    addressLine2: '',
-    pincode: '',
-    specialInstructions: '',
-    attachments: [],
-  })
+  const [skills, setSkills] = useState<ServiceSkillDto[]>([])
+  const [cities, setCities] = useState<CityMasterDto[]>([])
+  const [zones, setZones] = useState<ZoneMasterDto[]>([])
+  const [pods, setPods] = useState<PodMasterDto[]>([])
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
+    const user = getCurrentUser()
+    if (!user) {
       router.push('/login?redirect=/customer/jobs/create')
       return
     }
-    Promise.all([fetchCategories(), loadLocationData()])
+    hydrateMasterData()
   }, [router])
 
-  useEffect(() => {
-    if (formData.serviceCategoryId) {
-      loadSkillsForCategory(formData.serviceCategoryId)
-    } else {
-      setAvailableSkills([])
-      setFormData(prev => ({ ...prev, serviceSkillId: undefined }))
-    }
-  }, [formData.serviceCategoryId])
-
-  useEffect(() => {
-    if (formData.cityId) {
-      loadZonesForCity(formData.cityId)
-    } else {
-      setZones([])
-      setFormData(prev => ({ ...prev, zoneId: undefined, podId: undefined }))
-    }
-  }, [formData.cityId])
-
-  useEffect(() => {
-    if (formData.zoneId) {
-      loadPodsForZone(formData.zoneId)
-    } else {
-      setPods([])
-      setFormData(prev => ({ ...prev, podId: undefined }))
-    }
-  }, [formData.zoneId])
-
-  const fetchCategories = async () => {
+  const hydrateMasterData = async () => {
     try {
-      setLoadingCategories(true)
-      const cats = await getAllCategories()
-      setCategories(cats)
-    } catch (error) {
-      console.error('Failed to fetch categories:', error)
-      toast.error('Failed to load service categories')
-    } finally {
-      setLoadingCategories(false)
+      const [serviceCategories, cityData] = await Promise.all([getAllCategories(), getAllActiveCities()])
+      setCategories(serviceCategories)
+      setCities(cityData)
+    } catch {
+      toast.error('Failed to load booking form data')
     }
   }
 
-  const loadSkillsForCategory = async (categoryId: number) => {
-    try {
-      setLoadingSkills(true)
-      const skills = await getServiceSkillsByCategory(categoryId)
-      setAvailableSkills(skills.filter(s => s.isActive))
-    } catch (error) {
-      console.error('Failed to fetch skills:', error)
-      // Fallback to all skills if category-specific fails
-      try {
-        const allSkills = await getAllServiceSkills()
-        setAvailableSkills(allSkills.filter(s => s.isActive))
-      } catch (fallbackError) {
-        console.error('Failed to fetch all skills:', fallbackError)
-        toast.error('Failed to load service types')
-      }
-    } finally {
-      setLoadingSkills(false)
-    }
-  }
-
-  const loadLocationData = async () => {
-    try {
-      setLoadingLocation(true)
-      const citiesData = await getAllActiveCities()
-      setCities(citiesData)
-    } catch (error) {
-      console.error('Failed to fetch cities:', error)
-      toast.error('Failed to load location data')
-    } finally {
-      setLoadingLocation(false)
-    }
-  }
-
-  const loadZonesForCity = async (cityId: number) => {
-    try {
-      const zonesData = await getZonesByCity(cityId)
-      setZones(zonesData)
-    } catch (error) {
-      console.error('Failed to fetch zones:', error)
-      toast.error('Failed to load zones')
-    }
-  }
-
-  const loadPodsForZone = async (zoneId: number) => {
-    try {
-      const podsData = await getPodsByZone(zoneId)
-      setPods(podsData)
-    } catch (error) {
-      console.error('Failed to fetch pods:', error)
-      toast.error('Failed to load PODs')
-    }
-  }
-
-  const validateForm = (): string | null => {
-    if (!formData.serviceCategoryId || formData.serviceCategoryId === 0) {
-      return 'Please select a service category'
-    }
-    if (!formData.title || formData.title.trim().length < 5) {
-      return 'Job title must be at least 5 characters'
-    }
-    if (!formData.description || formData.description.trim().length < 20) {
-      return 'Description must be at least 20 characters'
-    }
-    if (!formData.preferredTime) {
-      return 'Please select a preferred time'
-    }
-    const selectedTime = new Date(formData.preferredTime)
-    const now = new Date()
-    if (selectedTime < now) {
-      return 'Preferred time must be in the future'
-    }
-    if (!formData.cityId || formData.cityId === 0) {
-      return 'Please select a city'
-    }
-    if (!formData.addressLine1 || formData.addressLine1.trim().length < 10) {
-      return 'Please provide a complete address'
-    }
-    if (formData.estimatedBudget && formData.estimatedBudget < 0) {
-      return 'Budget cannot be negative'
-    }
-    if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
-      return 'Pincode must be 6 digits'
-    }
-    return null
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      toast.error('Please login first')
-      router.push('/login?redirect=/customer/jobs/create')
+  const onSelectCategory = async (categoryId: number) => {
+    setForm((prev) => ({ ...prev, serviceCategoryId: categoryId, serviceSkillId: undefined }))
+    if (!categoryId) {
+      setSkills([])
       return
     }
-    
-    const validationError = validateForm()
-    if (validationError) {
-      toast.error(validationError)
+    try {
+      setSkills(await getServiceSkillsByCategory(categoryId))
+    } catch {
+      toast.error('Unable to load skill options')
+    }
+  }
+
+  const onSelectCity = async (cityId: number) => {
+    setForm((prev) => ({ ...prev, cityId, zoneId: undefined, podId: undefined }))
+    setPods([])
+    if (!cityId) {
+      setZones([])
+      return
+    }
+    try {
+      setZones(await getZonesByCity(cityId))
+    } catch {
+      toast.error('Unable to load zones')
+    }
+  }
+
+  const onSelectZone = async (zoneId: number) => {
+    setForm((prev) => ({ ...prev, zoneId, podId: undefined }))
+    if (!zoneId) {
+      setPods([])
+      return
+    }
+    try {
+      setPods(await getPodsByZone(zoneId))
+    } catch {
+      toast.error('Unable to load PODs')
+    }
+  }
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    const user = getCurrentUser()
+    if (!user) return
+
+    if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
+      toast.error('Please fill all mandatory fields')
       return
     }
 
     try {
       setLoading(true)
-      const job = await createJob(currentUser.userId, {
-        ...formData,
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        addressLine1: formData.addressLine1.trim(),
-        addressLine2: formData.addressLine2?.trim(),
-        specialInstructions: formData.specialInstructions?.trim(),
-        serviceSkillId: formData.serviceSkillId || undefined,
-        zoneId: formData.zoneId || undefined,
-        podId: formData.podId || undefined
-      })
-      toast.success('Job created successfully!')
-      router.push(`/customer/jobs/${job.id}`)
+      await createJob(user.userId, { ...form, estimatedBudget: form.estimatedBudget || undefined })
+      toast.success('Your service request is submitted successfully')
+      router.push('/customer/jobs')
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to create job. Please try again.'
-      toast.error(errorMsg)
-      console.error('Create job error:', error)
+      toast.error(error?.response?.data?.message || 'Submission failed')
     } finally {
       setLoading(false)
     }
   }
 
-  if (loadingCategories || loadingLocation) {
-    return <Loader fullScreen text="Loading form data..." />
-  }
-
   return (
-    <div className="px-6 py-6 max-w-4xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <Link href="/customer/jobs" className="inline-flex items-center gap-2 text-sm text-neutral-textSecondary hover:text-primary-main mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Jobs
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-textPrimary font-display mb-2">Create New Job</h1>
-          <p className="text-sm text-neutral-textSecondary">Fill in the details to post your service request</p>
+    <div className="px-6 py-6 space-y-6">
+      <Link href="/customer/jobs" className="inline-flex items-center gap-2 text-sm text-neutral-textSecondary hover:text-primary-main">
+        <ArrowLeft className="w-4 h-4" /> Back to jobs
+      </Link>
+
+      <section className="rounded-3xl bg-gradient-to-r from-slate-900 via-primary-dark to-primary-main text-white p-7">
+        <h1 className="text-3xl font-bold mb-2">Create a new service request</h1>
+        <p className="text-sm text-blue-100 max-w-2xl">We made booking simpler: choose service, add details, pick location and preferred time. That’s it.</p>
+        <div className="mt-5 grid sm:grid-cols-3 gap-3 text-xs">
+          {[
+            ['1', 'Service info'],
+            ['2', 'Location & time'],
+            ['3', 'Review & submit'],
+          ].map(([n, label]) => (
+            <div key={label} className="rounded-xl bg-white/10 border border-white/20 px-3 py-2"><span className="font-bold mr-1">{n}.</span>{label}</div>
+          ))}
         </div>
-      </motion.div>
+      </section>
 
-      <motion.form
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        onSubmit={handleSubmit}
-        className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-neutral-border space-y-6"
-      >
-        {/* Service Category */}
-        <div>
-          <label className="block text-sm font-semibold text-neutral-textPrimary mb-2 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary-main" />
-            Service Category <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={formData.serviceCategoryId}
-            onChange={(e) => setFormData({ ...formData, serviceCategoryId: Number(e.target.value), serviceSkillId: undefined })}
-            className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all bg-white"
-            required
-          >
-            <option value={0}>Select a category</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Service Type/Skill */}
-        {formData.serviceCategoryId > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            transition={{ duration: 0.3 }}
-          >
-            <label className="block text-sm font-semibold text-neutral-textPrimary mb-2 flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-primary-main" />
-              Service Type <span className="text-xs text-neutral-textSecondary font-normal">(Optional but recommended)</span>
-            </label>
-            {loadingSkills ? (
-              <div className="px-4 py-3 border-2 border-neutral-border rounded-xl bg-neutral-background animate-pulse">
-                <span className="text-sm text-neutral-textSecondary">Loading service types...</span>
-              </div>
-            ) : (
-              <select
-                value={formData.serviceSkillId || ''}
-                onChange={(e) => setFormData({ ...formData, serviceSkillId: e.target.value ? Number(e.target.value) : undefined })}
-                className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all bg-white"
-              >
-                <option value="">Select a service type (optional)</option>
-                {availableSkills.map((skill) => (
-                  <option key={skill.id} value={skill.id}>
-                    {skill.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            {availableSkills.length === 0 && !loadingSkills && (
-              <p className="text-xs text-neutral-textSecondary mt-1">No specific service types available for this category</p>
-            )}
-          </motion.div>
-        )}
-
-        {/* Job Title */}
-        <div>
-          <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-            Job Title <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all"
-            placeholder="e.g., AC Repair at Home"
-            maxLength={100}
-            required
-          />
-          <div className="text-xs text-neutral-textSecondary mt-1">{formData.title.length}/100 characters</div>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-            Description <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={5}
-            className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all resize-none"
-            placeholder="Describe your service requirement in detail. Include any specific issues, requirements, or preferences..."
-            maxLength={1000}
-            required
-          />
-          <div className="text-xs text-neutral-textSecondary mt-1">{formData.description.length}/1000 characters (minimum 20)</div>
-        </div>
-
-        {/* Preferred Time and Budget */}
-        <div className="grid md:grid-cols-2 gap-6">
+      <form onSubmit={submit} className="grid lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 bg-white border border-neutral-border rounded-2xl p-6 shadow-sm space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-              <Calendar className="w-4 h-4 inline mr-1" />
-              Preferred Time <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.preferredTime}
-              onChange={(e) => setFormData({ ...formData, preferredTime: e.target.value })}
-              min={new Date().toISOString().slice(0, 16)}
-              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all"
-              required
-            />
+            <h2 className="font-bold text-lg mb-4 inline-flex items-center gap-2"><Layers className="w-5 h-5 text-primary-main" /> Service information</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Select label="Category" required value={form.serviceCategoryId} onChange={(v) => onSelectCategory(Number(v))}>
+                <option value={0}>Select category</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+              <Select label="Skill (optional)" value={form.serviceSkillId || ''} onChange={(v) => setForm((prev) => ({ ...prev, serviceSkillId: v ? Number(v) : undefined }))}>
+                <option value="">Select skill</option>
+                {skills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              <Input label="Request title" required value={form.title} onChange={(v) => setForm((prev) => ({ ...prev, title: v }))} placeholder="Example: AC servicing and gas refill" />
+              <Input label="Estimated budget (₹)" type="number" value={form.estimatedBudget || ''} onChange={(v) => setForm((prev) => ({ ...prev, estimatedBudget: v ? Number(v) : undefined }))} placeholder="Optional" />
+            </div>
+            <label className="block text-sm font-semibold mt-4 mb-1">Description *</label>
+            <textarea required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-main/30" placeholder="Explain issue, requirements, and expected outcome" />
+            <label className="mt-3 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.isEmergency} onChange={(e) => setForm((prev) => ({ ...prev, isEmergency: e.target.checked }))} /> Mark as emergency</label>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-              <DollarSign className="w-4 h-4 inline mr-1" />
-              Estimated Budget (₹)
-            </label>
-            <input
-              type="number"
-              value={formData.estimatedBudget || ''}
-              onChange={(e) => setFormData({ ...formData, estimatedBudget: e.target.value ? Number(e.target.value) : undefined })}
-              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all"
-              placeholder="Optional - Enter your budget"
-              min="0"
-              step="100"
-            />
+            <h2 className="font-bold text-lg mb-4 inline-flex items-center gap-2"><MapPin className="w-5 h-5 text-primary-main" /> Location & schedule</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Input label="Preferred date & time" type="datetime-local" required value={form.preferredTime} onChange={(v) => setForm((prev) => ({ ...prev, preferredTime: v }))} icon={CalendarClock} />
+              <Select label="City" required value={form.cityId} onChange={(v) => onSelectCity(Number(v))}>
+                <option value={0}>Select city</option>
+                {cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
+              </Select>
+              <Select label="Zone" value={form.zoneId || ''} onChange={(v) => onSelectZone(v ? Number(v) : 0)}>
+                <option value="">Select zone</option>
+                {zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+              </Select>
+              <Select label="POD" value={form.podId || ''} onChange={(v) => setForm((prev) => ({ ...prev, podId: v ? Number(v) : undefined }))}>
+                <option value="">Select pod</option>
+                {pods.map((pod) => <option key={pod.id} value={pod.id}>{pod.name}</option>)}
+              </Select>
+              <Input label="Address line 1" required value={form.addressLine1} onChange={(v) => setForm((prev) => ({ ...prev, addressLine1: v }))} icon={Home} />
+              <Input label="Address line 2" value={form.addressLine2 || ''} onChange={(v) => setForm((prev) => ({ ...prev, addressLine2: v }))} />
+              <Input label="Pincode" value={form.pincode || ''} onChange={(v) => setForm((prev) => ({ ...prev, pincode: v }))} />
+            </div>
+
+            <label className="block text-sm font-semibold mt-4 mb-1">Special instructions</label>
+            <textarea value={form.specialInstructions || ''} onChange={(e) => setForm((prev) => ({ ...prev, specialInstructions: e.target.value }))} rows={3} className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-main/30" placeholder="Landmark, building entry details or notes" />
           </div>
         </div>
 
-        {/* Emergency Toggle */}
-        <div>
-          <label className="flex items-center gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-xl cursor-pointer hover:bg-red-100 transition-colors">
-            <input
-              type="checkbox"
-              checked={formData.isEmergency}
-              onChange={(e) => setFormData({ ...formData, isEmergency: e.target.checked })}
-              className="w-5 h-5 text-red-600 rounded focus:ring-red-500 focus:ring-2"
-            />
-            <div className="flex items-center gap-2 flex-1">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <div>
-                <div className="text-sm font-semibold text-red-800">Emergency Service Required</div>
-                <div className="text-xs text-red-600">This will prioritize your request and may incur additional charges</div>
-              </div>
-            </div>
-          </label>
-        </div>
+        <aside className="bg-white border border-neutral-border rounded-2xl p-6 shadow-sm h-fit">
+          <h3 className="font-bold mb-3">Before you submit</h3>
+          <ul className="text-sm text-neutral-textSecondary space-y-2 mb-5">
+            <li className="inline-flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-accent-green mt-0.5" /> Add a clear title and complete issue description.</li>
+            <li className="inline-flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-accent-green mt-0.5" /> Confirm your schedule and location fields.</li>
+            <li className="inline-flex items-start gap-2"><AlertCircle className="w-4 h-4 text-accent-orange mt-0.5" /> Mark emergency only for urgent needs.</li>
+          </ul>
+          <button disabled={loading} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary-main text-white font-semibold disabled:opacity-50">
+            <Send className="w-4 h-4" /> {loading ? 'Submitting...' : 'Submit request'}
+          </button>
+        </aside>
+      </form>
+    </div>
+  )
+}
 
-        {/* Location Selection */}
-        <div className="space-y-4 p-4 bg-neutral-background rounded-xl border border-neutral-border">
-          <h3 className="text-sm font-semibold text-neutral-textPrimary flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary-main" />
-            Service Location <span className="text-red-500">*</span>
-          </h3>
-          
-          <div className="grid md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-neutral-textSecondary mb-1">City</label>
-              <select
-                value={formData.cityId}
-                onChange={(e) => setFormData({ ...formData, cityId: Number(e.target.value), zoneId: undefined, podId: undefined })}
-                className="w-full px-3 py-2 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all bg-white text-sm"
-                required
-              >
-                <option value={0}>Select City</option>
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>{city.name}</option>
-                ))}
-              </select>
-            </div>
+function Input({ label, value, onChange, required, type = 'text', placeholder, icon: Icon }: { label: string; value: string | number; onChange: (value: string) => void; required?: boolean; type?: string; placeholder?: string; icon?: React.ComponentType<{ className?: string }> }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold mb-1">{label}{required ? ' *' : ''}</label>
+      <div className="relative">
+        {Icon && <Icon className="w-4 h-4 text-neutral-textSecondary absolute left-3 top-1/2 -translate-y-1/2" />}
+        <input type={type} required={required} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full rounded-xl border border-neutral-border ${Icon ? 'pl-9' : 'pl-3'} pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-main/30`} />
+      </div>
+    </div>
+  )
+}
 
-            <div>
-              <label className="block text-xs font-semibold text-neutral-textSecondary mb-1">Zone</label>
-              <select
-                value={formData.zoneId || ''}
-                onChange={(e) => setFormData({ ...formData, zoneId: e.target.value ? Number(e.target.value) : undefined, podId: undefined })}
-                disabled={!formData.cityId || formData.cityId === 0}
-                className="w-full px-3 py-2 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">Select Zone (Optional)</option>
-                {zones.map((zone) => (
-                  <option key={zone.id} value={zone.id}>{zone.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-neutral-textSecondary mb-1">POD</label>
-              <select
-                value={formData.podId || ''}
-                onChange={(e) => setFormData({ ...formData, podId: e.target.value ? Number(e.target.value) : undefined })}
-                disabled={!formData.zoneId}
-                className="w-full px-3 py-2 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">Select POD (Optional)</option>
-                {pods.map((pod) => (
-                  <option key={pod.id} value={pod.id}>{pod.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Address */}
-        <div>
-          <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-            <MapPin className="w-4 h-4 inline mr-1" />
-            Address Line 1 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.addressLine1}
-            onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all"
-            placeholder="Street address, building name, etc."
-            required
-          />
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-              Address Line 2
-            </label>
-            <input
-              type="text"
-              value={formData.addressLine2 || ''}
-              onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
-              className="w-full px-4 py-3 border border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-transparent"
-              placeholder="Apartment, suite, etc."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-              Pincode
-            </label>
-            <input
-              type="text"
-              value={formData.pincode || ''}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '').slice(0, 6)
-                setFormData({ ...formData, pincode: value })
-              }}
-              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-primary-main transition-all"
-              placeholder="452001"
-              maxLength={6}
-            />
-          </div>
-        </div>
-
-        {/* Special Instructions */}
-        <div>
-          <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
-            <FileText className="w-4 h-4 inline mr-1" />
-            Special Instructions
-          </label>
-          <textarea
-            value={formData.specialInstructions || ''}
-            onChange={(e) => setFormData({ ...formData, specialInstructions: e.target.value })}
-            rows={3}
-            className="w-full px-4 py-3 border border-neutral-border rounded-xl focus:ring-2 focus:ring-primary-main focus:border-transparent"
-            placeholder="Any special instructions for the service provider..."
-          />
-        </div>
-
-        {/* Submit Buttons */}
-        <div className="flex gap-4 pt-4 border-t border-neutral-border">
-          <Link
-            href="/customer/jobs"
-            className="px-6 py-3 border-2 border-neutral-border text-neutral-textSecondary rounded-xl font-semibold hover:bg-neutral-background transition-all"
-          >
-            Cancel
-          </Link>
-          <motion.button
-            type="submit"
-            disabled={loading}
-            whileHover={{ scale: loading ? 1 : 1.02 }}
-            whileTap={{ scale: loading ? 1 : 0.98 }}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Creating Job...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                Create Job Request
-              </>
-            )}
-          </motion.button>
-        </div>
-      </motion.form>
+function Select({ label, value, onChange, required, children }: { label: string; value: string | number; onChange: (value: string) => void; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold mb-1">{label}{required ? ' *' : ''}</label>
+      <select required={required} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border border-neutral-border px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-main/30">
+        {children}
+      </select>
     </div>
   )
 }
