@@ -40,4 +40,50 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
 
     @Query("SELECT j FROM JobMaster j WHERE j.isDeleted is null OR j.isDeleted = false")
     Page<JobMaster> findAllByIsDeletedNotTrue(Pageable pageable);
+
+    // Advanced filtering queries
+    @Query("SELECT j FROM JobMaster j WHERE j.customerId = :customerId " +
+           "AND (:status IS NULL OR :status = 'ALL' OR j.status = :status) " +
+           "AND (:isEmergency IS NULL OR j.isEmergency = :isEmergency) " +
+           "AND (:dateFrom IS NULL OR j.createdAt >= :dateFrom) " +
+           "AND (:dateTo IS NULL OR j.createdAt <= :dateTo) " +
+           "AND (:budgetMin IS NULL OR j.estimatedBudget >= :budgetMin) " +
+           "AND (:budgetMax IS NULL OR j.estimatedBudget <= :budgetMax) " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Page<JobMaster> findCustomerJobsWithFilters(
+            @Param("customerId") Long customerId,
+            @Param("status") String status,
+            @Param("isEmergency") Boolean isEmergency,
+            @Param("dateFrom") java.time.LocalDateTime dateFrom,
+            @Param("dateTo") java.time.LocalDateTime dateTo,
+            @Param("budgetMin") java.math.BigDecimal budgetMin,
+            @Param("budgetMax") java.math.BigDecimal budgetMax,
+            Pageable pageable);
+
+    @Query("SELECT j FROM JobMaster j WHERE " +
+           "(:status IS NULL OR :status = 'ALL' OR j.status = :status) " +
+           "AND (:cityId IS NULL OR j.cityId = :cityId) " +
+           "AND (:customerId IS NULL OR j.customerId = :customerId) " +
+           "AND (:providerId IS NULL OR j.providerId = :providerId) " +
+           "AND (:categoryId IS NULL OR j.serviceCategoryId = :categoryId) " +
+           "AND (:subCategoryId IS NULL OR j.serviceSubCategoryId = :subCategoryId) " +
+           "AND (:isEmergency IS NULL OR j.isEmergency = :isEmergency) " +
+           "AND (:dateFrom IS NULL OR j.createdAt >= :dateFrom) " +
+           "AND (:dateTo IS NULL OR j.createdAt <= :dateTo) " +
+           "AND (:budgetMin IS NULL OR j.estimatedBudget >= :budgetMin) " +
+           "AND (:budgetMax IS NULL OR j.estimatedBudget <= :budgetMax) " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Page<JobMaster> findAllJobsWithAdvancedFilters(
+            @Param("status") String status,
+            @Param("cityId") Long cityId,
+            @Param("customerId") Long customerId,
+            @Param("providerId") Long providerId,
+            @Param("categoryId") Long categoryId,
+            @Param("subCategoryId") Long subCategoryId,
+            @Param("isEmergency") Boolean isEmergency,
+            @Param("dateFrom") java.time.LocalDateTime dateFrom,
+            @Param("dateTo") java.time.LocalDateTime dateTo,
+            @Param("budgetMin") java.math.BigDecimal budgetMin,
+            @Param("budgetMax") java.math.BigDecimal budgetMax,
+            Pageable pageable);
 }

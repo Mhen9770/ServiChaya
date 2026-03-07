@@ -39,11 +39,11 @@ export default function CustomerLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-neutral-background to-white">
+    <div className="min-h-screen bg-[#010B2A] text-white overflow-x-hidden">
       <Header showUserMenu={true} />
       <div className="flex">
         <CustomerSidebar />
-        <main className="flex-1">
+        <main className="flex-1 pt-0">
           {children}
         </main>
       </div>

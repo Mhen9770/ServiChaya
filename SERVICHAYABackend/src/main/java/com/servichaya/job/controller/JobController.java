@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @RestController
 @RequestMapping("/jobs")
@@ -49,18 +51,43 @@ public class JobController {
     public ResponseEntity<ApiResponse<Page<JobDto>>> getCustomerJobs(
             @PathVariable Long customerId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) Boolean isEmergency,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) java.math.BigDecimal budgetMin,
+            @RequestParam(required = false) java.math.BigDecimal budgetMax,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDir) {
-        log.info("Fetching jobs for customerId: {}, status: {}, page: {}, size: {}", customerId, status, page, size);
+        log.info("Fetching jobs for customerId: {}, status: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}, page: {}, size: {}", 
+                customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax, page, size);
         Sort sort = Sort.unsorted();
         if (sortBy != null && !sortBy.isEmpty()) {
             Sort.Direction direction = (sortDir != null && sortDir.equalsIgnoreCase("desc")) ? Sort.Direction.DESC : Sort.Direction.ASC;
             sort = Sort.by(direction, sortBy);
         }
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<JobDto> jobs = jobService.getCustomerJobs(customerId, status, pageable);
+        
+        // Parse date strings to LocalDateTime
+        LocalDateTime parsedDateFrom = null;
+        LocalDateTime parsedDateTo = null;
+        if (dateFrom != null && !dateFrom.isEmpty()) {
+            try {
+                parsedDateFrom = LocalDateTime.parse(dateFrom, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (Exception e) {
+                log.warn("Invalid dateFrom format: {}", dateFrom);
+            }
+        }
+        if (dateTo != null && !dateTo.isEmpty()) {
+            try {
+                parsedDateTo = LocalDateTime.parse(dateTo, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (Exception e) {
+                log.warn("Invalid dateTo format: {}", dateTo);
+            }
+        }
+        
+        Page<JobDto> jobs = jobService.getCustomerJobsWithFilters(customerId, status, isEmergency, parsedDateFrom, parsedDateTo, budgetMin, budgetMax, pageable);
         return ResponseEntity.ok(ApiResponse.success("Jobs fetched successfully", jobs));
     }
 
@@ -100,13 +127,47 @@ public class JobController {
             @RequestParam(required = false) Long cityId,
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) Long providerId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long subCategoryId,
+            @RequestParam(required = false) Boolean isEmergency,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) java.math.BigDecimal budgetMin,
+            @RequestParam(required = false) java.math.BigDecimal budgetMax,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDir) {
-        log.info("Fetching all jobs with filters - status: {}, cityId: {}, page: {}, size: {}", status, cityId, page, size);
-        Pageable pageable = PageRequest.of(page, size);
-        Page<JobDto> jobs = jobService.getJobsWithFilters(status, cityId, customerId, providerId, pageable);
+        log.info("Fetching all jobs with advanced filters - status: {}, cityId: {}, customerId: {}, providerId: {}, categoryId: {}, subCategoryId: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}, page: {}, size: {}", 
+                status, cityId, customerId, providerId, categoryId, subCategoryId, isEmergency, dateFrom, dateTo, budgetMin, budgetMax, page, size);
+        Sort sort = Sort.unsorted();
+        if (sortBy != null && !sortBy.isEmpty()) {
+            Sort.Direction direction = (sortDir != null && sortDir.equalsIgnoreCase("desc")) ? Sort.Direction.DESC : Sort.Direction.ASC;
+            sort = Sort.by(direction, sortBy);
+        }
+        Pageable pageable = PageRequest.of(page, size, sort);
+        
+        // Parse date strings to LocalDateTime
+        LocalDateTime parsedDateFrom = null;
+        LocalDateTime parsedDateTo = null;
+        if (dateFrom != null && !dateFrom.isEmpty()) {
+            try {
+                parsedDateFrom = LocalDateTime.parse(dateFrom, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (Exception e) {
+                log.warn("Invalid dateFrom format: {}", dateFrom);
+            }
+        }
+        if (dateTo != null && !dateTo.isEmpty()) {
+            try {
+                parsedDateTo = LocalDateTime.parse(dateTo, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (Exception e) {
+                log.warn("Invalid dateTo format: {}", dateTo);
+            }
+        }
+        
+        Page<JobDto> jobs = jobService.getJobsWithAdvancedFilters(
+                status, cityId, customerId, providerId, categoryId, subCategoryId, 
+                isEmergency, parsedDateFrom, parsedDateTo, budgetMin, budgetMax, pageable);
         return ResponseEntity.ok(ApiResponse.success("Jobs fetched successfully", jobs));
     }
 }

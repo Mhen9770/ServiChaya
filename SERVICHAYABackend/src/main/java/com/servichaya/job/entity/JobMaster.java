@@ -25,6 +25,9 @@ public class JobMaster extends BaseEntity {
     @Column(name = "service_category_id", nullable = false)
     private Long serviceCategoryId;
 
+    @Column(name = "service_subcategory_id")
+    private Long serviceSubCategoryId;
+
     @Column(name = "service_skill_id")
     private Long serviceSkillId;
 

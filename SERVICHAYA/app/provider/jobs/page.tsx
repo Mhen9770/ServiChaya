@@ -158,6 +158,20 @@ export default function ProviderJobsPage() {
                 { value: 'COMPLETED', label: 'Completed' },
                 { value: 'CANCELLED', label: 'Cancelled' }
               ]
+            },
+            {
+              key: 'dateRange',
+              label: 'Created Date',
+              type: 'daterange'
+            },
+            {
+              key: 'budgetRange',
+              label: 'Budget Range (₹)',
+              type: 'range',
+              min: 0,
+              max: 100000,
+              step: 100,
+              placeholder: 'Amount'
             }
           ]}
           onFilterChange={handleFilterChange}

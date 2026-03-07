@@ -109,11 +109,31 @@ export const getAllJobs = async (
   page: number = 0,
   size: number = 20,
   sortBy?: string,
-  sortDir?: string
+  sortDir?: string,
+  filters?: {
+    customerId?: number
+    providerId?: number
+    categoryId?: number
+    subCategoryId?: number
+    isEmergency?: boolean
+    dateFrom?: string
+    dateTo?: string
+    budgetMin?: number
+    budgetMax?: number
+  }
 ): Promise<{ content: any[]; totalElements: number; totalPages: number }> => {
   const params = new URLSearchParams()
   if (status && status !== 'ALL') params.append('status', status)
   if (cityId) params.append('cityId', cityId.toString())
+  if (filters?.customerId) params.append('customerId', filters.customerId.toString())
+  if (filters?.providerId) params.append('providerId', filters.providerId.toString())
+  if (filters?.categoryId) params.append('categoryId', filters.categoryId.toString())
+  if (filters?.subCategoryId) params.append('subCategoryId', filters.subCategoryId.toString())
+  if (filters?.isEmergency !== undefined) params.append('isEmergency', filters.isEmergency.toString())
+  if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom)
+  if (filters?.dateTo) params.append('dateTo', filters.dateTo)
+  if (filters?.budgetMin !== undefined) params.append('budgetMin', filters.budgetMin.toString())
+  if (filters?.budgetMax !== undefined) params.append('budgetMax', filters.budgetMax.toString())
   params.append('page', page.toString())
   params.append('size', size.toString())
   if (sortBy) params.append('sortBy', sortBy)
@@ -174,6 +194,19 @@ export interface ServiceCategoryMasterDto {
   code: string
   name: string
   description?: string
+  iconUrl?: string
+  displayOrder?: number
+  isFeatured?: boolean
+  isActive?: boolean
+}
+
+export interface ServiceSubCategoryMasterDto {
+  id?: number
+  code: string
+  name: string
+  description?: string
+  categoryId: number
+  categoryName?: string
   iconUrl?: string
   displayOrder?: number
   isFeatured?: boolean
@@ -349,6 +382,41 @@ export const updateServiceCategory = async (id: number, data: ServiceCategoryMas
 
 export const deleteServiceCategory = async (id: number): Promise<void> => {
   await api.delete(`/admin/master-data/service-categories/${id}`)
+}
+
+// ========== Service SubCategory Master ==========
+export const getAllServiceSubCategories = async (
+  page: number = 0,
+  size: number = 20,
+  sortBy?: string,
+  sortDir?: string
+): Promise<{ content: ServiceSubCategoryMasterDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  if (sortBy) params.append('sortBy', sortBy)
+  if (sortDir) params.append('sortDir', sortDir)
+  const response = await api.get(`/admin/master-data/service-subcategories?${params.toString()}`)
+  return response.data.data
+}
+
+export const getServiceSubCategoryById = async (id: number): Promise<ServiceSubCategoryMasterDto> => {
+  const response = await api.get(`/admin/master-data/service-subcategories/${id}`)
+  return response.data.data
+}
+
+export const createServiceSubCategory = async (data: ServiceSubCategoryMasterDto): Promise<ServiceSubCategoryMasterDto> => {
+  const response = await api.post('/admin/master-data/service-subcategories', data)
+  return response.data.data
+}
+
+export const updateServiceSubCategory = async (id: number, data: ServiceSubCategoryMasterDto): Promise<ServiceSubCategoryMasterDto> => {
+  const response = await api.put(`/admin/master-data/service-subcategories/${id}`, data)
+  return response.data.data
+}
+
+export const deleteServiceSubCategory = async (id: number): Promise<void> => {
+  await api.delete(`/admin/master-data/service-subcategories/${id}`)
 }
 
 // ========== Matching Rule Master ==========

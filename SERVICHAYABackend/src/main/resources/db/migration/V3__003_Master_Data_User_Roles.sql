@@ -1,5 +1,11 @@
+-- ============================================
+-- Flyway Migration: Master Data Only
+-- ============================================
+-- IMPORTANT: This file contains ONLY master data (INSERT/UPDATE statements)
+-- Schema changes (CREATE TABLE, ALTER TABLE, etc.) are NOT allowed here
+-- Schema is managed by JPA/Hibernate (ddl-auto: update)
+-- ============================================
 -- Master Data: User Roles
--- Schema managed by JPA, only data here
 
 INSERT INTO user_role_master (code, name, description, role_code, is_system_role, is_active, created_at, updated_at)
 VALUES 

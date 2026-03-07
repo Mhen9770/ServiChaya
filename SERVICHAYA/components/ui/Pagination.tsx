@@ -1,6 +1,7 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 
 interface PaginationProps {
   currentPage: number
@@ -50,60 +51,107 @@ export default function Pagination({
     return pages
   }
 
+  if (totalPages === 0) return null
+
   return (
-    <div className="flex items-center justify-between border-t border-neutral-border pt-4">
-      <div className="flex items-center gap-4">
-        <p className="text-xs text-neutral-textSecondary">
-          Showing <span className="font-semibold text-neutral-textPrimary">{start}</span> to{' '}
-          <span className="font-semibold text-neutral-textPrimary">{end}</span> of{' '}
-          <span className="font-semibold text-neutral-textPrimary">{totalElements}</span> results
-        </p>
-        {onPageSizeChange && (
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="text-xs border border-neutral-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary-main"
+    <div className="glass-dark border border-white/10 rounded-2xl p-4">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Results Info & Page Size */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <p className="text-xs text-slate-300">
+            Showing <span className="font-bold text-white">{start.toLocaleString()}</span> to{' '}
+            <span className="font-bold text-white">{end.toLocaleString()}</span> of{' '}
+            <span className="font-bold text-white">{totalElements.toLocaleString()}</span> results
+          </p>
+          {onPageSizeChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                className="text-xs bg-white/10 border border-white/20 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-primary-main/50 transition-all"
+              >
+                <option value={10} className="bg-slate-900">10</option>
+                <option value={20} className="bg-slate-900">20</option>
+                <option value={50} className="bg-slate-900">50</option>
+                <option value={100} className="bg-slate-900">100</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Page Navigation */}
+        <div className="flex items-center gap-2">
+          {/* First Page */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onPageChange(0)}
+            disabled={currentPage === 0}
+            className="p-2 rounded-xl border border-white/20 hover:border-primary-main/50 hover:bg-primary-main/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="First page"
           >
-            <option value={10}>10 per page</option>
-            <option value={20}>20 per page</option>
-            <option value={50}>50 per page</option>
-          </select>
-        )}
-      </div>
+            <ChevronsLeft className="w-4 h-4 text-white" />
+          </motion.button>
 
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 0}
-          className="p-2 rounded-lg border border-neutral-border hover:bg-neutral-background disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-
-        {getPageNumbers().map((page, idx) => (
-          <button
-            key={idx}
-            onClick={() => typeof page === 'number' && onPageChange(page)}
-            disabled={page === '...'}
-            className={`min-w-[36px] h-9 px-3 rounded-lg text-xs font-semibold transition-all ${
-              page === currentPage
-                ? 'bg-gradient-to-r from-primary-main to-primary-dark text-white shadow-md'
-                : page === '...'
-                ? 'cursor-default'
-                : 'border border-neutral-border hover:bg-neutral-background text-neutral-textSecondary hover:text-primary-main'
-            }`}
+          {/* Previous Page */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 0}
+            className="p-2 rounded-xl border border-white/20 hover:border-primary-main/50 hover:bg-primary-main/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="Previous page"
           >
-            {page === '...' ? '...' : (page as number) + 1}
-          </button>
-        ))}
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </motion.button>
 
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages - 1}
-          className="p-2 rounded-lg border border-neutral-border hover:bg-neutral-background disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
+          {/* Page Numbers */}
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((page, idx) => (
+              <motion.button
+                key={idx}
+                whileHover={{ scale: page !== '...' ? 1.1 : 1 }}
+                whileTap={{ scale: page !== '...' ? 0.9 : 1 }}
+                onClick={() => typeof page === 'number' && onPageChange(page)}
+                disabled={page === '...'}
+                className={`min-w-[40px] h-10 px-3 rounded-xl text-xs font-bold transition-all ${
+                  page === currentPage
+                    ? 'bg-gradient-to-r from-primary-main to-primary-light text-white shadow-lg shadow-primary-main/50'
+                    : page === '...'
+                    ? 'cursor-default text-slate-400'
+                    : 'border border-white/20 text-slate-300 hover:border-primary-main/50 hover:bg-primary-main/20 hover:text-white'
+                }`}
+              >
+                {page === '...' ? '...' : (page as number) + 1}
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Next Page */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1}
+            className="p-2 rounded-xl border border-white/20 hover:border-primary-main/50 hover:bg-primary-main/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="Next page"
+          >
+            <ChevronRight className="w-4 h-4 text-white" />
+          </motion.button>
+
+          {/* Last Page */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onPageChange(totalPages - 1)}
+            disabled={currentPage >= totalPages - 1}
+            className="p-2 rounded-xl border border-white/20 hover:border-primary-main/50 hover:bg-primary-main/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            title="Last page"
+          >
+            <ChevronsRight className="w-4 h-4 text-white" />
+          </motion.button>
+        </div>
       </div>
     </div>
   )

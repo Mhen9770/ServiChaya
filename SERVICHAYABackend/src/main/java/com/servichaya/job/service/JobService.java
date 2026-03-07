@@ -39,6 +39,7 @@ public class JobService {
                 .jobCode(jobCode)
                 .customerId(customerId)
                 .serviceCategoryId(createJobDto.getServiceCategoryId())
+                .serviceSubCategoryId(createJobDto.getServiceSubCategoryId())
                 .serviceSkillId(createJobDto.getServiceSkillId())
                 .title(createJobDto.getTitle())
                 .description(createJobDto.getDescription())
@@ -107,12 +108,22 @@ public class JobService {
     }
 
     public Page<JobDto> getCustomerJobs(Long customerId, String status, Pageable pageable) {
-        log.info("Fetching jobs for customerId: {}, status: {}, page: {}, size: {}", customerId, status, pageable.getPageNumber(), pageable.getPageSize());
-        if (status != null && !status.isEmpty() && !"ALL".equals(status)) {
-            return jobRepository.findByCustomerIdAndStatusAndIsDeletedFalse(customerId, status, pageable)
-                    .map(this::mapToDto);
-        }
-        return jobRepository.findByCustomerIdAndIsDeletedFalse(customerId, pageable)
+        return getCustomerJobsWithFilters(customerId, status, null, null, null, null, null, pageable);
+    }
+
+    public Page<JobDto> getCustomerJobsWithFilters(
+            Long customerId, 
+            String status, 
+            Boolean isEmergency,
+            java.time.LocalDateTime dateFrom,
+            java.time.LocalDateTime dateTo,
+            java.math.BigDecimal budgetMin,
+            java.math.BigDecimal budgetMax,
+            Pageable pageable) {
+        log.info("Fetching jobs for customerId: {} with filters - status: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}", 
+                customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax);
+        return jobRepository.findCustomerJobsWithFilters(
+                customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable)
                 .map(this::mapToDto);
     }
     public Page<JobDto> getCustomerJobs(Long customerId) {
@@ -145,19 +156,29 @@ public class JobService {
 
     public Page<JobDto> getJobsWithFilters(String status, Long cityId, Long customerId, Long providerId, 
                                            Pageable pageable) {
-        log.info("Fetching jobs with filters - status: {}, cityId: {}, customerId: {}, providerId: {}, page: {}, size: {}", 
-                status, cityId, customerId, providerId, pageable.getPageNumber(), pageable.getPageSize());
+        return getJobsWithAdvancedFilters(status, cityId, customerId, providerId, null, null, null, null, null, null, null, pageable);
+    }
+
+    public Page<JobDto> getJobsWithAdvancedFilters(
+            String status, 
+            Long cityId, 
+            Long customerId, 
+            Long providerId,
+            Long categoryId,
+            Long subCategoryId,
+            Boolean isEmergency,
+            java.time.LocalDateTime dateFrom,
+            java.time.LocalDateTime dateTo,
+            java.math.BigDecimal budgetMin,
+            java.math.BigDecimal budgetMax,
+            Pageable pageable) {
+        log.info("Fetching jobs with advanced filters - status: {}, cityId: {}, customerId: {}, providerId: {}, categoryId: {}, subCategoryId: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}", 
+                status, cityId, customerId, providerId, categoryId, subCategoryId, isEmergency, dateFrom, dateTo, budgetMin, budgetMax);
         
-        if (customerId != null) {
-            return getCustomerJobs(customerId, status, pageable);
-        }
-        if (providerId != null) {
-            return getProviderJobs(providerId, status, pageable);
-        }
-        if (status != null && !status.isEmpty() && !"ALL".equals(status)) {
-            return getJobsByStatus(status, pageable);
-        }
-        return getAllJobs(pageable);
+        return jobRepository.findAllJobsWithAdvancedFilters(
+                status, cityId, customerId, providerId, categoryId, subCategoryId, 
+                isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable)
+                .map(this::mapToDto);
     }
 
     private JobDto mapToDto(JobMaster job) {
@@ -177,6 +198,7 @@ public class JobService {
                 .jobCode(job.getJobCode())
                 .customerId(job.getCustomerId())
                 .serviceCategoryId(job.getServiceCategoryId())
+                .serviceSubCategoryId(job.getServiceSubCategoryId())
                 .serviceSkillId(job.getServiceSkillId())
                 .title(job.getTitle())
                 .description(job.getDescription())

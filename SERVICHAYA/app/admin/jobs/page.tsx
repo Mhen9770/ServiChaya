@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAllJobs, type JobDto } from '@/lib/services/job'
-import { getAllJobs as getAllJobsAdmin } from '@/lib/services/admin'
+import { getAllJobs as getAllJobsAdmin, getAllActiveCities, type CityMasterDto } from '@/lib/services/admin'
+import { getAllCategories, getAllSubCategories, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { toast } from 'react-hot-toast'
 import Loader from '@/components/ui/Loader'
 import Pagination from '@/components/ui/Pagination'
@@ -28,25 +29,72 @@ export default function AdminJobsPage() {
   const [totalElements, setTotalElements] = useState(0)
   const [filters, setFilters] = useState<Record<string, any>>({
     status: searchParams.get('status') || 'ALL',
-    cityId: searchParams.get('cityId') || undefined
+    cityId: searchParams.get('cityId') || undefined,
+    categoryId: searchParams.get('categoryId') || undefined,
+    subCategoryId: searchParams.get('subCategoryId') || undefined,
+    customerId: searchParams.get('customerId') || undefined,
+    providerId: searchParams.get('providerId') || undefined,
+    isEmergency: searchParams.get('isEmergency') || undefined,
   })
+  const [categories, setCategories] = useState<ServiceCategory[]>([])
+  const [subCategories, setSubCategories] = useState<ServiceSubCategory[]>([])
+  const [cities, setCities] = useState<CityMasterDto[]>([])
   const [sortKey, setSortKey] = useState<string>('createdAt')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+
+  useEffect(() => {
+    loadInitialData()
+  }, [])
 
   useEffect(() => {
     fetchJobs()
   }, [currentPage, pageSize, filters, sortKey, sortDirection])
 
+  const loadInitialData = async () => {
+    try {
+      const [catsRes, citiesRes] = await Promise.all([
+        getAllCategories().catch(() => []),
+        getAllActiveCities().catch(() => [])
+      ])
+      setCategories(catsRes)
+      setCities(citiesRes)
+    } catch (error) {
+      console.error('Failed to load initial data:', error)
+    }
+  }
+
+  useEffect(() => {
+    if (filters.categoryId) {
+      getAllSubCategories(Number(filters.categoryId))
+        .then(setSubCategories)
+        .catch(() => setSubCategories([]))
+    } else {
+      setSubCategories([])
+    }
+  }, [filters.categoryId])
+
   const fetchJobs = useCallback(async () => {
     try {
       setLoading(true)
+      const filterParams = {
+        customerId: filters.customerId ? Number(filters.customerId) : undefined,
+        providerId: filters.providerId ? Number(filters.providerId) : undefined,
+        categoryId: filters.categoryId ? Number(filters.categoryId) : undefined,
+        subCategoryId: filters.subCategoryId ? Number(filters.subCategoryId) : undefined,
+        isEmergency: filters.isEmergency === 'true' ? true : filters.isEmergency === 'false' ? false : undefined,
+        dateFrom: filters.dateRange?.from ? `${filters.dateRange.from}T00:00:00` : undefined,
+        dateTo: filters.dateRange?.to ? `${filters.dateRange.to}T23:59:59` : undefined,
+        budgetMin: filters.budgetRange?.min,
+        budgetMax: filters.budgetRange?.max,
+      }
       const result = await getAllJobsAdmin(
         filters.status,
         filters.cityId ? Number(filters.cityId) : undefined,
         currentPage,
         pageSize,
         sortKey,
-        sortDirection
+        sortDirection,
+        filterParams
       )
       setJobs(result.content || [])
       setTotalPages(result.totalPages || 0)
@@ -69,6 +117,11 @@ export default function AdminJobsPage() {
     const params = new URLSearchParams()
     if (newFilters.status && newFilters.status !== 'ALL') params.set('status', newFilters.status)
     if (newFilters.cityId) params.set('cityId', newFilters.cityId.toString())
+    if (newFilters.categoryId) params.set('categoryId', newFilters.categoryId.toString())
+    if (newFilters.subCategoryId) params.set('subCategoryId', newFilters.subCategoryId.toString())
+    if (newFilters.customerId) params.set('customerId', newFilters.customerId.toString())
+    if (newFilters.providerId) params.set('providerId', newFilters.providerId.toString())
+    if (newFilters.isEmergency) params.set('isEmergency', newFilters.isEmergency)
     router.push(`/admin/jobs?${params.toString()}`)
   }
 
@@ -218,9 +271,67 @@ export default function AdminJobsPage() {
               ]
             },
             {
+              key: 'categoryId',
+              label: 'Category',
+              type: 'select',
+              options: [
+                { value: '', label: 'All Categories' },
+                ...categories.map(cat => ({ value: cat.id.toString(), label: cat.name }))
+              ]
+            },
+            {
+              key: 'subCategoryId',
+              label: 'Sub Category',
+              type: 'select',
+              options: [
+                { value: '', label: 'All Sub Categories' },
+                ...subCategories.map(sub => ({ value: sub.id.toString(), label: sub.name }))
+              ]
+            },
+            {
               key: 'cityId',
-              label: 'City ID',
-              type: 'number'
+              label: 'City',
+              type: 'select',
+              options: [
+                { value: '', label: 'All Cities' },
+                ...cities.map(city => ({ value: city.id?.toString() || '', label: city.name }))
+              ]
+            },
+            {
+              key: 'customerId',
+              label: 'Customer ID',
+              type: 'number',
+              placeholder: 'Enter customer ID'
+            },
+            {
+              key: 'providerId',
+              label: 'Provider ID',
+              type: 'number',
+              placeholder: 'Enter provider ID'
+            },
+            {
+              key: 'isEmergency',
+              label: 'Emergency',
+              type: 'select',
+              options: [
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Emergency Only' },
+                { value: 'false', label: 'Regular Only' }
+              ]
+            },
+            {
+              key: 'dateRange',
+              label: 'Created Date',
+              type: 'daterange'
+            },
+            {
+              key: 'budgetRange',
+              label: 'Budget Range (₹)',
+              type: 'range',
+              min: 0,
+              max: 100000,
+              step: 100,
+              placeholder: 'Amount'
             }
           ]}
           onFilterChange={handleFilterChange}

@@ -15,6 +15,7 @@ import java.util.List;
 @Builder
 public class CreateJobDto {
     private Long serviceCategoryId;
+    private Long serviceSubCategoryId;
     private Long serviceSkillId;
     private String title;
     private String description;

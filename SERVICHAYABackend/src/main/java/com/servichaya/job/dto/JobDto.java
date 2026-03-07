@@ -18,6 +18,7 @@ public class JobDto {
     private String jobCode;
     private Long customerId;
     private Long serviceCategoryId;
+    private Long serviceSubCategoryId;
     private Long serviceSkillId;
     private String title;
     private String description;

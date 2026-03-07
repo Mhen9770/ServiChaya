@@ -72,4 +72,155 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Glass Morphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .glass-dark {
+    background: rgba(1, 11, 42, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Shimmer Effect */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 3s infinite;
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    background: linear-gradient(135deg, #3B82F6 0%, #10B981 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glow Effect */
+  .glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+
+  .glow-hover:hover {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.7);
+    transition: box-shadow 0.3s ease;
+  }
+
+  /* Pulse Animation */
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+  }
+
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Floating Animation */
+  @keyframes float-slow {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-30px) rotate(5deg);
+    }
+  }
+
+  .float-slow {
+    animation: float-slow 8s ease-in-out infinite;
+  }
+
+  /* Gradient Border */
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1));
+    border-radius: 1rem;
+    padding: 2px;
+  }
+
+  .gradient-border-content {
+    background: white;
+    border-radius: calc(1rem - 2px);
+    padding: 1.5rem;
+  }
+
+  /* Dark Theme Select Styling */
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #0f172a;
+    color: #ffffff;
+    padding: 0.5rem;
+  }
+
+  /* Ensure select text is visible on dark backgrounds */
+  .glass-dark select,
+  .glass select {
+    color: #ffffff !important;
+  }
+
+  .glass-dark select option,
+  .glass select option {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+  }
+
+  /* Input text visibility */
+  .glass-dark input[type="text"],
+  .glass-dark input[type="number"],
+  .glass-dark input[type="email"],
+  .glass-dark input[type="tel"],
+  .glass-dark input[type="date"],
+  .glass-dark input[type="datetime-local"],
+  .glass-dark textarea {
+    color: #ffffff !important;
+  }
+
+  .glass input[type="text"],
+  .glass input[type="number"],
+  .glass input[type="email"],
+  .glass input[type="tel"],
+  .glass input[type="date"],
+  .glass input[type="datetime-local"],
+  .glass textarea {
+    color: #ffffff !important;
+  }
 }
