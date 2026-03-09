@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { useState, useEffect } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Menu as MenuIcon, X as CloseIcon } from 'lucide-react'
 import { LucideIcon } from 'lucide-react'
 
 interface SidebarItem {
@@ -99,6 +99,7 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
 export default function Sidebar({ items }: SidebarProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<any>(null)
+  const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -106,8 +107,29 @@ export default function Sidebar({ items }: SidebarProps) {
   }, [])
 
   return (
-    <aside className="w-64 glass-dark border-r border-white/10 sticky top-[73px] self-start h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40">
-      <div className="p-6">
+    <>
+      {/* Mobile menu button – match Home header style */}
+      <button
+        type="button"
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
+        className="md:hidden fixed right-4 top-[80px] z-40 w-10 h-10 flex items-center justify-center rounded-lg bg-slate-900/90 border border-white/15 hover:bg-white/10 transition-colors shadow-lg"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {isOpen ? (
+          <CloseIcon className="w-6 h-6 text-white" />
+        ) : (
+          <MenuIcon className="w-6 h-6 text-white" />
+        )}
+      </button>
+
+      {/* Sidebar panel */}
+      <aside
+        className={`w-64 glass-dark border-r border-white/10 h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40
+        fixed top-[73px] left-0 transform transition-transform duration-200 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:static md:self-start md:translate-x-0`}
+      >
+        <div className="p-6">
         {user && (
           <div className="mb-8 pb-6 border-b border-white/10">
             <div className="flex items-center gap-3 mb-2">
@@ -127,7 +149,8 @@ export default function Sidebar({ items }: SidebarProps) {
             <SidebarItem key={item.href} item={item} pathname={pathname} />
           ))}
         </nav>
-      </div>
-    </aside>
+        </div>
+      </aside>
+    </>
   )
 }

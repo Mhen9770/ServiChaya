@@ -165,6 +165,24 @@ public class PaymentController {
         }
     }
 
+    /**
+     * Test-only endpoint: mark a transaction as FAILED when TEST_PAYMENT_MODE is enabled.
+     */
+    @PostMapping("/test/fail")
+    public ResponseEntity<ApiResponse<String>> markPaymentFailed(
+            @RequestParam Long jobId,
+            @RequestParam String transactionCode) {
+        log.info("Marking test payment as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+        try {
+            paymentService.markTestPaymentFailed(jobId, transactionCode);
+            return ResponseEntity.ok(ApiResponse.success("Test payment marked as failed", "Payment marked as FAILED"));
+        } catch (Exception e) {
+            log.error("Error marking test payment failed: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to mark payment as failed: " + e.getMessage()));
+        }
+    }
+
     // Payout Endpoints
     @GetMapping("/payout/limits")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getPayoutLimits(

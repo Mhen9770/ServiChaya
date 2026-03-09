@@ -50,6 +50,20 @@ export interface OnboardingStep5Dto {
   experienceYears: number
 }
 
+export const uploadProviderDocuments = async (files: File[]): Promise<string[]> => {
+  const formData = new FormData()
+  files.forEach((file) => {
+    formData.append('files', file)
+  })
+
+  const response = await api.post('/provider/documents/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data.data as string[]
+}
+
 // Get onboarding status
 export const getOnboardingStatus = async (userId: number): Promise<OnboardingStatus> => {
   const response = await api.get(`/provider/onboarding/status?userId=${userId}`)

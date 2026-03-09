@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
-import { getOnboardingStatus, completeStep1, completeStep2, completeStep3, completeStep4, completeStep5, type OnboardingStatus, getAllServiceSkills, getServiceSkillsByCategory, getProviderProfile, getOnboardingData, type OnboardingDataDto } from '@/lib/services/provider'
+import { getOnboardingStatus, completeStep1, completeStep2, completeStep3, completeStep4, completeStep5, type OnboardingStatus, getAllServiceSkills, getServiceSkillsByCategory, getProviderProfile, getOnboardingData, type OnboardingDataDto, uploadProviderDocuments } from '@/lib/services/provider'
 import { getAllCategories } from '@/lib/services/service'
 import { getAllActiveCities, getZonesByCity, getPodsByZone } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
@@ -13,6 +13,13 @@ import { User, FileText, Wrench, MapPin, Sparkles, CheckCircle2, Plus, X, Star, 
 import { motion } from 'framer-motion'
 import { PageLoader, ButtonLoader, ContentLoader } from '@/components/ui/Loader'
 
+const ONBOARDING_STEPS = [
+  { number: 1, title: 'Basic Info', icon: User, description: 'Personal details' },
+  { number: 2, title: 'Documents', icon: FileText, description: 'ID & certificates' },
+  { number: 3, title: 'Skills', icon: Wrench, description: 'Your expertise' },
+  { number: 4, title: 'Service Area', icon: MapPin, description: 'Where you serve' },
+  { number: 5, title: 'Profile', icon: Sparkles, description: 'Complete profile' },
+] as const
 export default function ProviderOnboardingPage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
@@ -42,11 +49,19 @@ export default function ProviderOnboardingPage() {
   const [step2Data, setStep2Data] = useState({
     aadhaarNumber: '',
     panNumber: '',
+    // URLs are now managed internally after upload; not entered manually by user
     aadhaarUrl: '',
     panUrl: '',
     addressProofUrl: '',
     profilePhotoUrl: '',
   })
+
+  const [step2Files, setStep2Files] = useState<{
+    aadhaar?: File
+    pan?: File
+    address?: File
+    photo?: File
+  }>({})
 
   // Step 3 Data
   const [step3Data, setStep3Data] = useState<Array<{
@@ -56,6 +71,9 @@ export default function ProviderOnboardingPage() {
     certificationName: string
     certificationDocumentUrl: string
   }>>([])
+
+  // Step 3 certification files (keyed by skill index)
+  const [step3Files, setStep3Files] = useState<{ [index: number]: File | undefined }>({})
 
   // Step 4 Data
   const [step4Data, setStep4Data] = useState<Array<{
@@ -289,39 +307,6 @@ export default function ProviderOnboardingPage() {
   }
 
   const handleStep2Submit = async () => {
-    const documents = []
-    if (step2Data.aadhaarUrl) {
-      documents.push({
-        documentType: 'AADHAAR',
-        documentNumber: step2Data.aadhaarNumber,
-        documentUrl: step2Data.aadhaarUrl,
-      })
-    }
-    if (step2Data.panUrl) {
-      documents.push({
-        documentType: 'PAN',
-        documentNumber: step2Data.panNumber,
-        documentUrl: step2Data.panUrl,
-      })
-    }
-    if (step2Data.addressProofUrl) {
-      documents.push({
-        documentType: 'ADDRESS_PROOF',
-        documentUrl: step2Data.addressProofUrl,
-      })
-    }
-    if (step2Data.profilePhotoUrl) {
-      documents.push({
-        documentType: 'PROFILE_PHOTO',
-        documentUrl: step2Data.profilePhotoUrl,
-      })
-    }
-
-    if (documents.length === 0) {
-      toast.error('Please upload at least one document')
-      return
-    }
-
     try {
       setSubmitting(true)
       const currentUser = getCurrentUser()
@@ -329,7 +314,44 @@ export default function ProviderOnboardingPage() {
         toast.error('Please login first')
         return
       }
-      const status = await completeStep2(currentUser.userId, { documents })
+      // Build file list and metadata (type + number) for upload
+      const filesToUpload: File[] = []
+      const fileMeta: { type: string; number?: string }[] = []
+
+      if (step2Files.aadhaar) {
+        filesToUpload.push(step2Files.aadhaar)
+        fileMeta.push({ type: 'AADHAAR', number: step2Data.aadhaarNumber })
+      }
+      if (step2Files.pan) {
+        filesToUpload.push(step2Files.pan)
+        fileMeta.push({ type: 'PAN', number: step2Data.panNumber })
+      }
+      if (step2Files.address) {
+        filesToUpload.push(step2Files.address)
+        fileMeta.push({ type: 'ADDRESS_PROOF' })
+      }
+      if (step2Files.photo) {
+        filesToUpload.push(step2Files.photo)
+        fileMeta.push({ type: 'PROFILE_PHOTO' })
+      }
+
+      if (filesToUpload.length === 0) {
+        toast.error('Please upload at least one document')
+        return
+      }
+
+      const uploadedUrls = await uploadProviderDocuments(filesToUpload)
+
+      const finalDocs = uploadedUrls.map((url, index) => {
+        const meta = fileMeta[index]
+        return {
+          documentType: meta.type,
+          ...(meta.number ? { documentNumber: meta.number } : {}),
+          documentUrl: url,
+        }
+      })
+
+      const status = await completeStep2(currentUser.userId, { documents: finalDocs })
       setStatus(status)
       setCurrentStep(3)
       toast.success('Step 2 completed!')
@@ -359,7 +381,33 @@ export default function ProviderOnboardingPage() {
         toast.error('Please login first')
         return
       }
-      const status = await completeStep3(currentUser.userId, { skills: step3Data })
+
+      // Upload any certification files first
+      const filesToUpload: File[] = []
+      const fileSkillIndexes: number[] = []
+      step3Data.forEach((skill, index) => {
+        const file = step3Files[index]
+        if (file) {
+          filesToUpload.push(file)
+          fileSkillIndexes.push(index)
+        }
+      })
+
+      let updatedSkills = [...step3Data]
+      if (filesToUpload.length > 0) {
+        const uploadedUrls = await uploadProviderDocuments(filesToUpload)
+        uploadedUrls.forEach((url, i) => {
+          const skillIndex = fileSkillIndexes[i]
+          if (skillIndex !== undefined) {
+            updatedSkills[skillIndex] = {
+              ...updatedSkills[skillIndex],
+              certificationDocumentUrl: url,
+            }
+          }
+        })
+      }
+
+      const status = await completeStep3(currentUser.userId, { skills: updatedSkills })
       setStatus(status)
       setCurrentStep(4)
       toast.success('Step 3 completed!')
@@ -464,36 +512,31 @@ export default function ProviderOnboardingPage() {
     return null
   }
 
-  const steps = [
-    { number: 1, title: 'Basic Info', icon: User, description: 'Personal details' },
-    { number: 2, title: 'Documents', icon: FileText, description: 'ID & certificates' },
-    { number: 3, title: 'Skills', icon: Wrench, description: 'Your expertise' },
-    { number: 4, title: 'Service Area', icon: MapPin, description: 'Where you serve' },
-    { number: 5, title: 'Profile', icon: Sparkles, description: 'Complete profile' },
-  ]
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-background to-white">
+    <div className="min-h-screen bg-[#010B2A] text-white">
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 md:py-12">
-        <div className="max-w-5xl mx-auto">
-          {/* Page Header */}
-          <div className="text-center mb-8 md:mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold mb-3 font-display text-white">
-              Become a Service Provider
-            </h1>
-            <p className="text-base md:text-lg text-slate-300 max-w-2xl mx-auto">
-              Complete your profile to start receiving jobs and grow your business
-            </p>
-          </div>
+      <div className="w-full mx-auto px-4 py-4 md:py-6 max-w-6xl">
+        {/* Page Header */}
+        <div className="text-center mb-6 md:mb-8">
+          <p className="text-xs uppercase tracking-[0.2em] text-primary-light mb-2">
+            SERVICHAYA PARTNER PROGRAM
+          </p>
+          <h1 className="text-3xl md:text-4xl font-bold mb-3 font-display">
+            Become a <span className="text-primary-light">Service Provider</span>
+          </h1>
+          <p className="text-base md:text-lg text-slate-300 max-w-2xl mx-auto">
+            Complete these simple steps to start receiving verified jobs and grow your income in your city.
+          </p>
+        </div>
 
+        <div className="grid lg:grid-cols-[2fr,1fr] gap-6 md:gap-8 mb-6">
           {/* Progress Bar */}
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 md:p-8 mb-8 shadow-lg border border-white/20 text-white">
+          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-lg border border-white/15 text-white">
             <div className="flex items-center justify-between mb-6">
-              {steps.map((step) => (
+              {ONBOARDING_STEPS.map((step) => (
                 <div key={step.number} className="flex flex-col items-center flex-1 relative">
                   {/* Connection Line */}
-                  {step.number < steps.length && (
+                  {step.number < ONBOARDING_STEPS.length && (
                     <div className="hidden md:block absolute top-6 left-[60%] w-full h-0.5 bg-white/20 -z-10">
                       <div
                         className={`h-full transition-all duration-500 ${
@@ -542,6 +585,22 @@ export default function ProviderOnboardingPage() {
             </div>
           </div>
 
+          {/* Benefits / Info card */}
+          <div className="hidden lg:block">
+            <div className="glass-dark border border-white/10 rounded-3xl p-5 space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary-light" />
+                Why join as SERVICHAYA provider?
+              </h3>
+              <ul className="text-xs text-slate-300 space-y-2">
+                <li>• Get nearby jobs from verified customers in your city.</li>
+                <li>• Transparent earnings and payout tracking from dashboard.</li>
+                <li>• Support team to help you with onboarding and verification.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
           {/* Step Content Card */}
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 md:p-10 shadow-xl border border-white/20 text-white">
             {/* Step 1: Basic Info */}
@@ -583,23 +642,23 @@ export default function ProviderOnboardingPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Email</label>
+                    <label className="block text-sm font-semibold mb-2 text-white">Email</label>
                     <input
                       type="email"
                       value={step1Data.email}
                       onChange={(e) => setStep1Data({ ...step1Data, email: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="Enter email address"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                    <label className="block text-sm font-semibold mb-2 text-white">
                       Provider Type <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={step1Data.providerType}
                       onChange={(e) => setStep1Data({ ...step1Data, providerType: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                     >
                       <option value="INDIVIDUAL">Individual Provider</option>
                       <option value="BUSINESS">Business/Company</option>
@@ -650,99 +709,123 @@ export default function ProviderOnboardingPage() {
                 </div>
                 
                 <div className="space-y-5">
-                  <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
-                    <p className="text-sm text-blue-800">
-                      <strong>Note:</strong> For MVP, you can enter document URLs. File upload functionality will be added soon.
+                  <div className="bg-primary-main/10 border border-primary-main/40 rounded-xl p-4 mb-6 text-xs text-slate-100">
+                    <p className="font-semibold mb-1">Document security</p>
+                    <p className="text-slate-300">
+                      Your documents are uploaded securely to SERVICHAYA servers and used only for verification. You can upload
+                      Aadhaar, PAN, address proof and a clear profile photo.
                     </p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Aadhaar Number</label>
+                    <label className="block text-sm font-semibold mb-2 text-white">Aadhaar Number</label>
                     <input
                       type="text"
                       value={step2Data.aadhaarNumber}
                       onChange={(e) => setStep2Data({ ...step2Data, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="Enter 12-digit Aadhaar number"
                       maxLength={12}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Aadhaar Document URL</label>
-                    <input
-                      type="url"
-                      value={step2Data.aadhaarUrl}
-                      onChange={(e) => setStep2Data({ ...step2Data, aadhaarUrl: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
-                      placeholder="https://example.com/aadhaar.pdf"
-                    />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-white">Aadhaar File</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          setStep2Files((prev) => ({ ...prev, aadhaar: file }))
+                        }}
+                        className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-main/80 file:text-white hover:file:bg-primary-main cursor-pointer"
+                      />
+                      {step2Files.aadhaar && (
+                        <p className="mt-1 text-xs text-slate-400">Selected: {step2Files.aadhaar.name}</p>
+                      )}
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">PAN Number</label>
+                    <label className="block text-sm font-semibold mb-2 text-white">PAN Number</label>
                     <input
                       type="text"
                       value={step2Data.panNumber}
                       onChange={(e) => setStep2Data({ ...step2Data, panNumber: e.target.value.toUpperCase().slice(0, 10) })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="Enter PAN number"
                       maxLength={10}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">PAN Document URL</label>
-                    <input
-                      type="url"
-                      value={step2Data.panUrl}
-                      onChange={(e) => setStep2Data({ ...step2Data, panUrl: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
-                      placeholder="https://example.com/pan.pdf"
-                    />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-white">PAN File</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          setStep2Files((prev) => ({ ...prev, pan: file }))
+                        }}
+                        className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-main/80 file:text-white hover:file:bg-primary-main cursor-pointer"
+                      />
+                      {step2Files.pan && (
+                        <p className="mt-1 text-xs text-slate-400">Selected: {step2Files.pan.name}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Address Proof URL</label>
-                    <input
-                      type="url"
-                      value={step2Data.addressProofUrl}
-                      onChange={(e) => setStep2Data({ ...step2Data, addressProofUrl: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
-                      placeholder="https://example.com/address-proof.pdf"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">Utility bill, rental agreement, or any government document with address</p>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-white">Address Proof File</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          setStep2Files((prev) => ({ ...prev, address: file }))
+                        }}
+                        className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-main/80 file:text-white hover:file:bg-primary-main cursor-pointer"
+                      />
+                      {step2Files.address && (
+                        <p className="mt-1 text-xs text-slate-400">Selected: {step2Files.address.name}</p>
+                      )}
+                      <p className="text-xs text-slate-400 mt-1">Utility bill, rental agreement, or any government document with address</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Profile Photo URL</label>
-                    <input
-                      type="url"
-                      value={step2Data.profilePhotoUrl}
-                      onChange={(e) => setStep2Data({ ...step2Data, profilePhotoUrl: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
-                      placeholder="https://example.com/profile-photo.jpg"
-                    />
-                    {step2Data.profilePhotoUrl && (
-                      <div className="mt-3">
-                        <img 
-                          src={step2Data.profilePhotoUrl} 
-                          alt="Profile preview" 
-                          className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-md"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    )}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-white">Profile Photo File</label>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          setStep2Files((prev) => ({ ...prev, photo: file }))
+                        }}
+                        className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-main/80 file:text-white hover:file:bg-primary-main cursor-pointer"
+                      />
+                      {step2Files.photo && (
+                        <p className="mt-1 text-xs text-slate-400">Selected: {step2Files.photo.name}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
                 <div className="mt-8 flex justify-between">
                   <button
                     onClick={() => setCurrentStep(1)}
-                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                    className="px-6 py-3 border-2 border-white/20 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
                   >
                     Previous
                   </button>
                   <button
                     onClick={handleStep2Submit}
-                    disabled={submitting || (!step2Data.aadhaarUrl && !step2Data.panUrl && !step2Data.addressProofUrl)}
+                    disabled={
+                      submitting ||
+                      (!step2Files.aadhaar &&
+                        !step2Files.pan &&
+                        !step2Files.address &&
+                        !step2Files.photo)
+                    }
                     className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? (
@@ -796,7 +879,7 @@ export default function ProviderOnboardingPage() {
                         key={index}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-neutral-background rounded-2xl p-5 border-2 border-neutral-border"
+                        className="bg-white/5 rounded-2xl p-5 border-2 border-white/10"
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-2">
@@ -900,25 +983,28 @@ export default function ProviderOnboardingPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-white">Certification Document URL (Optional)</label>
+                            <label className="block text-sm font-semibold mb-2 text-white">Certification Document (Optional)</label>
                             <input
-                              type="url"
-                              value={skill.certificationDocumentUrl}
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
                               onChange={(e) => {
-                                const newData = [...step3Data]
-                                newData[index].certificationDocumentUrl = e.target.value
-                                setStep3Data(newData)
+                                const file = e.target.files?.[0]
+                                setStep3Files((prev) => ({ ...prev, [index]: file }))
                               }}
-                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
-                              placeholder="https://example.com/certificate.pdf"
+                              className="w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-main/80 file:text-white hover:file:bg-primary-main cursor-pointer"
                             />
+                            {step3Files[index] && (
+                              <p className="mt-1 text-xs text-slate-400">
+                                Selected: {step3Files[index]?.name}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </motion.div>
                     ))}
 
                     {step3Data.length === 0 && (
-                      <div className="text-center py-8 text-neutral-textSecondary">
+                      <div className="text-center py-8 text-slate-300">
                         <Wrench className="w-12 h-12 mx-auto mb-3 opacity-50" />
                         <p>No skills added yet. Click "Add Skill" to get started.</p>
                       </div>
@@ -929,7 +1015,7 @@ export default function ProviderOnboardingPage() {
                 <div className="mt-8 flex justify-between">
                   <button
                     onClick={() => setCurrentStep(2)}
-                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                    className="px-6 py-3 border-2 border-white/20 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
                   >
                     Previous
                   </button>
@@ -958,8 +1044,8 @@ export default function ProviderOnboardingPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
                     Step 4 of 5
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Select Service Areas</h2>
-                  <p className="text-neutral-textSecondary">Choose the areas where you provide services</p>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white font-display">Select Service Areas</h2>
+                  <p className="text-slate-300">Choose the areas where you provide services</p>
                 </div>
 
                 {loadingDropdowns ? (
@@ -989,12 +1075,12 @@ export default function ProviderOnboardingPage() {
                         key={index}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-neutral-background rounded-2xl p-5 border-2 border-neutral-border"
+                        className="bg-white/5 rounded-2xl p-5 border-2 border-white/10"
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-primary-main" />
-                            <span className="font-semibold text-neutral-textPrimary">Service Area {index + 1}</span>
+                            <span className="font-semibold text-white">Service Area {index + 1}</span>
                             {area.isPrimary && (
                               <span className="px-2 py-1 bg-accent-green/10 text-accent-green rounded-full text-xs font-semibold flex items-center gap-1">
                                 <Star className="w-3 h-3" />
@@ -1011,7 +1097,7 @@ export default function ProviderOnboardingPage() {
                                 }
                                 setStep4Data(newData)
                               }}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1042,7 +1128,7 @@ export default function ProviderOnboardingPage() {
                               value={area.zoneId}
                               onChange={(e) => handleZoneChange(Number(e.target.value), index)}
                               disabled={!area.cityId}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <option value={0}>Select Zone</option>
                               {zones.map((zone) => (
@@ -1062,7 +1148,7 @@ export default function ProviderOnboardingPage() {
                                 setStep4Data(newData)
                               }}
                               disabled={!area.zoneId}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <option value={0}>Select POD</option>
                               {pods.map((pod) => (
@@ -1104,14 +1190,14 @@ export default function ProviderOnboardingPage() {
                               }}
                               className="w-4 h-4 text-primary-main rounded focus:ring-primary-main"
                             />
-                            <span className="text-sm font-semibold text-neutral-textPrimary">Mark as Primary Service Area</span>
+                            <span className="text-sm font-semibold text-slate-200">Mark as Primary Service Area</span>
                           </label>
                         </div>
                       </motion.div>
                     ))}
 
                     {step4Data.length === 0 && (
-                      <div className="text-center py-8 text-neutral-textSecondary">
+                      <div className="text-center py-8 text-slate-300">
                         <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
                         <p>No service areas added yet. Click "Add Service Area" to get started.</p>
                       </div>
@@ -1122,7 +1208,7 @@ export default function ProviderOnboardingPage() {
                 <div className="mt-8 flex justify-between">
                   <button
                     onClick={() => setCurrentStep(3)}
-                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                    className="px-6 py-3 border-2 border-white/20 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
                   >
                     Previous
                   </button>
@@ -1151,29 +1237,29 @@ export default function ProviderOnboardingPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
                     Step 5 of 5
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Complete Your Profile</h2>
-                  <p className="text-neutral-textSecondary">Add a bio and experience to complete your profile</p>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white font-display">Complete Your Profile</h2>
+                  <p className="text-slate-300">Add a bio and experience to complete your profile</p>
                 </div>
 
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                    <label className="block text-sm font-semibold mb-2 text-white">
                       Bio/Description <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       value={step5Data.bio}
                       onChange={(e) => setStep5Data({ ...step5Data, bio: e.target.value })}
                       rows={6}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all resize-none"
                       placeholder="Tell customers about yourself, your experience, and what makes you special..."
                     />
-                    <p className="text-xs text-neutral-textSecondary mt-1">
+                    <p className="text-xs text-slate-300 mt-1">
                       {step5Data.bio.length}/500 characters
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                    <label className="block text-sm font-semibold mb-2 text-white">
                       Total Experience (Years) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -1182,23 +1268,23 @@ export default function ProviderOnboardingPage() {
                       max="50"
                       value={step5Data.experienceYears}
                       onChange={(e) => setStep5Data({ ...step5Data, experienceYears: Number(e.target.value) })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="Total years of experience"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Profile Image URL (Optional)</label>
+                    <label className="block text-sm font-semibold mb-2 text-white">Profile Image URL (Optional)</label>
                     <input
                       type="url"
                       value={step5Data.profileImageUrl}
                       onChange={(e) => setStep5Data({ ...step5Data, profileImageUrl: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                      className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="https://example.com/profile.jpg"
                     />
                     {step5Data.profileImageUrl && (
                       <div className="mt-3">
-                        <img src={step5Data.profileImageUrl} alt="Profile preview" className="w-24 h-24 rounded-full object-cover border-2 border-neutral-border" />
+                        <img src={step5Data.profileImageUrl} alt="Profile preview" className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-md" />
                       </div>
                     )}
                   </div>
@@ -1207,7 +1293,7 @@ export default function ProviderOnboardingPage() {
                 <div className="mt-8 flex justify-between">
                   <button
                     onClick={() => setCurrentStep(4)}
-                    className="px-6 py-3 border-2 border-neutral-border rounded-xl font-semibold hover:bg-neutral-background transition-all"
+                    className="px-6 py-3 border-2 border-white/20 text-white rounded-xl font-semibold hover:bg-white/10 transition-all"
                   >
                     Previous
                   </button>
@@ -1231,6 +1317,6 @@ export default function ProviderOnboardingPage() {
           </div>
         </div>
       </div>
-    </div>
+  
   )
 }

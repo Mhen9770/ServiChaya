@@ -1,5 +1,6 @@
 package com.servichaya.payment.service;
 
+import com.servichaya.common.service.ConfigService;
 import com.servichaya.job.entity.JobMaster;
 import com.servichaya.job.repository.JobMasterRepository;
 import com.servichaya.job.service.JobStateMachine;
@@ -37,6 +38,7 @@ public class PaymentService {
     private final EarningCalculationService earningCalculationService;
     private final NotificationService notificationService;
     private final PaymentGatewayService paymentGatewayService;
+    private final ConfigService configService;
     private final JobStateMachine stateMachine;
 
     @Transactional
@@ -293,6 +295,26 @@ public class PaymentService {
     }
 
     @Transactional
+    public void markTestPaymentFailed(Long jobId, String transactionCode) {
+        if (!configService.isTestPaymentModeEnabled()) {
+            throw new RuntimeException("Test payment mode is not enabled");
+        }
+
+        PaymentTransaction transaction = paymentTransactionRepository.findByTransactionCode(transactionCode)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionCode));
+
+        if (!transaction.getJobId().equals(jobId)) {
+            throw new RuntimeException("Transaction does not belong to this job");
+        }
+
+        transaction.setStatus("FAILED");
+        transaction.setCompletedAt(LocalDateTime.now());
+        paymentTransactionRepository.save(transaction);
+
+        log.info("Test payment marked as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+    }
+
+    @Transactional
     public String createPaymentLink(Long jobId, Long userId, BigDecimal amount) {
         log.info("Creating payment link for jobId: {}, userId: {}, amount: {}", jobId, userId, amount);
 
@@ -338,7 +360,16 @@ public class PaymentService {
 
         transaction = paymentTransactionRepository.save(transaction);
 
-        // Generate Razorpay order and payment link
+        // If test payment mode is enabled, return a fake link that frontend can use for sandbox flow
+        if (configService.isTestPaymentModeEnabled()) {
+            String testLink = String.format(
+                    "/test-payment?jobId=%d&transactionCode=%s&amount=%s",
+                    jobId, transactionCode, amount.toPlainString());
+            log.info("TEST_PAYMENT_MODE enabled. Returning sandbox payment link: {}", testLink);
+            return testLink;
+        }
+
+        // Generate real gateway payment link
         try {
             // Create Razorpay order
             Map<String, Object> orderData = paymentGatewayService.createOrder(
@@ -378,14 +409,18 @@ public class PaymentService {
             throw new RuntimeException("Transaction does not belong to this job");
         }
 
-        // Verify payment with gateway
-        if (razorpayPaymentId != null && razorpayOrderId != null && razorpaySignature != null) {
-            boolean isValid = paymentGatewayService.verifyPaymentSignature(
-                    razorpayOrderId, razorpayPaymentId, razorpaySignature);
-            if (!isValid) {
-                log.error("Invalid payment signature for transaction: {}", transactionCode);
-                throw new RuntimeException("Invalid payment signature");
+        // Verify payment with gateway unless we're in test mode
+        if (!configService.isTestPaymentModeEnabled()) {
+            if (razorpayPaymentId != null && razorpayOrderId != null && razorpaySignature != null) {
+                boolean isValid = paymentGatewayService.verifyPaymentSignature(
+                        razorpayOrderId, razorpayPaymentId, razorpaySignature);
+                if (!isValid) {
+                    log.error("Invalid payment signature for transaction: {}", transactionCode);
+                    throw new RuntimeException("Invalid payment signature");
+                }
             }
+        } else {
+            log.info("TEST_PAYMENT_MODE enabled. Skipping gateway signature verification for transaction: {}", transactionCode);
         }
         
         transaction.setStatus("SUCCESS");

@@ -48,7 +48,7 @@ export default function ProviderLayout({
       <Header showUserMenu={true} />
       <div className="flex">
         {showSidebar && <ProviderSidebar />}
-        <main className={`flex-1 ${showSidebar ? '' : 'container mx-auto px-4 py-8'}`}>
+        <main className={`flex-1 ${showSidebar ? '' : 'container mx-auto my-auto'}`}>
           {children}
         </main>
       </div>

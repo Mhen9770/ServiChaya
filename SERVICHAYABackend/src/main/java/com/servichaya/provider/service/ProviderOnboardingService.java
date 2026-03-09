@@ -194,11 +194,15 @@ public class ProviderOnboardingService {
         
         // Validate document URLs
         for (OnboardingStep2Dto.DocumentUpload doc : dto.getDocuments()) {
-            if (doc.getDocumentUrl() == null || doc.getDocumentUrl().trim().isEmpty()) {
+            String url = doc.getDocumentUrl();
+            if (url == null || url.trim().isEmpty()) {
                 throw new RuntimeException("Document URL is required for " + doc.getDocumentType());
             }
-            // Basic URL validation
-            if (!doc.getDocumentUrl().startsWith("http://") && !doc.getDocumentUrl().startsWith("https://")) {
+            url = url.trim();
+            // Accept either absolute URLs (legacy) or local stored file paths from ProviderDocumentService
+            boolean isHttp = url.startsWith("http://") || url.startsWith("https://");
+            boolean isLocalStoredPath = url.startsWith("/provider/documents/files/");
+            if (!isHttp && !isLocalStoredPath) {
                 throw new RuntimeException("Invalid document URL format for " + doc.getDocumentType());
             }
         }

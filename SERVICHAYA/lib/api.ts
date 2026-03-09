@@ -1,15 +1,18 @@
 import axios from 'axios'
 
 // Backend API URL from environment variable
-// Set NEXT_PUBLIC_API_URL in your Linux environment or .env file
+// Preferred: set NEXT_PUBLIC_API_URL in your Linux environment or .env file
 // Example: export NEXT_PUBLIC_API_URL=http://localhost:8080/api
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
+// For local development, we safely fall back to http://localhost:8080/api if not set.
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV !== 'production' ? 'http://localhost:8080/api' : undefined)
 
 if (!BACKEND_URL) {
   throw new Error(
     'NEXT_PUBLIC_API_URL environment variable is not set. ' +
-    'Please set it in your environment or .env file. ' +
-    'Example: NEXT_PUBLIC_API_URL=http://localhost:8080/api'
+      'Please set it in your environment or .env file. ' +
+      'Example: NEXT_PUBLIC_API_URL=http://localhost:8080/api'
   )
 }
 

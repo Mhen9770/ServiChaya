@@ -26,6 +26,17 @@ export default function AdminProviderDetailPage() {
   const [adminNotes, setAdminNotes] = useState('')
   const [expandedDocument, setExpandedDocument] = useState<number | null>(null)
 
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NODE_ENV !== 'production' ? 'http://localhost:8080/api' : '')
+  const backendOrigin = apiBase.replace(/\/api\/?$/, '')
+
+  const resolveDocumentUrl = (url: string | null | undefined) => {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    return `${backendOrigin}${url}`
+  }
+
   useEffect(() => {
     if (providerId) {
       fetchProvider()
@@ -308,7 +319,7 @@ export default function AdminProviderDetailPage() {
                         )}
                         {doc.documentUrl && (
                           <a
-                            href={doc.documentUrl}
+                            href={resolveDocumentUrl(doc.documentUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 text-sm text-primary-main hover:text-primary-dark transition-colors"
@@ -377,7 +388,7 @@ export default function AdminProviderDetailPage() {
                         </div>
                         {skill.certificationDocumentUrl && (
                           <a
-                            href={skill.certificationDocumentUrl}
+                            href={resolveDocumentUrl(skill.certificationDocumentUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 text-sm text-primary-main hover:text-primary-dark transition-colors mt-2"

@@ -123,6 +123,15 @@ public class ConfigService {
         return getConfigValueAsInteger("PAYMENT", "PAYMENT_PROCESSING_DAYS", 2);
     }
 
+    // Payment testing / sandbox
+    public boolean isTestPaymentModeEnabled() {
+        // Prefer feature flag; fallback to CommonMaster
+        if (featureFlagService.isFeatureEnabled("TEST_PAYMENT_MODE")) {
+            return true;
+        }
+        return getConfigValueAsBoolean("PAYMENT", "TEST_PAYMENT_MODE", false);
+    }
+
     // Matching related configs - Use Business Rules
     public Integer getProviderResponseTimeoutSeconds() {
         Integer ruleValue = businessRuleService.getRuleValueAsInteger(

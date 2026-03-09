@@ -4,7 +4,7 @@ import Sidebar from './Sidebar'
 import { 
   LayoutDashboard, ClipboardList, Users, User, Settings, 
   MapPin, Building2, Layers, List, Sliders, Globe, Wrench, Shield, Package,
-  DollarSign, UserPlus
+  DollarSign, UserPlus, MessageCircle
 } from 'lucide-react'
 
 export default function AdminSidebar() {
@@ -13,6 +13,7 @@ export default function AdminSidebar() {
     { label: 'Jobs', href: '/admin/jobs', icon: ClipboardList },
     { label: 'Providers', href: '/admin/providers', icon: Users },
     { label: 'Customers', href: '/admin/customers', icon: User },
+    { label: 'Open Points', href: '/admin/open-points', icon: MessageCircle },
     { 
       label: 'Master Data', 
       href: '#', 

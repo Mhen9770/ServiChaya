@@ -85,3 +85,15 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     enabled: true
+
+# Feedback / Open Points
+feedback:
+  # Base directory for storing uploaded feedback documents
+  # Can be overridden via FEEDBACK_DOCUMENTS_PATH environment variable
+  documents-path: ${FEEDBACK_DOCUMENTS_PATH:/app/data/documents/Feedback/docs}
+
+# Provider documents
+provider:
+  # Base directory for storing provider KYC and verification documents
+  # Can be overridden via PROVIDER_DOCUMENTS_PATH environment variable
+  documents-path: ${PROVIDER_DOCUMENTS_PATH:/app/data/documents/Providers/docs}

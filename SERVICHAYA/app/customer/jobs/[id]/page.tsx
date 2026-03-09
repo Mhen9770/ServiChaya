@@ -249,8 +249,12 @@ export default function CustomerJobDetailsPage() {
   const canPayUpfront = job.status === 'PENDING_FOR_PAYMENT' && payment && 
     (payment.paymentType === 'PARTIAL' || payment.paymentType === 'FULL') && 
     !payment.upfrontPaid && payment.upfrontAmount > 0
-  // Can pay final if: job is PAYMENT_PENDING and final not paid
-  const canPayFinal = job.status === 'PAYMENT_PENDING' && payment && !payment.finalPaid
+  // Can pay final if: job is PAYMENT_PENDING, there's a final amount due, and final not paid
+  const canPayFinal =
+    job.status === 'PAYMENT_PENDING' &&
+    payment !== null &&
+    !!payment.finalAmount &&
+    !payment.finalPaid
   const canPay = canPayUpfront || canPayFinal
   const canReview = job.status === 'COMPLETED' && !review
 
@@ -410,7 +414,7 @@ export default function CustomerJobDetailsPage() {
                     )}
                   </>
                 )}
-                {payment.paymentType === 'PARTIAL' && (
+                {(payment.paymentType === 'PARTIAL' || payment.paymentType === 'POST_WORK') && (
                   <div className="flex justify-between text-slate-300">
                     <span>Final Amount:</span>
                     <span className={`font-semibold ${payment.finalPaid ? 'text-green-400' : 'text-yellow-400'}`}>
@@ -449,7 +453,9 @@ export default function CustomerJobDetailsPage() {
                     </motion.button>
                   </Link>
                 )}
-                {!payment.finalPaid && payment.paymentType === 'PARTIAL' && job.status === 'PAYMENT_PENDING' && (
+                {!payment.finalPaid &&
+                  payment.finalAmount &&
+                  job.status === 'PAYMENT_PENDING' && (
                   <Link href={`/customer/jobs/${jobId}/payment?type=final`} className="block mt-4">
                     <motion.button
                       whileHover={{ scale: 1.02 }}

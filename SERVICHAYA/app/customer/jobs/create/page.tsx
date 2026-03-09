@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { ArrowLeft, CalendarDays, CheckCircle2, MapPin, Send, ShieldCheck, Sparkles, AlertCircle, Info } from 'lucide-react'
 import { PageLoader, ButtonLoader, ContentLoader } from '@/components/ui/Loader'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, sendOtp, verifyOtp } from '@/lib/auth'
 import { createJob, type CreateJobDto } from '@/lib/services/job'
 import { getAllCategories, getRootCategories, getCategoryTree, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { getServiceSkillsByCategory, type ServiceSkillDto } from '@/lib/services/provider'
@@ -53,11 +53,19 @@ export default function CreateJobPage() {
   const [cities, setCities] = useState<CityMasterDto[]>([])
   const [zones, setZones] = useState<ZoneMasterDto[]>([])
   const [pods, setPods] = useState<PodMasterDto[]>([])
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
+
+  // Guest mobile + OTP state
+  const [guestMobile, setGuestMobile] = useState('')
+  const [otp, setOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
 
   useEffect(() => {
-    // Allow public access - user can create job without login
-    // Login will be prompted only when submitting the job
     loadInitialData()
+    setCurrentUser(getCurrentUser())
   }, [router])
 
   const loadInitialData = async () => {
@@ -197,17 +205,23 @@ export default function CreateJobPage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault()
 
-    const user = getCurrentUser()
-    
-    // If user is not logged in, redirect to login with redirect back to this page
-    if (!user) {
-      toast.error('Please login to create a job request')
-      router.push(`/login?redirect=${encodeURIComponent('/customer/jobs/create')}`)
+    if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
+      toast.error('Please fill all required fields before submitting')
       return
     }
 
-    if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
-      toast.error('Please fill all required fields before submitting')
+    // Require login OR verified OTP before creating job
+    let user = getCurrentUser()
+    if (!user) {
+      if (!otpVerified) {
+        toast.error('Please verify your mobile number with OTP before submitting')
+        setCurrentStep(3)
+        return
+      }
+      user = getCurrentUser()
+    }
+    if (!user) {
+      toast.error('Unable to identify user. Please try OTP verification again.')
       return
     }
 
@@ -243,6 +257,59 @@ export default function CreateJobPage() {
     return <PageLoader text="Loading form..." />
   }
 
+  const handleNextFromStep1 = () => {
+    if (!form.serviceCategoryId || !form.title || !form.description) {
+      toast.error('Please fill service details before continuing')
+      return
+    }
+    setCurrentStep(2)
+  }
+
+  const handleNextFromStep2 = () => {
+    if (!form.preferredTime || !form.cityId || !form.addressLine1) {
+      toast.error('Please fill schedule & location before continuing')
+      return
+    }
+    setCurrentStep(3)
+  }
+
+  const handleSendGuestOtp = async () => {
+    if (!guestMobile || guestMobile.length !== 10) {
+      toast.error('Please enter a valid 10-digit mobile number')
+      return
+    }
+    try {
+      setOtpLoading(true)
+      const code = await sendOtp(guestMobile)
+      setOtpSent(true)
+      setOtpVerified(false)
+      toast.success(`OTP sent! OTP: ${code} (for testing)`)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to send OTP')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const handleVerifyGuestOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      toast.error('Please enter a valid 6-digit OTP')
+      return
+    }
+    try {
+      setOtpLoading(true)
+      const resp = await verifyOtp(guestMobile, otp)
+      setOtpVerified(true)
+      setCurrentUser(resp)
+      toast.success('Mobile verified and account created!')
+    } catch (error: any) {
+      setOtpVerified(false)
+      toast.error(error?.response?.data?.message || 'Invalid OTP')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
   return (
     <div className="px-6 py-6 space-y-6">
       <motion.div
@@ -270,12 +337,16 @@ export default function CreateJobPage() {
               className="h-full bg-white"
             />
           </div>
-          <span className="text-xs text-slate-300">{formProgress}% complete</span>
+          <span className="text-xs text-slate-300">
+            Step {currentStep} of 3 · {formProgress}% complete
+          </span>
         </div>
       </motion.section>
 
       <form onSubmit={submit} className="grid xl:grid-cols-[1.3fr_1fr] gap-5">
         <div className="rounded-2xl glass-dark border border-white/10 p-6 space-y-7">
+          {/* Step 1: Service scope */}
+          {currentStep === 1 && (
           <section>
             <h2 className="font-bold text-lg text-white">Service scope</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
@@ -340,7 +411,10 @@ export default function CreateJobPage() {
               <input type="checkbox" checked={!!form.isEmergency} onChange={(e) => setForm((prev) => ({ ...prev, isEmergency: e.target.checked }))} className="rounded" /> Emergency request
             </label>
           </section>
+          )}
 
+          {/* Step 2: Schedule & location */}
+          {currentStep === 2 && (
           <section>
             <h2 className="font-bold text-lg text-white">Schedule & location</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
@@ -396,25 +470,121 @@ export default function CreateJobPage() {
               placeholder="Landmark, entry notes, contact preference"
             />
           </section>
+          )}
 
-          <motion.button
-            whileHover={{ scale: saving ? 1 : 1.02 }}
-            whileTap={{ scale: saving ? 1 : 0.98 }}
-            disabled={saving || loadingInitialData} 
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-5 py-2.5 font-semibold disabled:opacity-60 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
-          >
-            {saving ? (
-              <>
-                <ButtonLoader />
-                Submitting...
-              </>
+          {/* Step 3: Contact & confirmation */}
+          {currentStep === 3 && (
+            <section className="space-y-5">
+              <h2 className="font-bold text-lg text-white">Contact & confirmation</h2>
+              {!currentUser && (
+                <div className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
+                  <p className="text-sm text-slate-200 font-semibold">
+                    Create request without account – verify your mobile
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    We will create your SERVICHAYA account after OTP verification so you can track this job.
+                  </p>
+                  <div className="grid sm:grid-cols-[2fr,1fr] gap-3">
+                    <InputField
+                      label="Mobile number"
+                      value={guestMobile}
+                      onChange={(value) => setGuestMobile(value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="Enter 10-digit mobile"
+                    />
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: otpLoading ? 1 : 1.02 }}
+                      whileTap={{ scale: otpLoading ? 1 : 0.98 }}
+                      disabled={otpLoading}
+                      onClick={handleSendGuestOtp}
+                      className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-main text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                    >
+                      {otpLoading ? <ButtonLoader size="sm" /> : 'Send OTP'}
+                    </motion.button>
+                  </div>
+                  {otpSent && (
+                    <div className="grid sm:grid-cols-[2fr,1fr] gap-3">
+                      <InputField
+                        label="OTP"
+                        value={otp}
+                        onChange={(value) => setOtp(value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="Enter 6-digit OTP"
+                      />
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: otpLoading ? 1 : 1.02 }}
+                        whileTap={{ scale: otpLoading ? 1 : 0.98 }}
+                        disabled={otpLoading}
+                        onClick={handleVerifyGuestOtp}
+                        className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                      >
+                        {otpLoading ? <ButtonLoader size="sm" /> : 'Verify OTP'}
+                      </motion.button>
+                    </div>
+                  )}
+                  {otpVerified && (
+                    <p className="text-xs text-emerald-400 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> Mobile verified. You can submit your request now.
+                    </p>
+                  )}
+                </div>
+              )}
+              {currentUser && (
+                <p className="text-sm text-slate-300">
+                  Logged in as <span className="font-semibold text-white">{currentUser.mobileNumber}</span>. We
+                  will use this number to contact you about this job.
+                </p>
+              )}
+            </section>
+          )}
+
+          <div className="flex justify-between pt-4 border-t border-white/10 mt-4">
+            <motion.button
+              type="button"
+              whileHover={{ scale: currentStep === 1 ? 1 : 1.02 }}
+              whileTap={{ scale: currentStep === 1 ? 1 : 0.98 }}
+              disabled={currentStep === 1}
+              onClick={() =>
+                setCurrentStep((prev) => (prev === 1 ? 1 : ((prev - 1) as 1 | 2 | 3)))
+              }
+              className="inline-flex items-center gap-2 rounded-xl border border-white/20 text-white px-4 py-2 text-sm disabled:opacity-40"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </motion.button>
+
+            {currentStep < 3 ? (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={currentStep === 1 ? handleNextFromStep1 : handleNextFromStep2}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-5 py-2.5 text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+              >
+                Next
+              </motion.button>
             ) : (
-              <>
-                <Send className="w-4 h-4" />
-                Submit Request
-              </>
+              <motion.button
+                type="submit"
+                whileHover={{ scale: saving ? 1 : 1.02 }}
+                whileTap={{ scale: saving ? 1 : 0.98 }}
+                disabled={saving || (!currentUser && !otpVerified)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-5 py-2.5 font-semibold disabled:opacity-60 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+              >
+                {saving ? (
+                  <>
+                    <ButtonLoader />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Submit Request
+                  </>
+                )}
+              </motion.button>
             )}
-          </motion.button>
+          </div>
         </div>
 
         <aside className="space-y-4">
