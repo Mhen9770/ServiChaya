@@ -327,6 +327,11 @@ function ServicesPageContent() {
     )
   }
 
+  // At this point, category is guaranteed to be non-null (we returned early if it was null)
+  if (!category) {
+    return null // This should never happen, but TypeScript needs this check
+  }
+
   const IconComponent = getCategoryIcon(category)
 
   return (
