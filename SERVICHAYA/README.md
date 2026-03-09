@@ -73,14 +73,27 @@ npm start
 
 ### Environment Variables
 
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8080/api
-NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_key
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_secret
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+**⚠️ IMPORTANT:** `NEXT_PUBLIC_API_URL` is **REQUIRED** and must be set as a Linux environment variable.
+
+```bash
+# Set in Linux environment (REQUIRED)
+export NEXT_PUBLIC_API_URL=http://localhost:8080/api
+
+# Or create .env file for development
+echo "NEXT_PUBLIC_API_URL=http://localhost:8080/api" > .env
 ```
+
+See [ENVIRONMENT_SETUP.md](ENVIRONMENT_SETUP.md) for detailed setup instructions.
+
+**Required Variables:**
+- `NEXT_PUBLIC_API_URL` - Backend API URL (REQUIRED)
+- `NEXT_PUBLIC_RAZORPAY_KEY_ID` - Razorpay key for payments (REQUIRED for payments)
+
+**Optional Variables:**
+- `NEXTAUTH_URL` - NextAuth URL
+- `NEXTAUTH_SECRET` - NextAuth secret
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
 
 ### Key Features
 

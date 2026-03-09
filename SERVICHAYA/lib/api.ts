@@ -1,7 +1,17 @@
 import axios from 'axios'
 
-// Direct backend API calls
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://servichaya-production.up.railway.app/api'
+// Backend API URL from environment variable
+// Set NEXT_PUBLIC_API_URL in your Linux environment or .env file
+// Example: export NEXT_PUBLIC_API_URL=http://localhost:8080/api
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
+
+if (!BACKEND_URL) {
+  throw new Error(
+    'NEXT_PUBLIC_API_URL environment variable is not set. ' +
+    'Please set it in your environment or .env file. ' +
+    'Example: NEXT_PUBLIC_API_URL=http://localhost:8080/api'
+  )
+}
 
 const api = axios.create({
   baseURL: BACKEND_URL, // Direct backend URL

@@ -5,8 +5,10 @@ const nextConfig = {
     domains: ['localhost'],
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api',
-    BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:8080/api',
+    // API URL must be set via environment variable
+    // In Linux: export NEXT_PUBLIC_API_URL=http://localhost:8080/api
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    BACKEND_URL: process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL,
   },
 }
 
