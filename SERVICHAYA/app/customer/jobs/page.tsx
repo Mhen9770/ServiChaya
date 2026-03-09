@@ -10,7 +10,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getCustomerJobs, type JobDto } from '@/lib/services/job'
 import FilterBar from '@/components/ui/FilterBar'
 import Pagination from '@/components/ui/Pagination'
-import Loader from '@/components/ui/Loader'
+import { PageLoader, ContentLoader, ButtonLoader, Loader } from '@/components/ui/Loader'
 
 export default function CustomerJobsPage() {
   const router = useRouter()
@@ -62,7 +62,7 @@ export default function CustomerJobsPage() {
     return jobs.filter((job) => [job.title, job.description, job.jobCode, job.addressLine1].join(' ').toLowerCase().includes(q))
   }, [jobs, searchQuery])
 
-  if (loading) return <Loader fullScreen text="Loading your requests..." />
+  if (loading) return <PageLoader text="Loading your requests..." />
 
   return (
     <div className="px-6 py-6 space-y-6">

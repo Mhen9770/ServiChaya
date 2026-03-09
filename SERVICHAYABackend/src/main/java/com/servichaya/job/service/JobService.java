@@ -1,5 +1,6 @@
 package com.servichaya.job.service;
 
+import com.servichaya.common.service.ConfigService;
 import com.servichaya.job.dto.AttachmentDto;
 import com.servichaya.job.dto.CreateJobDto;
 import com.servichaya.job.dto.JobDto;
@@ -8,6 +9,7 @@ import com.servichaya.job.entity.JobMaster;
 import com.servichaya.job.repository.JobAttachmentRepository;
 import com.servichaya.job.repository.JobMasterRepository;
 import com.servichaya.matching.service.MatchingService;
+import com.servichaya.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -16,8 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +29,9 @@ public class JobService {
     private final JobMasterRepository jobRepository;
     private final JobAttachmentRepository attachmentRepository;
     private final MatchingService matchingService;
+    private final ConfigService configService;
+    private final NotificationService notificationService;
+    private final JobStateMachine stateMachine;
 
     @Transactional
     public JobDto createJob(Long customerId, CreateJobDto createJobDto) {
@@ -61,6 +65,21 @@ public class JobService {
         JobMaster savedJob = jobRepository.save(job);
         log.info("Job created successfully with jobCode: {}, jobId: {}", jobCode, savedJob.getId());
 
+        // Notify customer about job creation
+        try {
+            notificationService.createNotification(
+                    customerId, "CUSTOMER", "JOB_CREATED",
+                    "Job Created Successfully",
+                    String.format("Your job request '%s' has been created. We're finding the best providers for you.", savedJob.getTitle()),
+                    "JOB", savedJob.getId(),
+                    String.format("/customer/jobs/%d", savedJob.getId()),
+                    Map.of("jobCode", savedJob.getJobCode(), "status", savedJob.getStatus())
+            );
+        } catch (Exception e) {
+            log.error("Failed to send job creation notification", e);
+            // Don't fail job creation if notification fails
+        }
+
         if (createJobDto.getAttachments() != null && !createJobDto.getAttachments().isEmpty()) {
             final Long jobId = savedJob.getId();
             List<JobAttachment> attachments = createJobDto.getAttachments().stream()
@@ -77,11 +96,54 @@ public class JobService {
             log.info("Saved {} attachments for jobId: {}", attachments.size(), jobId);
         }
 
+        // Check if AUTO_MATCHING_FEATURE is enabled before triggering matching
         try {
-            log.info("Triggering matching algorithm for jobId: {}", savedJob.getId());
-            matchingService.matchJobToProviders(savedJob.getId());
+            if (configService.isAutoMatchingEnabled()) {
+                log.info("AUTO_MATCHING_FEATURE enabled. Triggering matching algorithm for jobId: {}", savedJob.getId());
+                
+                // Update job status to MATCHING before starting matching
+                updateJobStatus(savedJob.getId(), "PENDING", "MATCHING");
+                
+                // Trigger matching (this will update status to MATCHED if providers found)
+                matchingService.matchJobToProviders(savedJob.getId());
+            } else {
+                log.info("AUTO_MATCHING_FEATURE disabled. Skipping automatic matching for jobId: {}. Admin can manually assign.", savedJob.getId());
+                // Notify customer that admin will assign manually
+                try {
+                    notificationService.createNotification(
+                            customerId, "CUSTOMER", "JOB_PENDING_MANUAL_ASSIGNMENT",
+                            "Job Created - Manual Assignment",
+                            String.format("Your job request '%s' has been created. Our team will assign a provider shortly.", savedJob.getTitle()),
+                            "JOB", savedJob.getId(),
+                            String.format("/customer/jobs/%d", savedJob.getId()),
+                            Map.of("jobCode", savedJob.getJobCode())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to send manual assignment notification", e);
+                }
+            }
         } catch (Exception e) {
-            log.error("Error triggering matching algorithm for jobId: {}", savedJob.getId(), e);
+            log.error("Error checking AUTO_MATCHING_FEATURE or triggering matching for jobId: {}", savedJob.getId(), e);
+            // Revert status to PENDING if matching fails
+            try {
+                updateJobStatus(savedJob.getId(), "MATCHING", "PENDING");
+            } catch (Exception ex) {
+                log.error("Failed to revert job status", ex);
+            }
+            
+            // Notify customer about matching failure
+            try {
+                notificationService.createNotification(
+                        customerId, "CUSTOMER", "JOB_MATCHING_FAILED",
+                        "Finding Providers",
+                        String.format("We're having trouble finding providers for '%s'. Our team will review and assign manually.", savedJob.getTitle()),
+                        "JOB", savedJob.getId(),
+                        String.format("/customer/jobs/%d", savedJob.getId()),
+                        Map.of("jobCode", savedJob.getJobCode())
+                );
+            } catch (Exception ex) {
+                log.error("Failed to send matching failure notification", ex);
+            }
         }
 
         return mapToDto(savedJob);
@@ -122,36 +184,57 @@ public class JobService {
             Pageable pageable) {
         log.info("Fetching jobs for customerId: {} with filters - status: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}", 
                 customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax);
-        return jobRepository.findCustomerJobsWithFilters(
-                customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable)
-                .map(this::mapToDto);
+        Page<JobMaster> jobsPage = jobRepository.findCustomerJobsWithFilters(
+                customerId, status, isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable);
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
     public Page<JobDto> getCustomerJobs(Long customerId) {
         log.info("Fetching jobs for customerId: {}", customerId);
-            return jobRepository.findByCustomerIdAndIsDeletedFalse(customerId, Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt")))
-                    .map(this::mapToDto);
+        Page<JobMaster> jobsPage = jobRepository.findByCustomerIdAndIsDeletedFalse(customerId, Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt")));
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
 
     public Page<JobDto> getProviderJobs(Long providerId, String status, Pageable pageable) {
         log.info("Fetching jobs for providerId: {}, status: {}, page: {}, size: {}", providerId, status, pageable.getPageNumber(), pageable.getPageSize());
+        Page<JobMaster> jobsPage;
         if (status != null && !status.isEmpty() && !"ALL".equals(status)) {
-            return jobRepository.findByProviderIdAndStatusAndIsDeletedFalse(providerId, status, pageable)
-                    .map(this::mapToDto);
+            jobsPage = jobRepository.findByProviderIdAndStatusAndIsDeletedFalse(providerId, status, pageable);
+        } else {
+            jobsPage = jobRepository.findByProviderIdAndIsDeletedFalse(providerId, pageable);
         }
-        return jobRepository.findByProviderIdAndIsDeletedFalse(providerId, pageable)
-                .map(this::mapToDto);
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
 
     public Page<JobDto> getJobsByStatus(String status, Pageable pageable) {
         log.info("Fetching jobs by status: {}, page: {}, size: {}", status, pageable.getPageNumber(), pageable.getPageSize());
-        return jobRepository.findByStatus(status, pageable)
-                .map(this::mapToDto);
+        Page<JobMaster> jobsPage = jobRepository.findByStatus(status, pageable);
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
 
     public Page<JobDto> getAllJobs(Pageable pageable) {
         log.info("Fetching all jobs, page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
-        return jobRepository.findAllByIsDeletedNotTrue(pageable)
-                .map(this::mapToDto);
+        Page<JobMaster> jobsPage = jobRepository.findAllByIsDeletedNotTrue(pageable);
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
 
     public Page<JobDto> getJobsWithFilters(String status, Long cityId, Long customerId, Long providerId, 
@@ -175,14 +258,39 @@ public class JobService {
         log.info("Fetching jobs with advanced filters - status: {}, cityId: {}, customerId: {}, providerId: {}, categoryId: {}, subCategoryId: {}, isEmergency: {}, dateFrom: {}, dateTo: {}, budgetMin: {}, budgetMax: {}", 
                 status, cityId, customerId, providerId, categoryId, subCategoryId, isEmergency, dateFrom, dateTo, budgetMin, budgetMax);
         
-        return jobRepository.findAllJobsWithAdvancedFilters(
+        Page<JobMaster> jobsPage = jobRepository.findAllJobsWithAdvancedFilters(
                 status, cityId, customerId, providerId, categoryId, subCategoryId, 
-                isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable)
-                .map(this::mapToDto);
+                isEmergency, dateFrom, dateTo, budgetMin, budgetMax, pageable);
+        
+        // Batch load attachments to avoid N+1 queries
+        Map<Long, List<JobAttachment>> attachmentsMap = batchLoadAttachments(jobsPage.getContent());
+        
+        return jobsPage.map(job -> mapToDto(job, attachmentsMap.getOrDefault(job.getId(), Collections.emptyList())));
     }
 
-    private JobDto mapToDto(JobMaster job) {
-        List<JobAttachment> attachments = attachmentRepository.findByJobIdOrderByDisplayOrderAsc(job.getId());
+    /**
+     * Batch load attachments for multiple jobs to avoid N+1 queries
+     */
+    private Map<Long, List<JobAttachment>> batchLoadAttachments(List<JobMaster> jobs) {
+        if (jobs == null || jobs.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        
+        List<Long> jobIds = jobs.stream()
+                .map(JobMaster::getId)
+                .collect(Collectors.toList());
+        
+        List<JobAttachment> allAttachments = attachmentRepository.findByJobIdInOrderByJobIdAscDisplayOrderAsc(jobIds);
+        
+        // Group attachments by jobId
+        return allAttachments.stream()
+                .collect(Collectors.groupingBy(JobAttachment::getJobId));
+    }
+
+    /**
+     * Map JobMaster to JobDto with pre-loaded attachments (for batch operations)
+     */
+    private JobDto mapToDto(JobMaster job, List<JobAttachment> attachments) {
         List<AttachmentDto> attachmentDtos = attachments.stream()
                 .map(att -> AttachmentDto.builder()
                         .attachmentType(att.getAttachmentType())
@@ -223,5 +331,43 @@ public class JobService {
                 .attachments(attachmentDtos)
                 .createdAt(job.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Map JobMaster to JobDto (for single job operations)
+     */
+    private JobDto mapToDto(JobMaster job) {
+        List<JobAttachment> attachments = attachmentRepository.findByJobIdOrderByDisplayOrderAsc(job.getId());
+        return mapToDto(job, attachments);
+    }
+
+    /**
+     * Update job status with state machine validation
+     */
+    @Transactional
+    public void updateJobStatus(Long jobId, String currentStatus, String newStatus) {
+        log.info("Updating job {} status: {} -> {}", jobId, currentStatus, newStatus);
+        
+        // Validate transition
+        stateMachine.validateTransition(currentStatus, newStatus);
+        
+        JobMaster job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new RuntimeException("Job not found"));
+        
+        // Verify current status matches
+        if (!job.getStatus().equals(currentStatus)) {
+            log.warn("Job {} current status is {}, expected {}. Skipping status update.", 
+                    jobId, job.getStatus(), currentStatus);
+            throw new RuntimeException(
+                String.format("Job status mismatch. Current: %s, Expected: %s", 
+                    job.getStatus(), currentStatus)
+            );
+        }
+        
+        // Update status
+        job.setStatus(newStatus);
+        jobRepository.save(job);
+        
+        log.info("Job {} status updated to {}", jobId, newStatus);
     }
 }

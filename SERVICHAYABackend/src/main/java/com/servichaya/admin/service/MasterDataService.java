@@ -394,10 +394,27 @@ public class MasterDataService {
     @Transactional
     public ServiceCategoryMasterDto createServiceCategory(ServiceCategoryMasterDto dto) {
         log.info("Creating service category: {}", dto.getName());
+        
+        // Validate parent if provided
+        ServiceCategoryMaster parent = null;
+        Integer level = 0;
+        String path = dto.getName();
+        
+        if (dto.getParentId() != null) {
+            parent = categoryRepository.findById(dto.getParentId())
+                    .orElseThrow(() -> new RuntimeException("Parent category not found"));
+            level = parent.getLevel() != null ? parent.getLevel() + 1 : 1;
+            path = (parent.getPath() != null ? parent.getPath() : parent.getName()) + "/" + dto.getName();
+        }
+        
         ServiceCategoryMaster category = ServiceCategoryMaster.builder()
+                .parentId(dto.getParentId())
+                .categoryType(dto.getCategoryType())
                 .iconUrl(dto.getIconUrl())
                 .displayOrder(dto.getDisplayOrder())
                 .isFeatured(dto.getIsFeatured() != null ? dto.getIsFeatured() : false)
+                .level(level)
+                .path(path)
                 .build();
         
         // Set inherited fields from MasterEntity
@@ -407,7 +424,7 @@ public class MasterDataService {
         category.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
 
         category = categoryRepository.save(category);
-        log.info("Service category created successfully with id: {}", category.getId());
+        log.info("Service category created successfully with id: {}, level: {}", category.getId(), level);
         return mapCategoryToDto(category);
     }
 
@@ -417,16 +434,76 @@ public class MasterDataService {
         ServiceCategoryMaster category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Service category not found"));
 
-        if (dto.getName() != null) category.setName(dto.getName());
+        // Handle parent change
+        if (dto.getParentId() != null && !dto.getParentId().equals(category.getParentId())) {
+            // Prevent circular reference
+            if (dto.getParentId().equals(id)) {
+                throw new RuntimeException("Category cannot be its own parent");
+            }
+            
+            // Check if new parent is not a descendant
+            if (isDescendant(dto.getParentId(), id)) {
+                throw new RuntimeException("Cannot set parent: would create circular reference");
+            }
+            
+            ServiceCategoryMaster newParent = categoryRepository.findById(dto.getParentId())
+                    .orElseThrow(() -> new RuntimeException("Parent category not found"));
+            
+            category.setParentId(dto.getParentId());
+            Integer newLevel = newParent.getLevel() != null ? newParent.getLevel() + 1 : 1;
+            category.setLevel(newLevel);
+            String newPath = (newParent.getPath() != null ? newParent.getPath() : newParent.getName()) + "/" + category.getName();
+            category.setPath(newPath);
+            
+            // Update all descendants' levels and paths
+            updateDescendantsPath(category);
+        }
+
+        if (dto.getName() != null) {
+            category.setName(dto.getName());
+            // Update path if name changed
+            if (category.getParentId() != null) {
+                ServiceCategoryMaster parent = categoryRepository.findById(category.getParentId()).orElse(null);
+                if (parent != null) {
+                    category.setPath((parent.getPath() != null ? parent.getPath() : parent.getName()) + "/" + dto.getName());
+                    updateDescendantsPath(category);
+                }
+            } else {
+                category.setPath(dto.getName());
+            }
+        }
         if (dto.getDescription() != null) category.setDescription(dto.getDescription());
         if (dto.getIconUrl() != null) category.setIconUrl(dto.getIconUrl());
         if (dto.getDisplayOrder() != null) category.setDisplayOrder(dto.getDisplayOrder());
         if (dto.getIsFeatured() != null) category.setIsFeatured(dto.getIsFeatured());
         if (dto.getIsActive() != null) category.setIsActive(dto.getIsActive());
+        if (dto.getCategoryType() != null) category.setCategoryType(dto.getCategoryType());
 
         category = categoryRepository.save(category);
         log.info("Service category updated successfully");
         return mapCategoryToDto(category);
+    }
+
+    private boolean isDescendant(Long potentialAncestorId, Long categoryId) {
+        ServiceCategoryMaster category = categoryRepository.findById(categoryId).orElse(null);
+        if (category == null || category.getParentId() == null) {
+            return false;
+        }
+        if (category.getParentId().equals(potentialAncestorId)) {
+            return true;
+        }
+        return isDescendant(potentialAncestorId, category.getParentId());
+    }
+
+    private void updateDescendantsPath(ServiceCategoryMaster parent) {
+        List<ServiceCategoryMaster> children = categoryRepository.findByParentId(parent.getId());
+        for (ServiceCategoryMaster child : children) {
+            Integer newLevel = parent.getLevel() != null ? parent.getLevel() + 1 : 1;
+            child.setLevel(newLevel);
+            child.setPath((parent.getPath() != null ? parent.getPath() : parent.getName()) + "/" + child.getName());
+            categoryRepository.save(child);
+            updateDescendantsPath(child); // Recursive
+        }
     }
 
     @Transactional
@@ -449,6 +526,11 @@ public class MasterDataService {
                 .displayOrder(category.getDisplayOrder())
                 .isFeatured(category.getIsFeatured())
                 .isActive(category.getIsActive())
+                .parentId(category.getParentId())
+                .parentName(category.getParent() != null ? category.getParent().getName() : null)
+                .categoryType(category.getCategoryType())
+                .level(category.getLevel() != null ? category.getLevel() : 0)
+                .path(category.getPath())
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();

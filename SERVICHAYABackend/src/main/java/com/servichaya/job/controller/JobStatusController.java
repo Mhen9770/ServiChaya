@@ -30,9 +30,20 @@ public class JobStatusController {
             @PathVariable Long jobId,
             @RequestParam Long providerId,
             @RequestBody JobStatusUpdateDto dto) {
-        log.info("Request to complete jobId: {} by providerId: {} with finalPrice: {}", 
-                jobId, providerId, dto.getFinalPrice());
-        jobStatusService.completeJob(jobId, providerId, dto.getFinalPrice());
+        log.info("Request to complete jobId: {} by providerId: {} with finalPrice: {}, paymentChannel: {}", 
+                jobId, providerId, dto.getFinalPrice(), dto.getPaymentChannel());
+        
+        if (dto.getFinalPrice() == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Final price is required"));
+        }
+        
+        if (dto.getPaymentChannel() == null || dto.getPaymentChannel().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Payment channel (CASH or ONLINE) is required"));
+        }
+        
+        jobStatusService.completeJob(jobId, providerId, dto.getFinalPrice(), dto.getPaymentChannel());
         return ResponseEntity.ok(ApiResponse.success("Job completed successfully", "Job completed"));
     }
 

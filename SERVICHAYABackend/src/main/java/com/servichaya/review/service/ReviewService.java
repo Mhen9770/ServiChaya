@@ -110,7 +110,7 @@ public class ReviewService {
         Long reviewCount = reviewRepository.getReviewCountByProviderId(providerId);
 
         if (averageRating != null) {
-            ServiceProviderProfile provider = providerRepository.findByUserId(providerId)
+            ServiceProviderProfile provider = providerRepository.findById(providerId)
                     .orElseThrow(() -> new RuntimeException("Provider not found"));
 
             provider.setRating(averageRating.setScale(2, RoundingMode.HALF_UP));

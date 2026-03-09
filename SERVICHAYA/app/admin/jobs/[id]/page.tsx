@@ -4,12 +4,16 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getJobById, type JobDto } from '@/lib/services/job'
+import { 
+  getAvailableProvidersForJob, assignJobToProvider, getJobAssignments, removeJobAssignment,
+  type ProviderMatchDto 
+} from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
 import Loader from '@/components/ui/Loader'
 import { 
   ArrowLeft, Calendar, MapPin, DollarSign, AlertCircle, 
   CheckCircle2, Clock, User, Building2, Phone, Mail, 
-  FileText, Image as ImageIcon
+  FileText, Image as ImageIcon, UserPlus, X, Loader2
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -19,10 +23,18 @@ export default function AdminJobDetailPage() {
   const jobId = Number(params.id)
   const [job, setJob] = useState<JobDto | null>(null)
   const [loading, setLoading] = useState(true)
+  const [availableProviders, setAvailableProviders] = useState<ProviderMatchDto[]>([])
+  const [assignedProviders, setAssignedProviders] = useState<ProviderMatchDto[]>([])
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null)
+  const [assigning, setAssigning] = useState(false)
+  const [loadingAssignments, setLoadingAssignments] = useState(false)
+  const [loadingProviders, setLoadingProviders] = useState(false)
 
   useEffect(() => {
     if (jobId) {
       fetchJobDetails()
+      fetchAssignedProviders()
     }
   }, [jobId])
 
@@ -42,6 +54,73 @@ export default function AdminJobDetailPage() {
       router.push('/admin/jobs')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAvailableProviders = async () => {
+    try {
+      setLoadingProviders(true)
+      const providers = await getAvailableProvidersForJob(jobId)
+      setAvailableProviders(providers)
+    } catch (error: any) {
+      console.error('Failed to fetch providers:', error)
+      toast.error('Failed to load available providers')
+    } finally {
+      setLoadingProviders(false)
+    }
+  }
+
+  const fetchAssignedProviders = async () => {
+    try {
+      setLoadingAssignments(true)
+      const assignments = await getJobAssignments(jobId)
+      setAssignedProviders(assignments)
+    } catch (error: any) {
+      console.error('Failed to fetch assigned providers:', error)
+      // Don't show error toast, just log it
+    } finally {
+      setLoadingAssignments(false)
+    }
+  }
+
+  const [removingAssignment, setRemovingAssignment] = useState<number | null>(null)
+
+  const handleRemoveAssignment = async (matchId: number) => {
+    if (!confirm('Are you sure you want to remove this provider assignment?')) return
+
+    try {
+      setRemovingAssignment(matchId)
+      await removeJobAssignment(jobId, matchId)
+      toast.success('Provider assignment removed')
+      fetchAssignedProviders() // Refresh the list
+      fetchJobDetails() // Refresh job details
+    } catch (error: any) {
+      console.error('Failed to remove assignment:', error)
+      toast.error(error.response?.data?.message || 'Failed to remove assignment')
+    } finally {
+      setRemovingAssignment(null)
+    }
+  }
+
+  const handleAssignJob = async () => {
+    if (!selectedProviderId) {
+      toast.error('Please select a provider')
+      return
+    }
+
+    try {
+      setAssigning(true)
+      await assignJobToProvider(jobId, selectedProviderId)
+      toast.success('Job assigned successfully')
+      setShowAssignModal(false)
+      setSelectedProviderId(null)
+      fetchJobDetails() // Refresh job details
+      fetchAssignedProviders() // Refresh assigned providers list
+    } catch (error: any) {
+      console.error('Failed to assign job:', error)
+      toast.error(error.response?.data?.message || 'Failed to assign job')
+    } finally {
+      setAssigning(false)
     }
   }
 
@@ -254,7 +333,31 @@ export default function AdminJobDetailPage() {
           </div>
 
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
-            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display">Participants</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-neutral-textPrimary font-display">Participants</h2>
+              {(!job.providerId || job.status === 'PENDING') && (
+              <button
+                onClick={() => {
+                  setShowAssignModal(true)
+                  fetchAvailableProviders()
+                }}
+                disabled={loadingProviders}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-main text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingProviders ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    Assign Provider
+                  </>
+                )}
+              </button>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <div className="text-xs text-neutral-textSecondary mb-1">Customer ID</div>
@@ -267,7 +370,7 @@ export default function AdminJobDetailPage() {
               </div>
               {job.providerId && (
                 <div>
-                  <div className="text-xs text-neutral-textSecondary mb-1">Provider ID</div>
+                  <div className="text-xs text-neutral-textSecondary mb-1">Accepted Provider ID</div>
                   <Link
                     href={`/admin/providers/${job.providerId}`}
                     className="text-sm font-semibold text-primary-main hover:text-primary-dark transition-colors"
@@ -278,6 +381,179 @@ export default function AdminJobDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Assigned Providers Section */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-neutral-textPrimary font-display">Assigned Providers</h2>
+              <button
+                onClick={fetchAssignedProviders}
+                className="text-sm text-primary-main hover:text-primary-dark transition-colors"
+                disabled={loadingAssignments}
+              >
+                {loadingAssignments ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+            
+            {loadingAssignments ? (
+              <div className="text-center py-8 text-neutral-textSecondary">Loading assignments...</div>
+            ) : assignedProviders.length === 0 ? (
+              <div className="text-center py-8 text-neutral-textSecondary">
+                <UserPlus className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No providers assigned yet</p>
+                <p className="text-xs mt-1">Click "Assign Provider" to assign providers to this job</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {assignedProviders.map((assignment) => (
+                  <div
+                    key={assignment.matchId}
+                    className="flex items-center justify-between p-4 border border-neutral-border rounded-lg hover:bg-neutral-background transition-colors"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href={`/admin/providers/${assignment.providerId}`}
+                          className="font-semibold text-primary-main hover:text-primary-dark transition-colors"
+                        >
+                          Provider #{assignment.providerId}
+                        </Link>
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          assignment.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
+                          assignment.status === 'NOTIFIED' ? 'bg-blue-100 text-blue-800' :
+                          assignment.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {assignment.status}
+                        </span>
+                        {assignment.matchScore && (
+                          <span className="text-xs text-neutral-textSecondary">
+                            Score: {assignment.matchScore.toFixed(1)}%
+                          </span>
+                        )}
+                        {assignment.rankOrder && (
+                          <span className="text-xs text-neutral-textSecondary">
+                            Rank: #{assignment.rankOrder}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 flex items-center gap-4 text-xs text-neutral-textSecondary">
+                        {assignment.notifiedAt && (
+                          <span>Notified: {new Date(assignment.notifiedAt).toLocaleString()}</span>
+                        )}
+                        {assignment.respondedAt && (
+                          <span>Responded: {new Date(assignment.respondedAt).toLocaleString()}</span>
+                        )}
+                      </div>
+                    </div>
+                    {assignment.status !== 'ACCEPTED' && (
+                      <button
+                        onClick={() => assignment.matchId && handleRemoveAssignment(assignment.matchId)}
+                        disabled={removingAssignment === assignment.matchId}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Remove assignment"
+                      >
+                        {removingAssignment === assignment.matchId ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <X className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assign Provider Modal */}
+          {showAssignModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-neutral-textPrimary">Assign Provider</h3>
+                  <button
+                    onClick={() => {
+                      setShowAssignModal(false)
+                      setSelectedProviderId(null)
+                    }}
+                    className="text-neutral-textSecondary hover:text-neutral-textPrimary"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                {loadingProviders ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary-main mb-2" />
+                    <p className="text-sm text-neutral-textSecondary">Loading available providers...</p>
+                  </div>
+                ) : availableProviders.length === 0 ? (
+                  <p className="text-sm text-neutral-textSecondary py-4">No available providers found for this job.</p>
+                ) : (
+                  <>
+                    <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+                      {availableProviders.map((provider) => (
+                        <button
+                          key={provider.providerId}
+                          onClick={() => setSelectedProviderId(provider.providerId)}
+                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                            selectedProviderId === provider.providerId
+                              ? 'border-primary-main bg-primary-light/10'
+                              : 'border-neutral-border hover:border-primary-main/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold text-sm">Provider #{provider.providerId}</div>
+                              {provider.matchScore && (
+                                <div className="text-xs text-neutral-textSecondary">
+                                  Match Score: {provider.matchScore.toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                            {selectedProviderId === provider.providerId && (
+                              <CheckCircle2 className="w-5 h-5 text-primary-main" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setShowAssignModal(false)
+                          setSelectedProviderId(null)
+                        }}
+                        className="flex-1 px-4 py-2 border border-neutral-border rounded-lg hover:bg-neutral-background transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleAssignJob}
+                        disabled={!selectedProviderId || assigning}
+                        className="flex-1 px-4 py-2 bg-primary-main text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                      >
+                        {assigning ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Assigning...
+                          </>
+                        ) : (
+                          'Assign'
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import api from '../api'
 export interface JobStatusUpdateDto {
   action: string
   finalPrice?: number
+  paymentChannel?: 'CASH' | 'ONLINE'
   cancelReason?: string
 }
 
@@ -11,8 +12,12 @@ export const startJob = async (jobId: number, providerId: number): Promise<strin
   return response.data.data
 }
 
-export const completeJob = async (jobId: number, providerId: number, finalPrice: number): Promise<string> => {
-  const response = await api.post(`/jobs/${jobId}/complete?providerId=${providerId}`, { action: 'COMPLETE', finalPrice })
+export const completeJob = async (jobId: number, providerId: number, finalPrice: number, paymentChannel: 'CASH' | 'ONLINE' = 'ONLINE'): Promise<string> => {
+  const response = await api.post(`/jobs/${jobId}/complete?providerId=${providerId}`, { 
+    action: 'COMPLETE', 
+    finalPrice,
+    paymentChannel 
+  })
   return response.data.data
 }
 

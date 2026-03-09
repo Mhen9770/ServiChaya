@@ -10,7 +10,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { 
   ArrowLeft, CheckCircle2, XCircle, Star, Phone, Mail, Building2, 
   MapPin, Calendar, DollarSign, Briefcase, AlertCircle, User, FileText,
-  Award, ExternalLink, Eye, Download, Wrench, Globe, Clock, Shield
+  Award, ExternalLink, Eye, Download, Wrench, Globe, Clock, Shield, CreditCard
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -176,24 +176,33 @@ export default function AdminProviderDetailPage() {
               </p>
             </div>
           </div>
-          {canApprove && (
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowApproveModal(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                Approve Provider
-              </button>
-              <button
-                onClick={() => setShowRejectModal(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all"
-              >
-                <XCircle className="w-5 h-5" />
-                Reject Provider
-              </button>
-            </div>
-          )}
+          <div className="flex gap-3">
+            <Link
+              href={`/admin/providers/${providerId}/payment-preferences`}
+              className="flex items-center gap-2 px-6 py-3 bg-primary-main text-white rounded-xl text-sm font-semibold hover:bg-primary-dark hover:shadow-lg transition-all"
+            >
+              <CreditCard className="w-5 h-5" />
+              Payment Preferences
+            </Link>
+            {canApprove && (
+              <>
+                <button
+                  onClick={() => setShowApproveModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  Approve Provider
+                </button>
+                <button
+                  onClick={() => setShowRejectModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                >
+                  <XCircle className="w-5 h-5" />
+                  Reject Provider
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
 

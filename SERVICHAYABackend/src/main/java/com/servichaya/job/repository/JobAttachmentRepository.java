@@ -9,4 +9,7 @@ import java.util.List;
 @Repository
 public interface JobAttachmentRepository extends JpaRepository<JobAttachment, Long> {
     List<JobAttachment> findByJobIdOrderByDisplayOrderAsc(Long jobId);
+    
+    // Batch fetch attachments for multiple jobs to avoid N+1 queries
+    List<JobAttachment> findByJobIdInOrderByJobIdAscDisplayOrderAsc(List<Long> jobIds);
 }

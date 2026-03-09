@@ -655,3 +655,136 @@ export const updateUserRole = async (id: number, data: UserRoleMasterDto): Promi
 export const deleteUserRole = async (id: number): Promise<void> => {
   await api.delete(`/admin/master-data/user-roles/${id}`)
 }
+
+// ========== Earning Configuration ==========
+export interface PlatformEarningConfigDto {
+  id?: number
+  earningModel: string // COMMISSION_ONLY, LEAD_ONLY, HYBRID
+  serviceCategoryId?: number
+  cityId?: number
+  commissionPercentage?: number
+  fixedCommissionAmount?: number
+  minimumCommission?: number
+  maximumCommission?: number
+  leadPrice?: number
+  leadPricePercentage?: number
+  minimumLeadPrice?: number
+  maximumLeadPrice?: number
+  hybridCommissionWeight?: number
+  hybridLeadWeight?: number
+  effectiveFrom: string
+  effectiveUntil?: string
+  isActive?: boolean
+  description?: string
+}
+
+export interface ProviderEarningConfigDto {
+  id?: number
+  providerId: number
+  serviceCategoryId?: number
+  earningModel: string
+  commissionPercentage?: number
+  fixedCommissionAmount?: number
+  minimumCommission?: number
+  maximumCommission?: number
+  leadPrice?: number
+  leadPricePercentage?: number
+  minimumLeadPrice?: number
+  maximumLeadPrice?: number
+  hybridCommissionWeight?: number
+  hybridLeadWeight?: number
+  effectiveFrom: string
+  effectiveUntil?: string
+  isActive?: boolean
+  reason?: string
+  createdByAdmin?: number
+}
+
+export const getPlatformEarningConfigs = async (
+  page: number = 0,
+  size: number = 20
+): Promise<{ content: PlatformEarningConfigDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  const response = await api.get(`/admin/earning-config/platform?${params.toString()}`)
+  return response.data.data
+}
+
+export const createPlatformEarningConfig = async (data: Partial<PlatformEarningConfigDto>): Promise<PlatformEarningConfigDto> => {
+  const response = await api.post('/admin/earning-config/platform', data)
+  return response.data.data
+}
+
+export const updatePlatformEarningConfig = async (id: number, data: Partial<PlatformEarningConfigDto>): Promise<PlatformEarningConfigDto> => {
+  const response = await api.put(`/admin/earning-config/platform/${id}`, data)
+  return response.data.data
+}
+
+export const getProviderEarningConfigs = async (
+  providerId?: number,
+  page: number = 0,
+  size: number = 20
+): Promise<{ content: ProviderEarningConfigDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  if (providerId) params.append('providerId', providerId.toString())
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  const response = await api.get(`/admin/earning-config/provider?${params.toString()}`)
+  return response.data.data
+}
+
+export const createProviderEarningConfig = async (data: Partial<ProviderEarningConfigDto>): Promise<ProviderEarningConfigDto> => {
+  const response = await api.post('/admin/earning-config/provider', data)
+  return response.data.data
+}
+
+export const updateProviderEarningConfig = async (id: number, data: Partial<ProviderEarningConfigDto>): Promise<ProviderEarningConfigDto> => {
+  const response = await api.put(`/admin/earning-config/provider/${id}`, data)
+  return response.data.data
+}
+
+export const deleteProviderEarningConfig = async (id: number): Promise<void> => {
+  await api.delete(`/admin/earning-config/provider/${id}`)
+}
+
+// ========== Job Assignment ==========
+export interface ProviderMatchDto {
+  matchId?: number
+  jobId: number
+  providerId: number
+  matchScore?: number
+  status: string
+  rankOrder?: number
+  notifiedAt?: string
+  respondedAt?: string
+  job?: any
+  provider?: any
+}
+
+export const getAvailableProvidersForJob = async (jobId: number): Promise<ProviderMatchDto[]> => {
+  const response = await api.get(`/admin/jobs/${jobId}/available-providers`)
+  return response.data.data
+}
+
+export const assignJobToProvider = async (
+  jobId: number,
+  providerId: number,
+  matchScore?: number,
+  rankOrder?: number
+): Promise<void> => {
+  const params = new URLSearchParams()
+  params.append('providerId', providerId.toString())
+  if (matchScore !== undefined) params.append('matchScore', matchScore.toString())
+  if (rankOrder !== undefined) params.append('rankOrder', rankOrder.toString())
+  await api.post(`/admin/jobs/${jobId}/assign?${params.toString()}`)
+}
+
+export const getJobAssignments = async (jobId: number): Promise<ProviderMatchDto[]> => {
+  const response = await api.get(`/admin/jobs/${jobId}/assignments`)
+  return response.data.data
+}
+
+export const removeJobAssignment = async (jobId: number, matchId: number): Promise<void> => {
+  await api.delete(`/admin/jobs/${jobId}/assignments/${matchId}`)
+}

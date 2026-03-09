@@ -32,7 +32,7 @@ export default function Header({
   }
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/10 glass-dark">
+    <nav className="sticky top-0 z-50 border-b border-white/10 glass-dark backdrop-blur-md bg-slate-900/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">

@@ -3,7 +3,8 @@
 import Sidebar from './Sidebar'
 import { 
   LayoutDashboard, ClipboardList, Users, User, Settings, 
-  MapPin, Building2, Layers, List, Sliders, Globe, Wrench, Shield, Package
+  MapPin, Building2, Layers, List, Sliders, Globe, Wrench, Shield, Package,
+  DollarSign, UserPlus
 } from 'lucide-react'
 
 export default function AdminSidebar() {
@@ -29,6 +30,16 @@ export default function AdminSidebar() {
         { label: 'User Roles', href: '/admin/master-data/user-roles', icon: Shield },
       ]
     },
+    {
+      label: 'Earning Config',
+      href: '#',
+      icon: DollarSign,
+      children: [
+        { label: 'Platform Config', href: '/admin/earning-config/platform', icon: DollarSign },
+        { label: 'Provider Config', href: '/admin/earning-config/provider', icon: User },
+      ]
+    },
+    { label: 'Configuration', href: '/admin/configuration', icon: Settings },
     { label: 'Settings', href: '/admin/settings', icon: Settings },
   ]
 

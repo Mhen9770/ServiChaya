@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
-import { getEarningsSummary, getEarningsHistory, type EarningsDto, type EarningsSummaryDto } from '@/lib/services/payment'
+import { getEarningsSummary, getEarningsHistory, getPayoutLimits, requestPayout, type EarningsDto, type EarningsSummaryDto, type PayoutLimitsDto } from '@/lib/services/payment'
 import { getOnboardingStatus } from '@/lib/services/provider'
 import { toast } from 'react-hot-toast'
 import Loader from '@/components/ui/Loader'
 import Pagination from '@/components/ui/Pagination'
-import { DollarSign, TrendingUp, Clock, CheckCircle2, ArrowRight } from 'lucide-react'
+import { DollarSign, TrendingUp, Clock, CheckCircle2, ArrowRight, Wallet, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export default function ProviderEarningsPage() {
@@ -25,6 +25,11 @@ export default function ProviderEarningsPage() {
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
+  const [payoutLimits, setPayoutLimits] = useState<PayoutLimitsDto | null>(null)
+  const [showPayoutModal, setShowPayoutModal] = useState(false)
+  const [payoutAmount, setPayoutAmount] = useState('')
+  const [payoutMethod, setPayoutMethod] = useState('BANK_TRANSFER')
+  const [payoutLoading, setPayoutLoading] = useState(false)
 
   const PAGE_SIZE = 10 // Max chunk 10 items
 
@@ -51,6 +56,7 @@ export default function ProviderEarningsPage() {
       }
       if (status.providerId) {
         fetchEarnings(status.providerId)
+        fetchPayoutLimits(status.providerId)
       } else {
         toast.error('Provider ID not found')
         setLoading(false)
@@ -88,6 +94,72 @@ export default function ProviderEarningsPage() {
       setEarnings([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPayoutLimits = async (providerId: number) => {
+    try {
+      const limits = await getPayoutLimits(providerId)
+      setPayoutLimits(limits)
+    } catch (error: any) {
+      console.error('Failed to fetch payout limits:', error)
+      // Set defaults if API fails
+      setPayoutLimits({ minWithdrawal: 500, maxWithdrawal: 50000, availableBalance: summary.paidEarnings })
+    }
+  }
+
+  const handlePayoutRequest = async () => {
+    const user = getCurrentUser()
+    if (!user || !payoutLimits) return
+
+    const amount = parseFloat(payoutAmount)
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    if (amount < payoutLimits.minWithdrawal) {
+      toast.error(`Minimum withdrawal amount is ₹${payoutLimits.minWithdrawal}`)
+      return
+    }
+
+    if (amount > payoutLimits.maxWithdrawal) {
+      toast.error(`Maximum withdrawal amount is ₹${payoutLimits.maxWithdrawal}`)
+      return
+    }
+
+    if (amount > payoutLimits.availableBalance) {
+      toast.error(`Insufficient balance. Available: ₹${payoutLimits.availableBalance}`)
+      return
+    }
+
+    try {
+      setPayoutLoading(true)
+      const status = await getOnboardingStatus(user.userId)
+      if (!status.providerId) {
+        toast.error('Provider ID not found')
+        return
+      }
+
+      await requestPayout(status.providerId, {
+        amount,
+        payoutMethod,
+        bankAccountId: payoutMethod === 'BANK_TRANSFER' ? undefined : undefined, // TODO: Add bank account selection
+        upiId: payoutMethod === 'UPI' ? undefined : undefined // TODO: Add UPI ID input
+      })
+
+      toast.success('Payout request submitted successfully')
+      setShowPayoutModal(false)
+      setPayoutAmount('')
+      // Refresh earnings
+      fetchEarnings(status.providerId)
+      fetchPayoutLimits(status.providerId)
+    } catch (error: any) {
+      console.error('Payout request failed:', error)
+      const errorMsg = error.response?.data?.message || 'Failed to submit payout request'
+      toast.error(errorMsg)
+    } finally {
+      setPayoutLoading(false)
     }
   }
 
@@ -157,12 +229,102 @@ export default function ProviderEarningsPage() {
               <CheckCircle2 className="w-5 h-5 text-accent-green" />
             </div>
             <div>
-              <div className="text-xs text-neutral-textSecondary">Paid</div>
+              <div className="text-xs text-neutral-textSecondary">Available for Withdrawal</div>
               <div className="text-2xl font-bold text-accent-green">₹{summary.paidEarnings.toLocaleString()}</div>
             </div>
           </div>
+          {payoutLimits && summary.paidEarnings >= payoutLimits.minWithdrawal && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowPayoutModal(true)}
+              className="w-full mt-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl px-4 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+            >
+              <Wallet className="w-4 h-4" />
+              Request Payout
+            </motion.button>
+          )}
+          {payoutLimits && summary.paidEarnings < payoutLimits.minWithdrawal && (
+            <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-xs text-yellow-800">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Minimum withdrawal: ₹{payoutLimits.minWithdrawal}</span>
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
+
+      {/* Payout Request Modal */}
+      {showPayoutModal && payoutLimits && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full"
+          >
+            <h2 className="text-xl font-bold text-neutral-textPrimary mb-4">Request Payout</h2>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-neutral-background rounded-xl">
+                <div className="text-xs text-neutral-textSecondary mb-1">Available Balance</div>
+                <div className="text-2xl font-bold text-accent-green">₹{payoutLimits.availableBalance.toLocaleString()}</div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
+                  Withdrawal Amount
+                </label>
+                <input
+                  type="number"
+                  value={payoutAmount}
+                  onChange={(e) => setPayoutAmount(e.target.value)}
+                  min={payoutLimits.minWithdrawal}
+                  max={Math.min(payoutLimits.maxWithdrawal, payoutLimits.availableBalance)}
+                  step="1"
+                  placeholder={`Min: ₹${payoutLimits.minWithdrawal}, Max: ₹${Math.min(payoutLimits.maxWithdrawal, payoutLimits.availableBalance)}`}
+                  className="w-full px-4 py-2.5 border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-main"
+                />
+                <div className="text-xs text-neutral-textSecondary mt-1">
+                  Min: ₹{payoutLimits.minWithdrawal} • Max: ₹{Math.min(payoutLimits.maxWithdrawal, payoutLimits.availableBalance)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">
+                  Payout Method
+                </label>
+                <select
+                  value={payoutMethod}
+                  onChange={(e) => setPayoutMethod(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-main"
+                >
+                  <option value="BANK_TRANSFER">Bank Transfer (NEFT/IMPS)</option>
+                  <option value="UPI">UPI</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowPayoutModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-neutral-border rounded-xl text-sm font-semibold hover:bg-neutral-background transition-colors"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handlePayoutRequest}
+                  disabled={payoutLoading}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold disabled:opacity-60"
+                >
+                  {payoutLoading ? 'Processing...' : 'Submit Request'}
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -213,8 +375,11 @@ export default function ProviderEarningsPage() {
                           <div className="font-bold text-lg text-neutral-textPrimary">₹{earning.jobAmount.toLocaleString()}</div>
                         </div>
                         <div className="p-3 bg-white rounded-xl border border-neutral-border">
-                          <div className="text-neutral-textSecondary mb-1">Commission ({earning.commissionPercentage}%)</div>
+                          <div className="text-neutral-textSecondary mb-1">Platform Commission ({earning.commissionPercentage}%)</div>
                           <div className="font-bold text-lg text-neutral-textPrimary">₹{earning.commissionAmount.toLocaleString()}</div>
+                          <div className="text-xs text-neutral-textSecondary mt-1">
+                            {((earning.commissionAmount / earning.jobAmount) * 100).toFixed(1)}% of job amount
+                          </div>
                         </div>
                         <div className="p-3 bg-gradient-to-br from-accent-green/10 to-green-50 rounded-xl border border-accent-green/20">
                           <div className="text-neutral-textSecondary mb-1">Net Earnings</div>

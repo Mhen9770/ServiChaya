@@ -102,4 +102,12 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
            "AND j.status = 'COMPLETED' " +
            "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
     Long countDistinctProvidersBySubCategoryId(@Param("subCategoryId") Long subCategoryId);
+
+    // Get distinct provider IDs who have jobs in a category (accepted, in_progress, or completed)
+    @Query("SELECT DISTINCT j.providerId FROM JobMaster j " +
+           "WHERE j.serviceCategoryId = :categoryId " +
+           "AND j.providerId IS NOT NULL " +
+           "AND j.status IN ('ACCEPTED', 'IN_PROGRESS', 'COMPLETED') " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    List<Long> findDistinctProviderIdsByCategoryId(@Param("categoryId") Long categoryId);
 }

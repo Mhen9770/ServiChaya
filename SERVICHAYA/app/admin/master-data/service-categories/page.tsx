@@ -24,6 +24,7 @@ export default function AdminServiceCategoriesPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [showModal, setShowModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<ServiceCategoryMasterDto | null>(null)
+  const [parentCategories, setParentCategories] = useState<ServiceCategoryMasterDto[]>([])
   const [formData, setFormData] = useState<ServiceCategoryMasterDto>({
     code: '',
     name: '',
@@ -31,12 +32,25 @@ export default function AdminServiceCategoriesPage() {
     iconUrl: '',
     displayOrder: 0,
     isFeatured: false,
-    isActive: true
+    isActive: true,
+    parentId: undefined,
+    categoryType: 'ELECTRONICS' // Default to Electronics
   })
 
   useEffect(() => {
     fetchCategories()
+    fetchParentCategories()
   }, [currentPage, pageSize, sortKey, sortDirection])
+
+  const fetchParentCategories = async () => {
+    try {
+      // Fetch all categories to use as potential parents
+      const result = await getAllServiceCategories(0, 1000, 'name', 'asc')
+      setParentCategories(result.content || [])
+    } catch (error) {
+      console.error('Failed to fetch parent categories:', error)
+    }
+  }
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -70,7 +84,9 @@ export default function AdminServiceCategoriesPage() {
       iconUrl: '',
       displayOrder: 0,
       isFeatured: false,
-      isActive: true
+      isActive: true,
+      parentId: undefined,
+      categoryType: 'ELECTRONICS'
     })
     setShowModal(true)
   }
@@ -137,8 +153,26 @@ export default function AdminServiceCategoriesPage() {
       render: (category) => (
         <div className="flex items-center gap-2">
           <List className="w-4 h-4 text-neutral-textSecondary" />
-          <span className="font-semibold text-neutral-textPrimary">{category.name}</span>
+          <div className="flex flex-col">
+            <span className="font-semibold text-neutral-textPrimary">{category.name}</span>
+            {category.path && (
+              <span className="text-xs text-neutral-textSecondary">{category.path}</span>
+            )}
+            {category.level !== undefined && category.level > 0 && (
+              <span className="text-xs text-primary-main">Level {category.level}</span>
+            )}
+          </div>
         </div>
+      )
+    },
+    {
+      key: 'categoryType',
+      header: 'Type',
+      sortable: true,
+      render: (category) => (
+        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+          {category.categoryType || 'N/A'}
+        </span>
       )
     },
     {
@@ -353,6 +387,39 @@ export default function AdminServiceCategoriesPage() {
                   className="w-full px-4 py-2.5 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
                   placeholder="https://example.com/icon.png"
                 />
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">Parent Category</label>
+                  <select
+                    value={formData.parentId || ''}
+                    onChange={(e) => setFormData({ ...formData, parentId: e.target.value ? Number(e.target.value) : undefined })}
+                    className="w-full px-4 py-2.5 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
+                  >
+                    <option value="">None (Root Category)</option>
+                    {parentCategories
+                      .filter(cat => !editingCategory || cat.id !== editingCategory.id) // Prevent self-selection
+                      .map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.path || cat.name} {cat.level !== undefined ? `(Level ${cat.level})` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-textPrimary mb-2">Category Type</label>
+                  <select
+                    value={formData.categoryType || 'ELECTRONICS'}
+                    onChange={(e) => setFormData({ ...formData, categoryType: e.target.value })}
+                    className="w-full px-4 py-2.5 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
+                  >
+                    <option value="ELECTRONICS">Electronics</option>
+                    <option value="APPLIANCE">Appliance</option>
+                    <option value="HOME_SERVICE">Home Service</option>
+                    <option value="AUTOMOTIVE">Automotive</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
               </div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">

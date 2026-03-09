@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -26,12 +27,5 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-main mx-auto"></div>
-        <p className="mt-4 text-neutral-textSecondary">Redirecting...</p>
-      </div>
-    </div>
-  )
+  return <PageLoader text="Redirecting..." />
 }

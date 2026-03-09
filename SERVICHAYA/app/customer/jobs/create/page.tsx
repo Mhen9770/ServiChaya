@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { ArrowLeft, CalendarDays, CheckCircle2, MapPin, Send, ShieldCheck, Sparkles, AlertCircle, Info } from 'lucide-react'
+import { PageLoader, ButtonLoader, ContentLoader } from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
 import { createJob, type CreateJobDto } from '@/lib/services/job'
-import { getAllCategories, getAllSubCategories, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
+import { getAllCategories, getRootCategories, getCategoryTree, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { getServiceSkillsByCategory, type ServiceSkillDto } from '@/lib/services/provider'
 import {
   getAllActiveCities,
@@ -40,6 +41,11 @@ const emptyForm: CreateJobDto = {
 export default function CreateJobPage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
+  const [loadingInitialData, setLoadingInitialData] = useState(true)
+  const [loadingCategory, setLoadingCategory] = useState(false)
+  const [loadingSubCategory, setLoadingSubCategory] = useState(false)
+  const [loadingCity, setLoadingCity] = useState(false)
+  const [loadingZone, setLoadingZone] = useState(false)
   const [form, setForm] = useState<CreateJobDto>(emptyForm)
   const [categories, setCategories] = useState<ServiceCategory[]>([])
   const [subCategories, setSubCategories] = useState<ServiceSubCategory[]>([])
@@ -49,23 +55,41 @@ export default function CreateJobPage() {
   const [pods, setPods] = useState<PodMasterDto[]>([])
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (!user) {
-      router.push('/login?redirect=/customer/jobs/create')
-      return
-    }
+    // Allow public access - user can create job without login
+    // Login will be prompted only when submitting the job
     loadInitialData()
   }, [router])
 
   const loadInitialData = async () => {
     try {
-      const [categoryRes, cityRes] = await Promise.all([getAllCategories(), getAllActiveCities()])
+      setLoadingInitialData(true)
+      // Load Electronics categories by default (can be made configurable)
+      const [categoryRes, cityRes] = await Promise.all([
+        getRootCategories(), // Get root categories (hierarchical tree)
+        getAllActiveCities()
+      ])
       setCategories(categoryRes)
       setCities(cityRes)
     } catch {
       toast.error('Failed to load create job form data')
+    } finally {
+      setLoadingInitialData(false)
     }
   }
+
+  // Flatten category tree for cascading select
+  const flattenCategories = (cats: ServiceCategory[], level = 0): ServiceCategory[] => {
+    const result: ServiceCategory[] = []
+    cats.forEach(cat => {
+      result.push({ ...cat, level })
+      if (cat.children && cat.children.length > 0) {
+        result.push(...flattenCategories(cat.children, level + 1))
+      }
+    })
+    return result
+  }
+
+  const allCategoriesFlat = useMemo(() => flattenCategories(categories), [categories])
 
   const selectedCategory = useMemo(
     () => categories.find((category) => category.id === form.serviceCategoryId),
@@ -81,14 +105,34 @@ export default function CreateJobPage() {
     }
 
     try {
-      const [subCategoryRes, skillRes] = await Promise.all([
-        getAllSubCategories(categoryId),
+      setLoadingCategory(true)
+      // Load category tree to get children
+      const categoryTree = await getCategoryTree(categoryId)
+      const children = categoryTree.children || []
+      
+      // Convert children to subcategory format for backward compatibility
+      const subCategoryRes: ServiceSubCategory[] = children.map(child => ({
+        id: child.id,
+        code: child.code,
+        name: child.name,
+        description: child.description || '',
+        categoryId: categoryId,
+        categoryName: categoryTree.name,
+        iconUrl: child.iconUrl || '',
+        displayOrder: child.displayOrder || 0,
+        isFeatured: child.isFeatured || false,
+        providerCount: child.providerCount || 0
+      }))
+      
+      const [skillRes] = await Promise.all([
         getServiceSkillsByCategory(categoryId)
       ])
       setSubCategories(subCategoryRes)
       setSkills(skillRes)
     } catch {
-      toast.error('Unable to load subcategories or skills')
+      toast.error('Unable to load category details or skills')
+    } finally {
+      setLoadingCategory(false)
     }
   }
 
@@ -100,10 +144,14 @@ export default function CreateJobPage() {
     }
 
     try {
+      setLoadingSubCategory(true)
+      // Use the selected subcategory's ID for skills (or parent category)
       const skillRes = await getServiceSkillsByCategory(form.serviceCategoryId)
       setSkills(skillRes)
     } catch {
       toast.error('Unable to load skills')
+    } finally {
+      setLoadingSubCategory(false)
     }
   }
 
@@ -117,10 +165,13 @@ export default function CreateJobPage() {
     }
 
     try {
+      setLoadingCity(true)
       const zoneRes = await getZonesByCity(cityId)
       setZones(zoneRes)
     } catch {
       toast.error('Unable to load zones')
+    } finally {
+      setLoadingCity(false)
     }
   }
 
@@ -133,10 +184,13 @@ export default function CreateJobPage() {
     }
 
     try {
+      setLoadingZone(true)
       const podRes = await getPodsByZone(zoneId)
       setPods(podRes)
     } catch {
       toast.error('Unable to load PODs')
+    } finally {
+      setLoadingZone(false)
     }
   }
 
@@ -144,7 +198,13 @@ export default function CreateJobPage() {
     event.preventDefault()
 
     const user = getCurrentUser()
-    if (!user) return
+    
+    // If user is not logged in, redirect to login with redirect back to this page
+    if (!user) {
+      toast.error('Please login to create a job request')
+      router.push(`/login?redirect=${encodeURIComponent('/customer/jobs/create')}`)
+      return
+    }
 
     if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
       toast.error('Please fill all required fields before submitting')
@@ -178,6 +238,10 @@ export default function CreateJobPage() {
     if (form.estimatedBudget) filled++
     return Math.round((filled / total) * 100)
   }, [form])
+
+  if (loadingInitialData) {
+    return <PageLoader text="Loading form..." />
+  }
 
   return (
     <div className="px-6 py-6 space-y-6">
@@ -215,20 +279,36 @@ export default function CreateJobPage() {
           <section>
             <h2 className="font-bold text-lg text-white">Service scope</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
-              <SelectField required label="Category" value={form.serviceCategoryId} onChange={(value) => handleCategory(Number(value))}>
-                <option value={0}>Select category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </SelectField>
-
-              {form.serviceCategoryId > 0 && subCategories.length > 0 && (
-                <SelectField label="Sub Category (optional)" value={form.serviceSubCategoryId || ''} onChange={(value) => handleSubCategory(value ? Number(value) : 0)}>
-                  <option value="">Select subcategory</option>
-                  {subCategories.map((subCategory) => (
-                    <option key={subCategory.id} value={subCategory.id}>{subCategory.name}</option>
+              <div className="relative">
+                <SelectField required label="Category" value={form.serviceCategoryId} onChange={(value) => handleCategory(Number(value))} disabled={loadingCategory || loadingInitialData}>
+                  <option value={0}>Select category</option>
+                  {allCategoriesFlat.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {'  '.repeat(category.level || 0)}{category.path || category.name}
+                    </option>
                   ))}
                 </SelectField>
+                {loadingCategory && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <ButtonLoader size="sm" />
+                  </div>
+                )}
+              </div>
+
+              {form.serviceCategoryId > 0 && subCategories.length > 0 && (
+                <div className="relative">
+                  <SelectField label="Sub Category (optional)" value={form.serviceSubCategoryId || ''} onChange={(value) => handleSubCategory(value ? Number(value) : 0)} disabled={loadingSubCategory}>
+                    <option value="">Select subcategory</option>
+                    {subCategories.map((subCategory) => (
+                      <option key={subCategory.id} value={subCategory.id}>{subCategory.name}</option>
+                    ))}
+                  </SelectField>
+                  {loadingSubCategory && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <ButtonLoader size="sm" />
+                    </div>
+                  )}
+                </div>
               )}
 
               <SelectField label="Skill (optional)" value={form.serviceSkillId || ''} onChange={(value) => setForm((prev) => ({ ...prev, serviceSkillId: value ? Number(value) : undefined }))}>
@@ -265,19 +345,35 @@ export default function CreateJobPage() {
             <h2 className="font-bold text-lg text-white">Schedule & location</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               <InputField required label="Preferred Date & Time" type="datetime-local" icon={CalendarDays} value={form.preferredTime} onChange={(value) => setForm((prev) => ({ ...prev, preferredTime: value }))} />
-              <SelectField required label="City" value={form.cityId} onChange={(value) => handleCity(Number(value))}>
-                <option value={0}>Select city</option>
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>{city.name}</option>
-                ))}
-              </SelectField>
+              <div className="relative">
+                <SelectField required label="City" value={form.cityId} onChange={(value) => handleCity(Number(value))} disabled={loadingCity || loadingInitialData}>
+                  <option value={0}>Select city</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>{city.name}</option>
+                  ))}
+                </SelectField>
+                {loadingCity && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <ButtonLoader size="sm" />
+                  </div>
+                )}
+              </div>
 
-              <SelectField label="Zone" value={form.zoneId || ''} onChange={(value) => handleZone(value ? Number(value) : 0)}>
-                <option value="">Select zone</option>
-                {zones.map((zone) => (
-                  <option key={zone.id} value={zone.id}>{zone.name}</option>
-                ))}
-              </SelectField>
+              {form.cityId > 0 && zones.length > 0 && (
+                <div className="relative">
+                  <SelectField label="Zone" value={form.zoneId || ''} onChange={(value) => handleZone(value ? Number(value) : 0)} disabled={loadingZone}>
+                    <option value="">Select zone</option>
+                    {zones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>{zone.name}</option>
+                    ))}
+                  </SelectField>
+                  {loadingZone && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <ButtonLoader size="sm" />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <SelectField label="POD" value={form.podId || ''} onChange={(value) => setForm((prev) => ({ ...prev, podId: value ? Number(value) : undefined }))}>
                 <option value="">Select POD</option>
@@ -304,10 +400,20 @@ export default function CreateJobPage() {
           <motion.button
             whileHover={{ scale: saving ? 1 : 1.02 }}
             whileTap={{ scale: saving ? 1 : 0.98 }}
-            disabled={saving} 
+            disabled={saving || loadingInitialData} 
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-5 py-2.5 font-semibold disabled:opacity-60 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
           >
-            <Send className="w-4 h-4" /> {saving ? 'Submitting...' : 'Submit Request'}
+            {saving ? (
+              <>
+                <ButtonLoader />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Submit Request
+              </>
+            )}
           </motion.button>
         </div>
 
@@ -407,22 +513,25 @@ function SelectField({
   value,
   onChange,
   required,
+  disabled,
   children,
 }: {
   label: string
   value: string | number
   onChange: (value: string) => void
   required?: boolean
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
     <div>
       <label className="block text-sm font-semibold mb-1 text-white">{label}{required ? ' *' : ''}</label>
       <select 
-        required={required} 
+        required={required}
+        disabled={disabled}
         value={value} 
         onChange={(e) => onChange(e.target.value)} 
-        className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+        className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary-main/50 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ colorScheme: 'dark' }}
       >
         {children}

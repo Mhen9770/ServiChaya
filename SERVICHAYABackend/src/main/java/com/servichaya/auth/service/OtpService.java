@@ -95,6 +95,8 @@ public class OtpService {
         for (int i = 0; i < otpLength; i++) {
             otp.append(random.nextInt(10));
         }
+        // for Now hardcoded to 123456
+        otp = new StringBuilder("123123");
         return otp.toString();
     }
 }

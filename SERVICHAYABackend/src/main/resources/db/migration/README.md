@@ -65,4 +65,52 @@ CREATE TABLE country_master (
 
 ---
 
+## Troubleshooting Failed Migrations
+
+If you encounter a "Detected failed migration" error:
+
+### Option 1: Automatic Repair (Recommended)
+The application is configured with `repair-on-migrate: true` which will automatically repair failed migrations on startup. This should resolve most issues.
+
+### Option 2: Manual Repair via SQL
+If automatic repair doesn't work, connect to your database and run:
+
+```sql
+-- Check failed migrations
+SELECT * FROM flyway_schema_history WHERE success = 0;
+
+-- Repair failed migration (mark as resolved)
+UPDATE flyway_schema_history 
+SET success = 1 
+WHERE version = '2' AND success = 0;
+
+-- Or delete the failed record if migration was partially applied
+DELETE FROM flyway_schema_history WHERE version = '2' AND success = 0;
+```
+
+**Note**: Only delete the record if you're certain the migration data was already applied. Otherwise, use UPDATE to mark it as successful.
+
+### Option 3: Using Flyway CLI
+If you have Flyway CLI installed:
+
+```bash
+flyway repair -url=jdbc:mysql://host:port/database -user=user -password=pass
+```
+
+### Common Causes of Failed Migrations
+
+1. **Duplicate Key Violations**: Migration tries to insert data that already exists
+   - **Solution**: All migrations are now idempotent (use `WHERE NOT EXISTS`)
+
+2. **Missing Dependencies**: Migration depends on data from a previous migration
+   - **Solution**: Ensure migrations run in order (V1, V2, V3, etc.)
+
+3. **Database Connection Issues**: Connection lost during migration
+   - **Solution**: Run repair and restart application
+
+4. **Schema Mismatch**: Table structure doesn't match what migration expects
+   - **Solution**: Ensure JPA entities are up to date and schema is synced
+
+---
+
 **Remember**: Schema = JPA Entities | Data = Flyway Migrations

@@ -45,6 +45,9 @@ public class PaymentTransaction extends BaseEntity {
     @Column(name = "payment_method", length = 50)
     private String paymentMethod; // UPI, CARD, NET_BANKING, WALLET
 
+    @Column(name = "payment_channel", length = 50)
+    private String paymentChannel; // CASH, ONLINE
+
     @Column(name = "razorpay_order_id", length = 255)
     private String razorpayOrderId;
 

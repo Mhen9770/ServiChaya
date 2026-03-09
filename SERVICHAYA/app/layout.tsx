@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { Toaster } from 'react-hot-toast'
+import { LoadingProvider } from '@/contexts/LoadingContext'
+import { NavigationLoader } from '@/components/navigation/NavigationLoader'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -15,8 +17,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        {children}
-        <Toaster position="top-right" />
+        <LoadingProvider>
+          <NavigationLoader />
+          {children}
+          <Toaster position="top-right" />
+        </LoadingProvider>
       </body>
     </html>
   )

@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getAvailableJobsForProvider, acceptJob, type ProviderMatchDto } from '@/lib/services/matching'
 import { getOnboardingStatus } from '@/lib/services/provider'
 import { toast } from 'react-hot-toast'
-import Loader from '@/components/ui/Loader'
+import {PageLoader ,Loader, ContentLoader, ButtonLoader} from '@/components/ui/Loader'
 import { RefreshCw, ClipboardList, AlertCircle, Calendar, DollarSign, MapPin, CheckCircle2, Eye, TrendingUp, Clock } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -101,7 +101,7 @@ export default function AvailableJobsPage() {
   }
 
   if (loading) {
-    return <Loader fullScreen text="Loading available jobs..." />
+    return <PageLoader text="Loading available jobs..." />
   }
 
   const currentUser = getCurrentUser()
@@ -238,12 +238,28 @@ export default function AvailableJobsPage() {
                       </span>
                     )}
                   </div>
-                  {match.notifiedAt && (
-                    <div className="flex items-center gap-1 text-neutral-textSecondary">
-                      <Clock className="w-3 h-3" />
-                      <span>Notified {new Date(match.notifiedAt).toLocaleDateString()}</span>
-                    </div>
-                  )}
+                  {match.notifiedAt && (() => {
+                    const notifiedTime = new Date(match.notifiedAt).getTime()
+                    const currentTime = Date.now()
+                    const elapsedSeconds = Math.floor((currentTime - notifiedTime) / 1000)
+                    const timeoutSeconds = 120 // From business rule PROVIDER_RESPONSE_TIMEOUT_SECONDS
+                    const remainingSeconds = Math.max(0, timeoutSeconds - elapsedSeconds)
+                    const isExpiringSoon = remainingSeconds < 60 && remainingSeconds > 0
+                    const isExpired = remainingSeconds === 0
+                    
+                    return (
+                      <div className={`flex items-center gap-1 ${isExpired ? 'text-red-500' : isExpiringSoon ? 'text-accent-orange' : 'text-neutral-textSecondary'}`}>
+                        <Clock className="w-3 h-3" />
+                        {isExpired ? (
+                          <span className="font-semibold">Expired</span>
+                        ) : isExpiringSoon ? (
+                          <span className="font-semibold">Expires in {Math.floor(remainingSeconds / 60)}m {remainingSeconds % 60}s</span>
+                        ) : (
+                          <span>Notified {new Date(match.notifiedAt).toLocaleTimeString()}</span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
               <div className="flex gap-2 pt-4 border-t border-neutral-border">
@@ -256,7 +272,7 @@ export default function AvailableJobsPage() {
                 >
                   {accepting === match.matchId ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <ButtonLoader />
                       Accepting...
                     </>
                   ) : match.status === 'ACCEPTED' ? (

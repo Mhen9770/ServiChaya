@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   CircleDollarSign,
   CreditCard,
+  Clock,
+  List,
   MapPin,
   MessageSquareText,
   ShieldCheck,
@@ -22,7 +24,7 @@ import {
   Mail,
   ExternalLink,
 } from 'lucide-react'
-import Loader from '@/components/ui/Loader'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
 import { getJobById, type JobDto } from '@/lib/services/job'
 import { cancelJob } from '@/lib/services/jobStatus'
@@ -32,7 +34,7 @@ import { getProviderProfile, type ProviderProfileDto } from '@/lib/services/prov
 import { getSubCategoryById, type ServiceSubCategory } from '@/lib/services/service'
 import { getCategoryById, type ServiceCategory } from '@/lib/services/service'
 
-const statusOrder = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED']
+const statusOrder = ['PENDING', 'MATCHING', 'MATCHED', 'PENDING_FOR_PAYMENT', 'ACCEPTED', 'IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED']
 
 export default function CustomerJobDetailsPage() {
   const router = useRouter()
@@ -41,6 +43,7 @@ export default function CustomerJobDetailsPage() {
 
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   const [job, setJob] = useState<JobDto | null>(null)
   const [payment, setPayment] = useState<PaymentScheduleDto | null>(null)
   const [review, setReview] = useState<ReviewDto | null>(null)
@@ -66,6 +69,20 @@ export default function CustomerJobDetailsPage() {
     }
     if (Number.isNaN(jobId)) return
     fetchData()
+    
+    // Refresh data when returning from payment page or window gains focus
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData()
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleFocus)
+    }
   }, [jobId])
 
   const fetchData = async () => {
@@ -74,30 +91,52 @@ export default function CustomerJobDetailsPage() {
       const jobData = await getJobById(jobId)
       setJob(jobData)
 
+      // Fetch additional details in parallel
+      setLoadingDetails(true)
+      const promises: Promise<any>[] = []
+
       // Fetch category and subcategory
       if (jobData.serviceCategoryId) {
-        const categoryData = await getCategoryById(jobData.serviceCategoryId).catch(() => null)
-        setCategory(categoryData)
+        promises.push(
+          getCategoryById(jobData.serviceCategoryId)
+            .then(setCategory)
+            .catch(() => setCategory(null))
+        )
       }
       if (jobData.serviceSubCategoryId) {
-        const subCategoryData = await getSubCategoryById(jobData.serviceSubCategoryId).catch(() => null)
-        setSubCategory(subCategoryData)
+        promises.push(
+          getSubCategoryById(jobData.serviceSubCategoryId)
+            .then(setSubCategory)
+            .catch(() => setSubCategory(null))
+        )
       }
 
       if (jobData.providerId) {
-        const providerData = await getProviderProfile(jobData.providerId).catch(() => null)
-        setProvider(providerData)
+        promises.push(
+          getProviderProfile(jobData.providerId)
+            .then(setProvider)
+            .catch(() => setProvider(null))
+        )
       }
 
-      if (['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(jobData.status)) {
-        const paymentData = await getPaymentSchedule(jobData.id).catch(() => null)
-        setPayment(paymentData)
+      // Fetch payment schedule for PENDING_FOR_PAYMENT, ACCEPTED, IN_PROGRESS, COMPLETED, or PAYMENT_PENDING jobs
+      if (['PENDING_FOR_PAYMENT', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'PAYMENT_PENDING'].includes(jobData.status)) {
+        promises.push(
+          getPaymentSchedule(jobData.id)
+            .then(setPayment)
+            .catch(() => setPayment(null))
+        )
       }
 
       if (jobData.status === 'COMPLETED') {
-        const reviewData = await getJobReview(jobData.id).catch(() => null)
-        setReview(reviewData)
+        promises.push(
+          getJobReview(jobData.id)
+            .then(setReview)
+            .catch(() => setReview(null))
+        )
       }
+
+      await Promise.all(promises)
     } catch (error: any) {
       if (error.response?.status === 404) {
         toast.error('Job not found')
@@ -106,18 +145,47 @@ export default function CustomerJobDetailsPage() {
       }
     } finally {
       setLoading(false)
+      setLoadingDetails(false)
     }
   }
 
   const cancelCurrentJob = async () => {
     const user = getCurrentUser()
     if (!user || !job) return
-    if (!confirm('Are you sure you want to cancel this request?')) return
+    
+    // Calculate cancellation fee based on job status
+    let cancellationFee = 0
+    let refundAmount = 0
+    const jobAmount = job.finalPrice || job.estimatedBudget || 0
+    
+    if (job.status === 'PENDING' || job.status === 'MATCHED') {
+      // Before provider accepts - no fee, 100% refund
+      refundAmount = jobAmount
+      cancellationFee = 0
+    } else if (job.status === 'ACCEPTED') {
+      // After provider accepts but before start - 10% fee (min ₹50)
+      const feePercent = 10
+      cancellationFee = Math.max(jobAmount * feePercent / 100, 50)
+      refundAmount = jobAmount - cancellationFee
+    } else if (job.status === 'IN_PROGRESS') {
+      // After provider started - 20% fee (min ₹100)
+      const feePercent = 20
+      cancellationFee = Math.max(jobAmount * feePercent / 100, 100)
+      refundAmount = jobAmount - cancellationFee
+    }
+    
+    const confirmMessage = cancellationFee > 0
+      ? `Cancelling this job will incur a cancellation fee of ₹${cancellationFee.toLocaleString()}. You will receive a refund of ₹${refundAmount.toLocaleString()}. Do you want to proceed?`
+      : 'Are you sure you want to cancel this request? You will receive a full refund.'
+    
+    if (!confirm(confirmMessage)) return
 
     try {
       setActionLoading(true)
       await cancelJob(job.id, user.userId, 'Customer cancelled', false)
-      toast.success('Request cancelled successfully')
+      toast.success(cancellationFee > 0 
+        ? `Request cancelled. Cancellation fee: ₹${cancellationFee.toLocaleString()}. Refund: ₹${refundAmount.toLocaleString()}`
+        : 'Request cancelled successfully. Full refund will be processed.')
       await fetchData()
     } catch {
       toast.error('Unable to cancel request')
@@ -171,13 +239,19 @@ export default function CustomerJobDetailsPage() {
     return Math.round((idx / (statusOrder.length - 1)) * 100)
   }, [job])
 
-  if (loading) return <Loader fullScreen text="Loading request details..." />
+  if (loading) return <PageLoader text="Loading request details..." />
   if (!job) {
     return <div className="px-6 py-6 text-white">Request not found. <Link href="/customer/jobs" className="text-primary-light hover:underline">Back to requests</Link></div>
   }
 
-  const canCancel = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS'].includes(job.status)
-  const canPay = job.status === 'COMPLETED' && payment && !payment.finalPaid
+  const canCancel = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS', 'PENDING_FOR_PAYMENT'].includes(job.status)
+  // Can pay upfront if: job is PENDING_FOR_PAYMENT (after acceptance), payment type is PARTIAL/FULL, and upfront not paid
+  const canPayUpfront = job.status === 'PENDING_FOR_PAYMENT' && payment && 
+    (payment.paymentType === 'PARTIAL' || payment.paymentType === 'FULL') && 
+    !payment.upfrontPaid && payment.upfrontAmount > 0
+  // Can pay final if: job is PAYMENT_PENDING and final not paid
+  const canPayFinal = job.status === 'PAYMENT_PENDING' && payment && !payment.finalPaid
+  const canPay = canPayUpfront || canPayFinal
   const canReview = job.status === 'COMPLETED' && !review
 
   return (
@@ -286,24 +360,7 @@ export default function CustomerJobDetailsPage() {
                   <CheckCircle2 className="w-4 h-4 text-accent-green" /> Jobs done: {provider.totalJobsCompleted || 0}
                 </p>
               </div>
-              {provider.mobileNumber && (
-                <div className="mt-4 pt-4 border-t border-white/10 flex gap-2">
-                  <a 
-                    href={`tel:${provider.mobileNumber}`}
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-primary-main/30 text-primary-light px-3 py-2 text-sm font-semibold hover:bg-primary-main/20 transition-colors"
-                  >
-                    <Phone className="w-4 h-4" /> Call
-                  </a>
-                  {provider.email && (
-                    <a 
-                      href={`mailto:${provider.email}`}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 text-white px-3 py-2 text-sm font-semibold hover:bg-white/10 transition-colors"
-                    >
-                      <Mail className="w-4 h-4" /> Email
-                    </a>
-                  )}
-                </div>
-              )}
+              {/* Contact options can be added when provider contact info is available in the DTO */}
             </motion.article>
           )}
 
@@ -328,10 +385,82 @@ export default function CustomerJobDetailsPage() {
               className="rounded-2xl glass-dark border border-white/10 p-6"
             >
               <h2 className="font-bold text-lg mb-3 text-white">Payment summary</h2>
-              <p className="text-sm text-slate-300">Type: {payment.paymentType}</p>
-              <p className="text-sm text-slate-300">Total: ₹{payment.totalAmount.toLocaleString()}</p>
-              <p className="text-sm text-slate-300">Final due: ₹{payment.finalAmount.toLocaleString()}</p>
-              <p className="text-sm text-slate-300">Status: {payment.paymentStatus}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-slate-300">
+                  <span>Type:</span>
+                  <span className="text-white">{payment.paymentType}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Total:</span>
+                  <span className="text-white">₹{(payment.totalAmount || 0).toLocaleString()}</span>
+                </div>
+                {(payment.paymentType === 'PARTIAL' || payment.paymentType === 'FULL') && (
+                  <>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Upfront Amount:</span>
+                      <span className={`font-semibold ${payment.upfrontPaid ? 'text-green-400' : 'text-yellow-400'}`}>
+                        ₹{(payment.upfrontAmount || 0).toLocaleString()}
+                        {payment.upfrontPaid && ' ✓ Paid'}
+                      </span>
+                    </div>
+                    {payment.upfrontPaymentDate && (
+                      <div className="text-xs text-slate-400">
+                        Paid on: {new Date(payment.upfrontPaymentDate).toLocaleString()}
+                      </div>
+                    )}
+                  </>
+                )}
+                {payment.paymentType === 'PARTIAL' && (
+                  <div className="flex justify-between text-slate-300">
+                    <span>Final Amount:</span>
+                    <span className={`font-semibold ${payment.finalPaid ? 'text-green-400' : 'text-yellow-400'}`}>
+                      ₹{(payment.finalAmount || 0).toLocaleString()}
+                      {payment.finalPaid && ' ✓ Paid'}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-300">
+                  <span>Status:</span>
+                  <span className={`font-semibold ${
+                    payment.paymentStatus === 'COMPLETED' ? 'text-green-400' :
+                    payment.paymentStatus === 'PARTIAL' ? 'text-yellow-400' :
+                    payment.paymentStatus === 'PENDING' ? 'text-yellow-400' :
+                    'text-slate-300'
+                  }`}>
+                    {payment.paymentStatus}
+                  </span>
+                </div>
+                {payment.paymentStatus === 'PENDING' && (
+                  <div className="text-xs text-slate-400 mt-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      <span>Payment processing: 2 business days</span>
+                    </div>
+                  </div>
+                )}
+                {!payment.upfrontPaid && (payment.paymentType === 'PARTIAL' || payment.paymentType === 'FULL') && job.status === 'PENDING_FOR_PAYMENT' && (
+                  <Link href={`/customer/jobs/${jobId}/payment?type=upfront`} className="block mt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                    >
+                      <CreditCard className="w-4 h-4" /> Pay Upfront ₹{(payment.upfrontAmount || 0).toLocaleString()}
+                    </motion.button>
+                  </Link>
+                )}
+                {!payment.finalPaid && payment.paymentType === 'PARTIAL' && job.status === 'PAYMENT_PENDING' && (
+                  <Link href={`/customer/jobs/${jobId}/payment?type=final`} className="block mt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                    >
+                      <CreditCard className="w-4 h-4" /> Pay Final ₹{(payment.finalAmount || 0).toLocaleString()}
+                    </motion.button>
+                  </Link>
+                )}
+              </div>
             </motion.article>
           )}
 
@@ -353,15 +482,27 @@ export default function CustomerJobDetailsPage() {
                   Cancel request
                 </motion.button>
               )}
-              {canPay && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowPaymentModal(true)} 
-                  className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
-                >
-                  <CreditCard className="w-4 h-4" /> Pay now
-                </motion.button>
+              {canPayUpfront && payment && (
+                <Link href={`/customer/jobs/${jobId}/payment?type=upfront`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                  >
+                    <CreditCard className="w-4 h-4" /> Pay Upfront ₹{payment.upfrontAmount?.toLocaleString() || '0'}
+                  </motion.button>
+                </Link>
+              )}
+              {canPayFinal && payment && (
+                <Link href={`/customer/jobs/${jobId}/payment?type=final`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                  >
+                    <CreditCard className="w-4 h-4" /> Pay Final ₹{payment.finalAmount?.toLocaleString() || '0'}
+                  </motion.button>
+                </Link>
               )}
               {canReview && (
                 <motion.button
@@ -383,7 +524,7 @@ export default function CustomerJobDetailsPage() {
 
       {showPaymentModal && payment && (
         <Modal title="Confirm payment" onClose={() => setShowPaymentModal(false)}>
-          <p className="text-sm text-slate-300 mb-4">You are about to pay ₹{payment.finalAmount.toLocaleString()} for this completed job.</p>
+          <p className="text-sm text-slate-300 mb-4">You are about to pay ₹{(payment.finalAmount || 0).toLocaleString()} for this completed job.</p>
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

@@ -13,7 +13,7 @@ import Loader from '@/components/ui/Loader'
 import { 
   Calendar, MapPin, DollarSign, AlertCircle, CheckCircle2, 
   X, Clock, Play, ArrowLeft, MessageSquare, User, FileText, 
-  Image as ImageIcon, Building2, Phone, Mail, Shield
+  Image as ImageIcon, Building2, Phone, Mail, Shield, CreditCard
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -28,6 +28,7 @@ export default function ProviderJobDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [finalPrice, setFinalPrice] = useState('')
+  const [paymentChannel, setPaymentChannel] = useState<'CASH' | 'ONLINE'>('ONLINE')
   const [showCompleteModal, setShowCompleteModal] = useState(false)
 
   useEffect(() => {
@@ -45,25 +46,34 @@ export default function ProviderJobDetailsPage() {
       const jobData = await getJobById(jobId)
       setJob(jobData)
       
+      // Fetch additional details in parallel
+      const promises: Promise<any>[] = []
+      
       // Fetch customer info
       if (jobData.customerId) {
-        try {
-          const customerData = await getCustomerProfile(jobData.customerId)
-          setCustomer(customerData)
-        } catch (error) {
-          console.log('Could not fetch customer details')
-        }
+        promises.push(
+          getCustomerProfile(jobData.customerId)
+            .then(setCustomer)
+            .catch(() => {
+              console.log('Could not fetch customer details')
+              setCustomer(null)
+            })
+        )
       }
       
-      // Fetch payment schedule if job is accepted or in progress
-      if (['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(jobData.status)) {
-        try {
-          const schedule = await getPaymentSchedule(jobId)
-          setPaymentSchedule(schedule)
-        } catch (error) {
-          console.log('No payment schedule found for this job')
-        }
+      // Fetch payment schedule if job is pending for payment, accepted or in progress
+      if (['PENDING_FOR_PAYMENT', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'PAYMENT_PENDING'].includes(jobData.status)) {
+        promises.push(
+          getPaymentSchedule(jobId)
+            .then(setPaymentSchedule)
+            .catch(() => {
+              console.log('No payment schedule found for this job')
+              setPaymentSchedule(null)
+            })
+        )
       }
+      
+      await Promise.all(promises)
     } catch (error: any) {
       console.error('Failed to fetch job:', error)
       if (error.response?.status === 404) {
@@ -108,6 +118,11 @@ export default function ProviderJobDetailsPage() {
       return
     }
 
+    if (!paymentChannel) {
+      toast.error('Please select a payment channel')
+      return
+    }
+
     const currentUser = getCurrentUser()
     if (!currentUser || !job) {
       toast.error('Please login first')
@@ -121,10 +136,13 @@ export default function ProviderJobDetailsPage() {
 
     try {
       setActionLoading(true)
-      await completeJob(jobId, currentUser.userId, Number(finalPrice))
-      toast.success('Job completed successfully!')
+      await completeJob(jobId, currentUser.userId, Number(finalPrice), paymentChannel)
+      toast.success(paymentChannel === 'CASH' 
+        ? 'Job completed! Payment received via cash.' 
+        : 'Job completed! Payment link sent to customer.')
       setShowCompleteModal(false)
       setFinalPrice('')
+      setPaymentChannel('ONLINE') // Reset to default
       await fetchJobDetails()
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || 'Failed to complete job. Please try again.'
@@ -427,6 +445,18 @@ export default function ProviderJobDetailsPage() {
               <DollarSign className="w-5 h-5 text-accent-green" />
               Payment Information
             </h2>
+            <div className="mb-4 p-3 bg-white/60 rounded-xl border border-green-200">
+              <div className="text-xs text-neutral-textSecondary mb-1">Your Payment Preference</div>
+              <div className="text-sm font-semibold text-neutral-textPrimary">
+                {paymentSchedule.paymentType === 'PARTIAL' && paymentSchedule.upfrontPercentage 
+                  ? `Partial Payment (${paymentSchedule.upfrontPercentage}% upfront)`
+                  : paymentSchedule.paymentType === 'FULL'
+                  ? 'Full Payment (100% upfront)'
+                  : paymentSchedule.paymentType === 'POST_WORK'
+                  ? 'Post Work Payment (Pay after completion)'
+                  : paymentSchedule.paymentType}
+              </div>
+            </div>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-neutral-textSecondary">Total Amount</span>
@@ -455,7 +485,7 @@ export default function ProviderJobDetailsPage() {
                 </>
               )}
               <div className="pt-3 border-t border-green-200">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-semibold text-neutral-textSecondary">Payment Status</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                     paymentSchedule.paymentStatus === 'COMPLETED' 
@@ -467,6 +497,12 @@ export default function ProviderJobDetailsPage() {
                     {paymentSchedule.paymentStatus}
                   </span>
                 </div>
+                {paymentSchedule.paymentStatus === 'PENDING' && (
+                  <div className="text-xs text-neutral-textSecondary flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    <span>Payment processing: 2 business days</span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -541,6 +577,47 @@ export default function ProviderJobDetailsPage() {
                     Estimated: ₹{job.estimatedBudget.toLocaleString()}
                   </div>
                 )}
+              </div>
+              
+              <div>
+                <label className="text-sm font-semibold text-neutral-textPrimary mb-2 block">Payment Channel <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentChannel('CASH')}
+                    className={`p-3 border-2 rounded-xl font-semibold transition-all ${
+                      paymentChannel === 'CASH'
+                        ? 'border-primary-main bg-primary-main/10 text-primary-main'
+                        : 'border-neutral-border text-neutral-textSecondary hover:border-primary-main/50'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <DollarSign className="w-5 h-5" />
+                      <span>CASH</span>
+                      <span className="text-xs opacity-75">Immediate</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentChannel('ONLINE')}
+                    className={`p-3 border-2 rounded-xl font-semibold transition-all ${
+                      paymentChannel === 'ONLINE'
+                        ? 'border-primary-main bg-primary-main/10 text-primary-main'
+                        : 'border-neutral-border text-neutral-textSecondary hover:border-primary-main/50'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <CreditCard className="w-5 h-5" />
+                      <span>ONLINE</span>
+                      <span className="text-xs opacity-75">Payment Link</span>
+                    </div>
+                  </button>
+                </div>
+                <div className="text-xs text-neutral-textSecondary mt-2">
+                  {paymentChannel === 'CASH' 
+                    ? 'Job will be marked as completed immediately after cash payment confirmation.'
+                    : 'Customer will receive a payment link. Job will be completed after payment confirmation.'}
+                </div>
               </div>
               <div className="flex gap-3">
                 <motion.button

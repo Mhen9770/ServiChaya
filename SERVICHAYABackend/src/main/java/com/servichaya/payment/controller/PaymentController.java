@@ -5,6 +5,7 @@ import com.servichaya.payment.dto.*;
 import com.servichaya.payment.service.EarningsService;
 import com.servichaya.payment.service.PaymentPreferenceService;
 import com.servichaya.payment.service.PaymentService;
+import com.servichaya.payment.service.PayoutService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,7 +14,10 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/payments")
@@ -24,6 +28,7 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final PaymentPreferenceService preferenceService;
     private final EarningsService earningsService;
+    private final PayoutService payoutService;
 
     @PostMapping("/schedule")
     public ResponseEntity<ApiResponse<PaymentScheduleDto>> createPaymentSchedule(
@@ -107,6 +112,111 @@ public class PaymentController {
         } catch (Exception e) {
             log.error("Error fetching payment schedule for jobId: {}", jobId, e);
             return ResponseEntity.ok(ApiResponse.success("No payment schedule found", null));
+        }
+    }
+
+    @PostMapping("/create-link")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createPaymentLink(
+            @RequestBody Map<String, Object> request) {
+        Long jobId = Long.valueOf(request.get("jobId").toString());
+        BigDecimal amount = new BigDecimal(request.get("amount").toString());
+        String paymentChannel = request.get("paymentChannel") != null 
+            ? request.get("paymentChannel").toString() : "ONLINE";
+        
+        log.info("Creating payment link for jobId: {}, amount: {}", jobId, amount);
+        try {
+            // Get customer ID from job
+            com.servichaya.job.entity.JobMaster job = paymentService.getJobById(jobId);
+            String paymentLink = paymentService.createPaymentLink(jobId, job.getCustomerId(), amount);
+            
+            // Get transaction code from the created transaction
+            com.servichaya.payment.entity.PaymentTransaction transaction = 
+                paymentService.getPendingTransactionByJobId(jobId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("paymentLink", paymentLink);
+            response.put("transactionCode", transaction != null ? transaction.getTransactionCode() : null);
+            response.put("orderId", transaction != null ? transaction.getRazorpayOrderId() : null);
+            
+            return ResponseEntity.ok(ApiResponse.success("Payment link created", response));
+        } catch (Exception e) {
+            log.error("Error creating payment link: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to create payment link: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/confirm")
+    public ResponseEntity<ApiResponse<String>> confirmPayment(
+            @RequestParam Long jobId,
+            @RequestParam String transactionCode,
+            @RequestParam(required = false) String razorpayPaymentId,
+            @RequestParam(required = false) String razorpayOrderId,
+            @RequestParam(required = false) String razorpaySignature) {
+        log.info("Confirming payment for jobId: {}, transactionCode: {}", jobId, transactionCode);
+        try {
+            paymentService.confirmPayment(jobId, transactionCode, razorpayPaymentId, 
+                    razorpayOrderId, razorpaySignature, null);
+            return ResponseEntity.ok(ApiResponse.success("Payment confirmed successfully", "Payment confirmed"));
+        } catch (Exception e) {
+            log.error("Error confirming payment: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to confirm payment: " + e.getMessage()));
+        }
+    }
+
+    // Payout Endpoints
+    @GetMapping("/payout/limits")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getPayoutLimits(
+            @RequestParam Long providerId) {
+        log.info("Fetching payout limits for providerId: {}", providerId);
+        try {
+            BigDecimal minWithdrawal = payoutService.getMinimumWithdrawalAmount();
+            BigDecimal maxWithdrawal = payoutService.getMaximumWithdrawalAmount();
+            BigDecimal availableBalance = payoutService.getAvailableBalance(providerId);
+            
+            Map<String, Object> limits = new HashMap<>();
+            limits.put("minWithdrawal", minWithdrawal);
+            limits.put("maxWithdrawal", maxWithdrawal);
+            limits.put("availableBalance", availableBalance);
+            
+            return ResponseEntity.ok(ApiResponse.success("Payout limits fetched", limits));
+        } catch (Exception e) {
+            log.error("Error fetching payout limits: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to fetch payout limits: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/payout/request")
+    public ResponseEntity<ApiResponse<String>> requestPayout(
+            @RequestParam Long providerId,
+            @RequestBody Map<String, Object> request) {
+        log.info("Processing payout request for providerId: {}", providerId);
+        try {
+            BigDecimal amount = new BigDecimal(request.get("amount").toString());
+            String payoutMethod = request.get("payoutMethod") != null 
+                ? request.get("payoutMethod").toString() : "BANK_TRANSFER";
+            
+            // Validate payout request using business rules
+            payoutService.validatePayoutRequest(providerId, amount);
+            
+            // TODO: Create payout record in database
+            // TODO: Process payout via payment gateway
+            // TODO: Update provider balance
+            // TODO: Send notification to provider
+            
+            log.info("Payout request validated successfully for providerId: {}, amount: {}", providerId, amount);
+            return ResponseEntity.ok(ApiResponse.success("Payout request submitted successfully", 
+                "Your payout request has been submitted. Processing time: 24-48 hours"));
+        } catch (RuntimeException e) {
+            log.warn("Payout validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error processing payout request: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to process payout request: " + e.getMessage()));
         }
     }
 

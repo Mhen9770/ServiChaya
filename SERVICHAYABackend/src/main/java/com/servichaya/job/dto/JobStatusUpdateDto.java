@@ -14,5 +14,6 @@ import java.math.BigDecimal;
 public class JobStatusUpdateDto {
     private String action; // START, COMPLETE, CANCEL
     private BigDecimal finalPrice; // Required for COMPLETE
+    private String paymentChannel; // CASH, ONLINE - Required for COMPLETE
     private String cancelReason; // Required for CANCEL
 }

@@ -124,3 +124,26 @@ export const getPaymentSchedule = async (jobId: number): Promise<PaymentSchedule
     throw error
   }
 }
+
+// Payout functions
+export interface PayoutRequestDto {
+  amount: number
+  payoutMethod: string
+  bankAccountId?: number
+  upiId?: string
+}
+
+export interface PayoutLimitsDto {
+  minWithdrawal: number
+  maxWithdrawal: number
+  availableBalance: number
+}
+
+export const getPayoutLimits = async (providerId: number): Promise<PayoutLimitsDto> => {
+  const response = await api.get(`/payments/payout/limits?providerId=${providerId}`)
+  return response.data.data
+}
+
+export const requestPayout = async (providerId: number, data: PayoutRequestDto): Promise<void> => {
+  await api.post(`/payments/payout/request?providerId=${providerId}`, data)
+}

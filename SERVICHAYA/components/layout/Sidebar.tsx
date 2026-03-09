@@ -106,7 +106,7 @@ export default function Sidebar({ items }: SidebarProps) {
   }, [])
 
   return (
-    <aside className="w-64 glass-dark border-r border-white/10 min-h-screen sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent">
+    <aside className="w-64 glass-dark border-r border-white/10 sticky top-[73px] self-start h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40">
       <div className="p-6">
         {user && (
           <div className="mb-8 pb-6 border-b border-white/10">

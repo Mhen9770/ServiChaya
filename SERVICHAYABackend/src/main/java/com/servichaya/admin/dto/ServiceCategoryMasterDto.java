@@ -20,6 +20,14 @@ public class ServiceCategoryMasterDto {
     private Integer displayOrder;
     private Boolean isFeatured;
     private Boolean isActive;
+    
+    // Hierarchical fields
+    private Long parentId;
+    private String parentName;
+    private String categoryType; // ELECTRONICS, APPLIANCE, HOME_SERVICE, etc.
+    private Integer level; // 0 = root, 1 = first level, etc.
+    private String path; // Full path for display
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

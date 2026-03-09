@@ -39,10 +39,10 @@ public class MatchingController {
     @PostMapping("/match/{matchId}/accept")
     public ResponseEntity<ApiResponse<String>> acceptJob(
             @PathVariable Long matchId,
-            @RequestParam Long providerId) {
-        log.info("Provider {} accepting match {}", providerId, matchId);
-        matchingService.acceptJob(matchId, providerId);
-        log.info("Job accepted successfully. MatchId: {}, ProviderId: {}", matchId, providerId);
+            @RequestParam Long userId) {
+        log.info("User {} accepting match {}", userId, matchId);
+        matchingService.acceptJob(matchId, userId);
+        log.info("Job accepted successfully. MatchId: {}, UserId: {}", matchId, userId);
         return ResponseEntity.ok(ApiResponse.success("Job accepted successfully", "Job has been accepted"));
     }
 }

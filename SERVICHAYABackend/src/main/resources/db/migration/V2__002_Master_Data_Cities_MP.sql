@@ -7,7 +7,7 @@
 -- ============================================
 -- Master Data: Cities in Madhya Pradesh (Launch Cities)
 
--- Indore
+-- Indore (Idempotent: Only insert if not exists)
 INSERT INTO city_master (code, name, description, state_id, city_code, latitude, longitude, timezone, is_serviceable, is_active, created_at, updated_at)
 SELECT 
     'INDORE',
@@ -22,9 +22,12 @@ SELECT
     true,
     NOW(),
     NOW()
-FROM state_master WHERE code = 'MP';
+FROM state_master 
+WHERE code = 'MP' 
+  AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'INDORE')
+LIMIT 1;
 
--- Sanawad
+-- Sanawad (Idempotent: Only insert if not exists)
 INSERT INTO city_master (code, name, description, state_id, city_code, latitude, longitude, timezone, is_serviceable, is_active, created_at, updated_at)
 SELECT 
     'SANAWAD',
@@ -39,9 +42,12 @@ SELECT
     true,
     NOW(),
     NOW()
-FROM state_master WHERE code = 'MP';
+FROM state_master 
+WHERE code = 'MP' 
+  AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'SANAWAD')
+LIMIT 1;
 
--- Khandwa
+-- Khandwa (Idempotent: Only insert if not exists)
 INSERT INTO city_master (code, name, description, state_id, city_code, latitude, longitude, timezone, is_serviceable, is_active, created_at, updated_at)
 SELECT 
     'KHANDWA',
@@ -56,9 +62,12 @@ SELECT
     true,
     NOW(),
     NOW()
-FROM state_master WHERE code = 'MP';
+FROM state_master 
+WHERE code = 'MP' 
+  AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHANDWA')
+LIMIT 1;
 
--- Khargone
+-- Khargone (Idempotent: Only insert if not exists)
 INSERT INTO city_master (code, name, description, state_id, city_code, latitude, longitude, timezone, is_serviceable, is_active, created_at, updated_at)
 SELECT 
     'KHARGONE',
@@ -73,4 +82,7 @@ SELECT
     true,
     NOW(),
     NOW()
-FROM state_master WHERE code = 'MP';
+FROM state_master 
+WHERE code = 'MP' 
+  AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHARGONE')
+LIMIT 1;

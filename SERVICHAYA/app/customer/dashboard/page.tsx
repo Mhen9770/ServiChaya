@@ -10,6 +10,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getCustomerJobs, type JobDto } from '@/lib/services/job'
 import { getCustomerProfile } from '@/lib/services/customer'
 import { getUnreadCount } from '@/lib/services/notification'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -65,7 +66,7 @@ export default function CustomerDashboard() {
     return Math.round((stats.completed / stats.total) * 100)
   }, [stats])
 
-  if (loading) return <div className="px-6 py-10 text-sm text-slate-300">Loading dashboard...</div>
+  if (loading) return <PageLoader text="Loading dashboard..." />
 
   const statCards = [
     { label: 'Total Jobs', value: stats.total, icon: Briefcase, link: '/customer/jobs', color: 'from-blue-500 to-blue-600' },

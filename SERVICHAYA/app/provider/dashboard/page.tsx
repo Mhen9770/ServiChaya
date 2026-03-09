@@ -10,7 +10,7 @@ import { getEarningsSummary } from '@/lib/services/payment'
 import { getUnreadCount } from '@/lib/services/notification'
 import { getAvailableJobsForProvider } from '@/lib/services/matching'
 import { toast } from 'react-hot-toast'
-import Loader from '@/components/ui/Loader'
+import {PageLoader ,Loader, ContentLoader, ButtonLoader} from '@/components/ui/Loader'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { 
   Clock, FileText, CheckCircle2, ArrowRight, ClipboardList, 
@@ -137,15 +137,7 @@ export default function ProviderDashboard() {
   }
 
   if (loading) {
-    return (
-      <div className="px-6 py-6">
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          {[1, 2, 3].map((i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      </div>
-    )
+    return <PageLoader text="Loading dashboard..." />
   }
 
   if (onboardingStatus?.profileStatus === 'PENDING_VERIFICATION') {

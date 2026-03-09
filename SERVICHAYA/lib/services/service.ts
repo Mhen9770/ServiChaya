@@ -1,4 +1,5 @@
 import api from '../api'
+import { ProviderProfileDto } from './provider'
 
 export interface ServiceSubCategory {
   id: number
@@ -22,13 +23,43 @@ export interface ServiceCategory {
   displayOrder: number
   isFeatured: boolean
   providerCount: number
+  // Hierarchical fields
+  parentId?: number
+  parentName?: string
+  categoryType?: string // ELECTRONICS, APPLIANCE, etc.
+  level?: number // 0 = root, 1 = first level, etc.
+  path?: string // Full path for display
+  children?: ServiceCategory[] // Unlimited depth hierarchy
+  // Legacy support
   subCategories?: ServiceSubCategory[]
 }
 
 // Get all active categories
-export const getAllCategories = async (featured?: boolean): Promise<ServiceCategory[]> => {
-  const url = featured ? '/service-categories?featured=true' : '/service-categories'
+export const getAllCategories = async (featured?: boolean, categoryType?: string, rootOnly?: boolean): Promise<ServiceCategory[]> => {
+  const params = new URLSearchParams()
+  if (featured) params.append('featured', 'true')
+  if (categoryType) params.append('categoryType', categoryType)
+  if (rootOnly) params.append('rootOnly', 'true')
+  const url = params.toString() ? `/service-categories?${params.toString()}` : '/service-categories'
   const response = await api.get(url)
+  return response.data.data
+}
+
+// Get categories by type (e.g., 'ELECTRONICS')
+export const getCategoriesByType = async (categoryType: string): Promise<ServiceCategory[]> => {
+  const response = await api.get(`/service-categories/type/${categoryType}`)
+  return response.data.data
+}
+
+// Get root categories only
+export const getRootCategories = async (): Promise<ServiceCategory[]> => {
+  const response = await api.get('/service-categories?rootOnly=true')
+  return response.data.data
+}
+
+// Get category tree by ID (includes all descendants)
+export const getCategoryTree = async (id: number): Promise<ServiceCategory> => {
+  const response = await api.get(`/service-categories/tree/${id}`)
   return response.data.data
 }
 
@@ -36,6 +67,12 @@ export const getAllCategories = async (featured?: boolean): Promise<ServiceCateg
 export const getCategoryById = async (id: number): Promise<ServiceCategory> => {
   const response = await api.get(`/service-categories/${id}`)
   return response.data.data
+}
+
+// Get providers by category ID
+export const getProvidersByCategory = async (categoryId: number): Promise<ProviderProfileDto[]> => {
+  const response = await api.get(`/service-categories/${categoryId}/providers`)
+  return response.data.data || []
 }
 
 // Get category by code

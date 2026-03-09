@@ -50,7 +50,8 @@ export const getAvailableJobsForProvider = async (providerId: number): Promise<P
 }
 
 // Accept a job match
-export const acceptJob = async (matchId: number, providerId: number): Promise<string> => {
-  const response = await api.post(`/matching/match/${matchId}/accept?providerId=${providerId}`)
+// Note: userId is passed (not providerId) - backend converts userId to providerProfileId internally
+export const acceptJob = async (matchId: number, userId: number): Promise<string> => {
+  const response = await api.post(`/matching/match/${matchId}/accept?userId=${userId}`)
   return response.data.data
 }

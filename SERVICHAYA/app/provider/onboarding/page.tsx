@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast'
 import Loader from '@/components/ui/Loader'
 import { User, FileText, Wrench, MapPin, Sparkles, CheckCircle2, Plus, X, Star, Award, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { PageLoader, ButtonLoader, ContentLoader } from '@/components/ui/Loader'
 
 export default function ProviderOnboardingPage() {
   const router = useRouter()
@@ -419,31 +420,29 @@ export default function ProviderOnboardingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-background to-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-main"></div>
-      </div>
+      <PageLoader text="Loading onboarding..." />
     )
   }
 
   // Step 6: Verification Pending
   if (currentStep === 6) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-background to-white">
+      <div className="min-h-screen bg-[#010B2A] text-white">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-3xl p-8 md:p-12 shadow-xl text-center border border-neutral-border">
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-xl text-center border border-white/20 text-white">
               <div className="w-20 h-20 bg-primary-main/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-10 h-10 text-primary-main" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h1 className="text-3xl font-bold mb-4 text-neutral-textPrimary font-display">Onboarding Complete!</h1>
-              <p className="text-lg text-neutral-textSecondary mb-6">
+              <h1 className="text-3xl font-bold mb-4 text-white font-display">Onboarding Complete!</h1>
+              <p className="text-lg text-slate-300 mb-6">
                 Your profile is under review. We'll notify you once it's verified.
               </p>
-              <div className="bg-primary-main/5 rounded-2xl p-6 mb-6">
-                <p className="text-sm text-neutral-textSecondary">
-                  Status: <span className="font-semibold text-primary-main">Pending Verification</span>
+              <div className="bg-primary-main/20 rounded-2xl p-6 mb-6 border border-primary-main/30">
+                <p className="text-sm text-slate-300">
+                  Status: <span className="font-semibold text-primary-light">Pending Verification</span>
                 </p>
               </div>
               <Link
@@ -480,27 +479,27 @@ export default function ProviderOnboardingPage() {
         <div className="max-w-5xl mx-auto">
           {/* Page Header */}
           <div className="text-center mb-8 md:mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold mb-3 font-display text-neutral-textPrimary">
+            <h1 className="text-3xl md:text-4xl font-bold mb-3 font-display text-white">
               Become a Service Provider
             </h1>
-            <p className="text-base md:text-lg text-neutral-textSecondary max-w-2xl mx-auto">
+            <p className="text-base md:text-lg text-slate-300 max-w-2xl mx-auto">
               Complete your profile to start receiving jobs and grow your business
             </p>
           </div>
 
           {/* Progress Bar */}
-          <div className="bg-white rounded-3xl p-6 md:p-8 mb-8 shadow-lg border border-neutral-border">
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 md:p-8 mb-8 shadow-lg border border-white/20 text-white">
             <div className="flex items-center justify-between mb-6">
               {steps.map((step) => (
                 <div key={step.number} className="flex flex-col items-center flex-1 relative">
                   {/* Connection Line */}
                   {step.number < steps.length && (
-                    <div className="hidden md:block absolute top-6 left-[60%] w-full h-0.5 bg-neutral-border -z-10">
+                    <div className="hidden md:block absolute top-6 left-[60%] w-full h-0.5 bg-white/20 -z-10">
                       <div
                         className={`h-full transition-all duration-500 ${
                           step.number < currentStep
                             ? 'bg-gradient-to-r from-primary-main to-primary-light'
-                            : 'bg-neutral-border'
+                            : 'bg-white/20'
                         }`}
                         style={{ width: step.number < currentStep ? '100%' : '0%' }}
                       ></div>
@@ -513,7 +512,7 @@ export default function ProviderOnboardingPage() {
                         ? 'bg-accent-green text-white shadow-lg scale-110'
                         : step.number === currentStep
                         ? 'bg-primary-main text-white shadow-lg scale-110 ring-4 ring-primary-main/20'
-                        : 'bg-neutral-background text-neutral-textSecondary'
+                        : 'bg-white/10 text-slate-400'
                     }`}
                   >
                     {step.number < currentStep ? (
@@ -524,18 +523,18 @@ export default function ProviderOnboardingPage() {
                   </div>
                   <div className="text-center">
                     <span className={`text-xs md:text-sm font-semibold block ${
-                      step.number === currentStep ? 'text-primary-main' : 'text-neutral-textSecondary'
+                      step.number === currentStep ? 'text-primary-light' : 'text-slate-400'
                     }`}>
                       {step.title}
                     </span>
-                    <span className="text-xs text-neutral-textSecondary hidden md:block mt-1">
+                    <span className="text-xs text-slate-400 hidden md:block mt-1">
                       {step.description}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="w-full h-2 bg-neutral-background rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-primary-main to-primary-dark transition-all duration-500"
                 style={{ width: `${((currentStep - 1) / 4) * 100}%` }}
@@ -544,7 +543,7 @@ export default function ProviderOnboardingPage() {
           </div>
 
           {/* Step Content Card */}
-          <div className="bg-white rounded-3xl p-6 md:p-10 shadow-xl border border-neutral-border">
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 md:p-10 shadow-xl border border-white/20 text-white">
             {/* Step 1: Basic Info */}
             {currentStep === 1 && (
               <div>
@@ -552,33 +551,33 @@ export default function ProviderOnboardingPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
                     Step 1 of 5
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Basic Information</h2>
-                  <p className="text-neutral-textSecondary">Tell us about yourself to get started</p>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white font-display">Basic Information</h2>
+                  <p className="text-slate-300">Tell us about yourself to get started</p>
                 </div>
                 
                 <div className="space-y-5">
                   <div className="grid md:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                      <label className="block text-sm font-semibold mb-2 text-white">
                         First Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={step1Data.firstName}
                         onChange={(e) => setStep1Data({ ...step1Data, firstName: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                         placeholder="Enter first name"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                      <label className="block text-sm font-semibold mb-2 text-white">
                         Last Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={step1Data.lastName}
                         onChange={(e) => setStep1Data({ ...step1Data, lastName: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                         placeholder="Enter last name"
                       />
                     </div>
@@ -608,12 +607,12 @@ export default function ProviderOnboardingPage() {
                   </div>
                   {step1Data.providerType === 'BUSINESS' && (
                     <div>
-                      <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Business Name</label>
+                      <label className="block text-sm font-semibold mb-2 text-white">Business Name</label>
                       <input
                         type="text"
                         value={step1Data.businessName}
                         onChange={(e) => setStep1Data({ ...step1Data, businessName: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                        className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                         placeholder="Enter business name"
                       />
                     </div>
@@ -628,10 +627,7 @@ export default function ProviderOnboardingPage() {
                   >
                     {submitting ? (
                       <span className="flex items-center gap-2">
-                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                        <ButtonLoader />
                         Saving...
                       </span>
                     ) : (
@@ -649,8 +645,8 @@ export default function ProviderOnboardingPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
                     Step 2 of 5
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Document Upload</h2>
-                  <p className="text-neutral-textSecondary">Upload your verification documents</p>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white font-display">Document Upload</h2>
+                  <p className="text-slate-300">Upload your verification documents</p>
                 </div>
                 
                 <div className="space-y-5">
@@ -711,7 +707,7 @@ export default function ProviderOnboardingPage() {
                       className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                       placeholder="https://example.com/address-proof.pdf"
                     />
-                    <p className="text-xs text-neutral-textSecondary mt-1">Utility bill, rental agreement, or any government document with address</p>
+                    <p className="text-xs text-slate-400 mt-1">Utility bill, rental agreement, or any government document with address</p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Profile Photo URL</label>
@@ -727,7 +723,7 @@ export default function ProviderOnboardingPage() {
                         <img 
                           src={step2Data.profilePhotoUrl} 
                           alt="Profile preview" 
-                          className="w-24 h-24 rounded-full object-cover border-2 border-neutral-border shadow-md"
+                          className="w-24 h-24 rounded-full object-cover border-2 border-white/20 shadow-md"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none'
                           }}
@@ -749,7 +745,14 @@ export default function ProviderOnboardingPage() {
                     disabled={submitting || (!step2Data.aadhaarUrl && !step2Data.panUrl && !step2Data.addressProofUrl)}
                     className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? 'Saving...' : 'Continue'}
+                    {submitting ? (
+                      <span className="flex items-center gap-2">
+                        <ButtonLoader />
+                        Saving...
+                      </span>
+                    ) : (
+                      'Continue'
+                    )}
                   </button>
                 </div>
               </div>
@@ -762,8 +765,8 @@ export default function ProviderOnboardingPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-main/10 text-primary-main rounded-full text-xs font-semibold mb-4">
                     Step 3 of 5
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-neutral-textPrimary font-display">Select Your Skills</h2>
-                  <p className="text-neutral-textSecondary">Choose the skills you offer and mark your primary skill</p>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white font-display">Select Your Skills</h2>
+                  <p className="text-slate-300">Choose the skills you offer and mark your primary skill</p>
                 </div>
 
                 {loadingDropdowns ? (
@@ -798,7 +801,7 @@ export default function ProviderOnboardingPage() {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <Wrench className="w-5 h-5 text-primary-main" />
-                            <span className="font-semibold text-neutral-textPrimary">Skill {index + 1}</span>
+                            <span className="font-semibold text-white">Skill {index + 1}</span>
                             {skill.isPrimary && (
                               <span className="px-2 py-1 bg-accent-green/10 text-accent-green rounded-full text-xs font-semibold flex items-center gap-1">
                                 <Star className="w-3 h-3" />
@@ -825,7 +828,7 @@ export default function ProviderOnboardingPage() {
 
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               Skill <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -835,7 +838,7 @@ export default function ProviderOnboardingPage() {
                                 newData[index].skillId = Number(e.target.value)
                                 setStep3Data(newData)
                               }}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                             >
                               <option value={0}>Select a skill</option>
                               {skills.map((s) => (
@@ -844,7 +847,7 @@ export default function ProviderOnboardingPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               Experience (Years) <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -857,7 +860,7 @@ export default function ProviderOnboardingPage() {
                                 newData[index].experienceYears = Number(e.target.value)
                                 setStep3Data(newData)
                               }}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                               placeholder="Years of experience"
                             />
                           </div>
@@ -877,13 +880,13 @@ export default function ProviderOnboardingPage() {
                               }}
                               className="w-4 h-4 text-primary-main rounded focus:ring-primary-main"
                             />
-                            <span className="text-sm font-semibold text-neutral-textPrimary">Mark as Primary Skill</span>
+                            <span className="text-sm font-semibold text-white">Mark as Primary Skill</span>
                           </label>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4 mt-4">
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Certification Name (Optional)</label>
+                            <label className="block text-sm font-semibold mb-2 text-white">Certification Name (Optional)</label>
                             <input
                               type="text"
                               value={skill.certificationName}
@@ -892,12 +895,12 @@ export default function ProviderOnboardingPage() {
                                 newData[index].certificationName = e.target.value
                                 setStep3Data(newData)
                               }}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                               placeholder="e.g., Certified Electrician"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">Certification Document URL (Optional)</label>
+                            <label className="block text-sm font-semibold mb-2 text-white">Certification Document URL (Optional)</label>
                             <input
                               type="url"
                               value={skill.certificationDocumentUrl}
@@ -906,7 +909,7 @@ export default function ProviderOnboardingPage() {
                                 newData[index].certificationDocumentUrl = e.target.value
                                 setStep3Data(newData)
                               }}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                               placeholder="https://example.com/certificate.pdf"
                             />
                           </div>
@@ -935,7 +938,14 @@ export default function ProviderOnboardingPage() {
                     disabled={submitting || step3Data.length === 0 || step3Data.some(s => !s.skillId || s.experienceYears === 0)}
                     className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? 'Saving...' : 'Continue'}
+                    {submitting ? (
+                      <span className="flex items-center gap-2">
+                        <ButtonLoader />
+                        Saving...
+                      </span>
+                    ) : (
+                      'Continue'
+                    )}
                   </button>
                 </div>
               </div>
@@ -1010,13 +1020,13 @@ export default function ProviderOnboardingPage() {
 
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               City <span className="text-red-500">*</span>
                             </label>
                             <select
                               value={area.cityId}
                               onChange={(e) => handleCityChange(Number(e.target.value), index)}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                             >
                               <option value={0}>Select City</option>
                               {cities.map((city) => (
@@ -1025,7 +1035,7 @@ export default function ProviderOnboardingPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               Zone <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -1041,7 +1051,7 @@ export default function ProviderOnboardingPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               POD <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -1061,7 +1071,7 @@ export default function ProviderOnboardingPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold mb-2 text-neutral-textPrimary">
+                            <label className="block text-sm font-semibold mb-2 text-white">
                               Service Radius (Km) <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -1074,7 +1084,7 @@ export default function ProviderOnboardingPage() {
                                 newData[index].serviceRadiusKm = Number(e.target.value)
                                 setStep4Data(newData)
                               }}
-                              className="w-full px-4 py-3 border-2 border-neutral-border rounded-xl focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
+                              className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder:text-white/50 focus:outline-none focus:border-primary-main focus:ring-4 focus:ring-primary-main/20 transition-all"
                               placeholder="Service radius in km"
                             />
                           </div>
@@ -1121,7 +1131,14 @@ export default function ProviderOnboardingPage() {
                     disabled={submitting || step4Data.length === 0 || step4Data.some(a => !a.cityId || !a.zoneId || !a.podId)}
                     className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? 'Saving...' : 'Continue'}
+                    {submitting ? (
+                      <span className="flex items-center gap-2">
+                        <ButtonLoader />
+                        Saving...
+                      </span>
+                    ) : (
+                      'Continue'
+                    )}
                   </button>
                 </div>
               </div>
@@ -1197,9 +1214,16 @@ export default function ProviderOnboardingPage() {
                   <button
                     onClick={handleStep5Submit}
                     disabled={submitting || !step5Data.bio || step5Data.bio.length < 20 || step5Data.experienceYears === 0}
-                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
-                    {submitting ? 'Submitting...' : 'Complete Onboarding'}
+                    {submitting ? (
+                      <>
+                        <ButtonLoader />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Complete Onboarding'
+                    )}
                   </button>
                 </div>
               </div>
