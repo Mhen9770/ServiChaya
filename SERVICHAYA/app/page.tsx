@@ -51,13 +51,13 @@ import {
   Cable,
   Battery,
   Power,
-  Pipe,
-  Saw,
+  Wrench as PipeIcon,
+  Scissors as SawIcon,
   Drill,
   HardHat,
   Brush,
   Palette,
-  Spray,
+  Droplet as SprayIcon,
   Car as CarIcon,
   Bike,
   Truck,
@@ -120,7 +120,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
     return Droplets // Water droplets for plumbing
   }
   if (code.includes('CARPENTRY') || code.includes('CARPENTER') || name.includes('CARPENT')) {
-    return Saw // Saw for carpentry
+    return SawIcon // Saw for carpentry
   }
   if (code.includes('PAINTING') || code.includes('PAINTER') || name.includes('PAINT')) {
     return Paintbrush // Paintbrush for painting
@@ -147,7 +147,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
     return Cable // Cable for wiring
   }
   if (code.includes('PIPE') || name.includes('PIPE')) {
-    return Pipe // Pipe for plumbing pipes
+    return PipeIcon // Pipe for plumbing pipes
   }
   if (code.includes('FAUCET') || name.includes('FAUCET') || name.includes('TAP')) {
     return Droplets // Water droplets for faucet
@@ -183,7 +183,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
     return SparklesIcon // Sparkles for vacuum cleaning
   }
   if (code.includes('SPRAY') || name.includes('SPRAY')) {
-    return Spray // Spray icon
+    return SprayIcon // Spray icon
   }
   
   // Check by categoryType as fallback
@@ -194,7 +194,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
     return Droplets
   }
   if (categoryType === 'CARPENTRY') {
-    return Saw
+    return SawIcon
   }
   if (categoryType === 'PAINTING') {
     return Paintbrush
@@ -1226,7 +1226,7 @@ export default function HomePage() {
                   <ul className="space-y-3 text-sm text-slate-400">
                     {section.links.map((link) => (
                       <li key={link.label}>
-                        {link.onClick ? (
+                        {'onClick' in link && link.onClick ? (
                           <button
                             onClick={link.onClick}
                             className="hover:text-primary-light transition-colors flex items-center gap-2 group"

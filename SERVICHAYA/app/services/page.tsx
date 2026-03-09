@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -31,7 +31,7 @@ import { PageLoader, ContentLoader } from '@/components/ui/Loader'
 import {
   Snowflake,
   Droplets,
-  Saw,
+  Scissors as Saw,
   Paintbrush,
   Sparkles as SparklesIcon,
   Car as CarIcon,
@@ -40,10 +40,10 @@ import {
   Fan,
   Lightbulb,
   Cable,
-  Pipe,
+  Wrench as Pipe,
   Drill,
   HardHat,
-  Spray,
+  Droplet as Spray,
   Cog,
   Cpu,
   Monitor,
@@ -164,7 +164,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
   return Wrench
 }
 
-export default function ServicesPage() {
+function ServicesPageContent() {
   const searchParams = useSearchParams()
   const categoryId = searchParams.get('category')
   
@@ -509,5 +509,13 @@ export default function ServicesPage() {
         </section>
       </main>
     </div>
+  )
+}
+
+export default function ServicesPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading services..." />}>
+      <ServicesPageContent />
+    </Suspense>
   )
 }

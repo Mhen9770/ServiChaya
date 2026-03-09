@@ -17,33 +17,40 @@ interface DataTableProps<T> {
   onSort?: (key: string, direction: 'asc' | 'desc') => void
   sortKey?: string
   sortDirection?: 'asc' | 'desc'
+  currentSortKey?: string
+  currentSortDirection?: 'asc' | 'desc'
   loading?: boolean
   emptyMessage?: string
   onRowClick?: (item: T) => void
 }
 
-export default function DataTable<T extends { id: number | string }>({
+export default function DataTable<T extends { id?: number | string }>({
   data,
   columns,
   onSort,
   sortKey,
   sortDirection,
+  currentSortKey,
+  currentSortDirection,
   loading = false,
   emptyMessage = 'No data available',
   onRowClick
 }: DataTableProps<T>) {
+  // Support both prop names for backward compatibility
+  const activeSortKey = currentSortKey ?? sortKey
+  const activeSortDirection = currentSortDirection ?? sortDirection
   const handleSort = (key: string) => {
     if (!onSort || !columns.find(c => c.key === key)?.sortable) return
     
-    const newDirection = sortKey === key && sortDirection === 'asc' ? 'desc' : 'asc'
+    const newDirection = activeSortKey === key && activeSortDirection === 'asc' ? 'desc' : 'asc'
     onSort(key, newDirection)
   }
-
+  
   const getSortIcon = (key: string) => {
-    if (sortKey !== key) {
+    if (activeSortKey !== key) {
       return <ArrowUpDown className="w-3.5 h-3.5 text-neutral-textSecondary" />
     }
-    return sortDirection === 'asc' 
+    return activeSortDirection === 'asc' 
       ? <ArrowUp className="w-3.5 h-3.5 text-primary-main" />
       : <ArrowDown className="w-3.5 h-3.5 text-primary-main" />
   }
@@ -95,9 +102,9 @@ export default function DataTable<T extends { id: number | string }>({
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-border">
-            {data.map((item) => (
+            {data.map((item, index) => (
               <tr
-                key={item.id}
+                key={item.id ?? `row-${index}`}
                 onClick={() => onRowClick?.(item)}
                 className={`hover:bg-neutral-background transition-colors ${
                   onRowClick ? 'cursor-pointer' : ''

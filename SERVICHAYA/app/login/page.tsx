@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -20,9 +20,9 @@ import {
 } from 'lucide-react'
 import { sendOtp, verifyOtp, googleAuth } from '@/lib/auth'
 import { toast } from 'react-hot-toast'
-import { ButtonLoader } from '@/components/ui/Loader'
+import { ButtonLoader, PageLoader } from '@/components/ui/Loader'
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [mobile, setMobile] = useState('')
@@ -472,5 +472,13 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading..." />}>
+      <LoginPageContent />
+    </Suspense>
   )
 }

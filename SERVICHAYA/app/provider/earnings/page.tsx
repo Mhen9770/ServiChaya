@@ -48,7 +48,7 @@ export default function ProviderEarningsPage() {
       const status = await getOnboardingStatus(userId)
       if (!status.onboardingCompleted || status.profileStatus !== 'ACTIVE') {
         if (status.profileStatus === 'PENDING_VERIFICATION') {
-          toast.info('Your profile is pending verification')
+          toast('Your profile is pending verification')
         } else {
           router.push('/provider/onboarding')
         }

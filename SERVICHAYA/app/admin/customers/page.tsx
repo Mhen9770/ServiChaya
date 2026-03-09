@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
+import { PageLoader } from '@/components/ui/Loader'
 import Loader from '@/components/ui/Loader'
 import Pagination from '@/components/ui/Pagination'
 import FilterBar from '@/components/ui/FilterBar'
@@ -25,7 +26,7 @@ interface CustomerDto {
   isActive: boolean
 }
 
-export default function AdminCustomersPage() {
+function AdminCustomersPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [customers, setCustomers] = useState<CustomerDto[]>([])
@@ -255,5 +256,13 @@ export default function AdminCustomersPage() {
         </motion.div>
       )}
     </div>
+  )
+}
+
+export default function AdminCustomersPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading customers..." />}>
+      <AdminCustomersPageContent />
+    </Suspense>
   )
 }

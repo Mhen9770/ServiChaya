@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -19,7 +19,7 @@ declare global {
   }
 }
 
-export default function CustomerPaymentPage() {
+function CustomerPaymentPageContent() {
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -196,7 +196,7 @@ export default function CustomerPaymentPage() {
           prefill: {
             name: getCurrentUser()?.name || '',
             email: getCurrentUser()?.email || '',
-            contact: getCurrentUser()?.mobile || '',
+            contact: getCurrentUser()?.mobileNumber || '',
           },
           theme: {
             color: '#2563EB',
@@ -470,5 +470,13 @@ export default function CustomerPaymentPage() {
         </div>
       </div>
     </>
+  )
+}
+
+export default function CustomerPaymentPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading payment..." />}>
+      <CustomerPaymentPageContent />
+    </Suspense>
   )
 }

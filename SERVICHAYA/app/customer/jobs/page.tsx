@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -10,9 +10,9 @@ import { getCurrentUser } from '@/lib/auth'
 import { getCustomerJobs, type JobDto } from '@/lib/services/job'
 import FilterBar from '@/components/ui/FilterBar'
 import Pagination from '@/components/ui/Pagination'
-import { PageLoader, ContentLoader, ButtonLoader, Loader } from '@/components/ui/Loader'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 
-export default function CustomerJobsPage() {
+function CustomerJobsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -221,5 +221,13 @@ export default function CustomerJobsPage() {
         />
       </div>
     </div>
+  )
+}
+
+export default function CustomerJobsPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading jobs..." />}>
+      <CustomerJobsPageContent />
+    </Suspense>
   )
 }

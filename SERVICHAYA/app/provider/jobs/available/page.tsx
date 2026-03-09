@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getAvailableJobsForProvider, acceptJob, type ProviderMatchDto } from '@/lib/services/matching'
 import { getOnboardingStatus } from '@/lib/services/provider'
 import { toast } from 'react-hot-toast'
-import {PageLoader ,Loader, ContentLoader, ButtonLoader} from '@/components/ui/Loader'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { RefreshCw, ClipboardList, AlertCircle, Calendar, DollarSign, MapPin, CheckCircle2, Eye, TrendingUp, Clock } from 'lucide-react'
 import { motion } from 'framer-motion'
 

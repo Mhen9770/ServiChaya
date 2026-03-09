@@ -1,10 +1,10 @@
 import api from '../api'
 
 export interface PlatformStatsDto {
-  verifiedProviders: number | Long
-  completedJobs: number | Long
+  verifiedProviders: number
+  completedJobs: number
   averageRating: number | string
-  citiesCovered: number | Long
+  citiesCovered: number
 }
 
 export interface FeaturedServiceDto {

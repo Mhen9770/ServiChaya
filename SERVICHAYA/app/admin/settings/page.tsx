@@ -188,9 +188,9 @@ export default function AdminSettingsPage() {
                             const value = field.type === 'number' ? Number(e.target.value) : e.target.value
                             setSettings({ ...settings, [field.key]: value })
                           }}
-                          placeholder={field.placeholder}
-                          min={field.min}
-                          max={field.max}
+                          placeholder={'placeholder' in field ? field.placeholder : ''}
+                          min={'min' in field ? field.min : undefined}
+                          max={'max' in field ? field.max : undefined}
                           className="w-full px-4 py-2.5 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
                         />
                       </>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAllJobs, type JobDto } from '@/lib/services/job'
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
-export default function AdminJobsPage() {
+function AdminJobsPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [jobs, setJobs] = useState<JobDto[]>([])
@@ -382,5 +382,13 @@ export default function AdminJobsPage() {
         </motion.div>
       )}
     </div>
+  )
+}
+
+export default function AdminJobsPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading jobs..." />}>
+      <AdminJobsPageContent />
+    </Suspense>
   )
 }

@@ -22,13 +22,17 @@ export function SkeletonCard() {
   )
 }
 
-export function SkeletonTable() {
+export function SkeletonTable({ rows = 5, cols = 5 }: { rows?: number; cols?: number } = {}) {
   return (
     <div className="bg-white rounded-2xl border border-neutral-border overflow-hidden">
       <div className="animate-pulse">
-        {[1, 2, 3, 4, 5].map((i) => (
+        {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="border-b border-neutral-border last:border-0">
-            <div className="h-14 bg-neutral-background" />
+            <div className="h-14 bg-neutral-background grid gap-4 px-4" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+              {Array.from({ length: cols }).map((_, j) => (
+                <div key={j} className="h-4 bg-neutral-background/50 rounded" />
+              ))}
+            </div>
           </div>
         ))}
       </div>

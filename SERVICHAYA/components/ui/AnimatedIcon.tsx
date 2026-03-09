@@ -36,9 +36,9 @@ export default function AnimatedIcon({
         scale: [1, 1.1, 1]
       },
       transition: {
-        y: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
-        rotate: { duration: 3, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" },
-        scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+        y: { duration: 2.5, repeat: Infinity, ease: "easeInOut" as const },
+        rotate: { duration: 3, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" as const },
+        scale: { duration: 2, repeat: Infinity, ease: "easeInOut" as const }
       }
     },
     pulse: {
@@ -49,7 +49,7 @@ export default function AnimatedIcon({
       transition: {
         duration: 2,
         repeat: Infinity,
-        ease: "easeInOut"
+        ease: "easeInOut" as const
       }
     },
     rotate: {
@@ -59,7 +59,7 @@ export default function AnimatedIcon({
       transition: {
         duration: 3,
         repeat: Infinity,
-        ease: "linear"
+        ease: "linear" as const
       }
     },
     bounce: {
@@ -70,7 +70,7 @@ export default function AnimatedIcon({
       transition: {
         duration: 1.5,
         repeat: Infinity,
-        ease: "easeInOut"
+        ease: "easeInOut" as const
       }
     },
     glow: {
@@ -81,7 +81,7 @@ export default function AnimatedIcon({
       transition: {
         duration: 2,
         repeat: Infinity,
-        ease: "easeInOut"
+        ease: "easeInOut" as const
       }
     }
   }
@@ -99,7 +99,7 @@ export default function AnimatedIcon({
       ) : iconContent ? (
         <span className={`${sizeClasses[size]} ${color} text-4xl`}>{iconContent}</span>
       ) : (
-        <div className={`${sizeClasses[size]} ${color}`}>{icon}</div>
+        <div className={`${sizeClasses[size]} ${color}`}>{icon as ReactNode}</div>
       )}
       {animationType === 'glow' && (
         <motion.div

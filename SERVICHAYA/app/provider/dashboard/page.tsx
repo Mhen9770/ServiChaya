@@ -10,7 +10,7 @@ import { getEarningsSummary } from '@/lib/services/payment'
 import { getUnreadCount } from '@/lib/services/notification'
 import { getAvailableJobsForProvider } from '@/lib/services/matching'
 import { toast } from 'react-hot-toast'
-import {PageLoader ,Loader, ContentLoader, ButtonLoader} from '@/components/ui/Loader'
+import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { 
   Clock, FileText, CheckCircle2, ArrowRight, ClipboardList, 

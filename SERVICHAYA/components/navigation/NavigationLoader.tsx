@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import Loader from '@/components/ui/Loader'
 
 let navigationTimeout: NodeJS.Timeout | null = null
 
-export function NavigationLoader() {
+function NavigationLoaderContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isNavigating, setIsNavigating] = useState(false)
@@ -50,5 +50,13 @@ export function NavigationLoader() {
         }
       `}</style>
     </div>
+  )
+}
+
+export function NavigationLoader() {
+  return (
+    <Suspense fallback={null}>
+      <NavigationLoaderContent />
+    </Suspense>
   )
 }

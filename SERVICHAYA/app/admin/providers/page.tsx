@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getProviders, type ProviderDto } from '@/lib/services/admin'
@@ -13,7 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton'
 import { Eye, CheckCircle2, X, Star, Phone, Mail, Building2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
-export default function AdminProvidersPage() {
+function AdminProvidersPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [providers, setProviders] = useState<ProviderDto[]>([])
@@ -273,5 +273,13 @@ export default function AdminProvidersPage() {
         </motion.div>
       )}
     </div>
+  )
+}
+
+export default function AdminProvidersPage() {
+  return (
+    <Suspense fallback={<PageLoader text="Loading providers..." />}>
+      <AdminProvidersPageContent />
+    </Suspense>
   )
 }

@@ -299,7 +299,7 @@ export default function ProviderEarningConfigPage() {
           transition={{ duration: 0.3, delay: 0.1 }}
         >
           <DataTable
-            data={configs}
+            data={configs.filter((c): c is typeof c & { id: number } => c.id !== undefined)}
             columns={columns}
             onSort={() => {}}
           />

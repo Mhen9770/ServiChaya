@@ -48,7 +48,7 @@ function SidebarItem({ item, pathname }: { item: SidebarItem; pathname: string }
             className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
           />
         </button>
-        {isExpanded && (
+        {isExpanded && item.children && (
           <div className="ml-4 mt-2 space-y-1 border-l-2 border-white/10 pl-4">
             {item.children.map((child) => {
               const isChildActive = pathname === child.href || pathname.startsWith(child.href + '/')

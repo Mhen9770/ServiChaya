@@ -374,10 +374,10 @@ export default function ProviderJobDetailsPage() {
                     <div className="text-neutral-textSecondary mb-1">Completed</div>
                     <div className="font-semibold text-accent-green">{customer.completedJobs}</div>
                   </div>
-                  {customer.averageRating > 0 && (
+                  {(customer.averageRating ?? 0) > 0 && (
                     <div>
                       <div className="text-neutral-textSecondary mb-1">Avg Rating</div>
-                      <div className="font-semibold text-neutral-textPrimary">{customer.averageRating.toFixed(1)}</div>
+                      <div className="font-semibold text-neutral-textPrimary">{(customer.averageRating ?? 0).toFixed(1)}</div>
                     </div>
                   )}
                 </div>
