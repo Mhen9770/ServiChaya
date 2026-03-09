@@ -196,6 +196,84 @@ export default function ProviderJobDetailsPage() {
     }
   }
 
+  const statusSteps = [
+    { key: 'PENDING', label: 'Request Created', description: 'Customer raised the service request' },
+    { key: 'MATCHED', label: 'Matched to You', description: 'You have been matched to this job' },
+    { key: 'ACCEPTED', label: 'Accepted by You', description: 'You confirmed you will take this job' },
+    { key: 'IN_PROGRESS', label: 'Work In Progress', description: 'You are working on this job' },
+    { key: 'PAYMENT_PENDING', label: 'Payment Pending', description: 'Waiting for customer payment' },
+    { key: 'COMPLETED', label: 'Completed', description: 'Job completed and closed' },
+    { key: 'CANCELLED', label: 'Cancelled', description: 'Job was cancelled' },
+  ]
+
+  const getStepIndex = (status: string) => {
+    return statusSteps.findIndex((s) => s.key === status)
+  }
+
+  const currentStepIndex = getStepIndex(job?.status || '')
+
+  const getStepDetails = (key: string): { label: string; value: string }[] => {
+    if (!job) return []
+    const details: { label: string; value: string }[] = []
+
+    switch (key) {
+      case 'PENDING':
+        details.push(
+          { label: 'Created at', value: new Date(job.createdAt).toLocaleString() },
+          { label: 'Job code', value: job.jobCode },
+          job.estimatedBudget
+            ? { label: 'Estimated budget', value: `₹${job.estimatedBudget.toLocaleString()}` }
+            : { label: 'Estimated budget', value: 'Not specified' },
+        )
+        break
+      case 'MATCHED':
+        details.push({ label: 'Matched to you', value: 'Assigned based on your skills & location' })
+        break
+      case 'ACCEPTED':
+        if (job.acceptedAt) {
+          details.push({ label: 'Accepted at', value: new Date(job.acceptedAt).toLocaleString() })
+        }
+        details.push({ label: 'Next step', value: 'Travel to customer and start work' })
+        break
+      case 'IN_PROGRESS':
+        if (job.startedAt) {
+          details.push({ label: 'Started at', value: new Date(job.startedAt).toLocaleString() })
+        }
+        if (job.finalPrice) {
+          details.push({ label: 'Expected final price', value: `₹${job.finalPrice.toLocaleString()}` })
+        } else if (job.estimatedBudget) {
+          details.push({ label: 'Estimated budget', value: `₹${job.estimatedBudget.toLocaleString()}` })
+        }
+        break
+      case 'PAYMENT_PENDING':
+        if (paymentSchedule) {
+          details.push(
+            { label: 'Final amount', value: `₹${paymentSchedule.finalAmount.toLocaleString()}` },
+            { label: 'Payment status', value: paymentSchedule.paymentStatus },
+          )
+        }
+        break
+      case 'COMPLETED':
+        if (job.completedAt) {
+          details.push({ label: 'Completed at', value: new Date(job.completedAt).toLocaleString() })
+        }
+        if (job.finalPrice) {
+          details.push({ label: 'Final price', value: `₹${job.finalPrice.toLocaleString()}` })
+        }
+        if (paymentSchedule?.paymentStatus) {
+          details.push({ label: 'Payment status', value: paymentSchedule.paymentStatus })
+        }
+        break
+      case 'CANCELLED':
+        details.push({ label: 'Status', value: 'Cancelled – no further action required' })
+        break
+      default:
+        break
+    }
+
+    return details
+  }
+
   if (loading) {
     return <Loader fullScreen text="Loading job details..." />
   }
@@ -396,42 +474,212 @@ export default function ProviderJobDetailsPage() {
             <Clock className="w-5 h-5 text-primary-main" />
             Job Timeline
           </h2>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-textPrimary">Job Created</div>
-                <div className="text-xs text-neutral-textSecondary">{new Date(job.createdAt).toLocaleString()}</div>
+
+          {/* Horizontal timeline on desktop */}
+          <div className="hidden md:block">
+            <div className="relative pb-4">
+              <div className="absolute left-6 right-6 top-5 h-0.5 bg-neutral-border" />
+              <div
+                className="absolute left-6 top-5 h-0.5 bg-gradient-to-r from-primary-main to-primary-dark origin-left"
+                style={{
+                  width:
+                    currentStepIndex >= 0 && statusSteps.length > 1
+                      ? `${(currentStepIndex / (statusSteps.length - 1)) * 100}%`
+                      : '0%',
+                }}
+              />
+
+              <div className="grid md:grid-cols-4 lg:grid-cols-7 gap-4 mt-6">
+                {statusSteps.map((step, index) => {
+                  const isActive = index <= currentStepIndex && currentStepIndex >= 0
+                  const isCurrent = index === currentStepIndex
+                  const details = getStepDetails(step.key)
+
+                  return (
+                    <div key={step.key} className="flex flex-col items-center text-center gap-2">
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center border-2 text-xs font-semibold transition-all ${
+                          isCurrent
+                            ? 'bg-primary-main text-white border-primary-main shadow-md'
+                            : isActive
+                            ? 'bg-primary-main/10 text-primary-main border-primary-main/60'
+                            : 'bg-neutral-background text-neutral-textSecondary border-neutral-border'
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <p
+                        className={`text-[11px] font-semibold ${
+                          isCurrent
+                            ? 'text-primary-main'
+                            : isActive
+                            ? 'text-neutral-textPrimary'
+                            : 'text-neutral-textSecondary'
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                      <p className="text-[11px] text-neutral-textSecondary">{step.description}</p>
+                      {details.length > 0 && (
+                        <div className="mt-1 space-y-0.5 text-[10px] text-neutral-textSecondary">
+                          {details.map((d) => (
+                            <p key={d.label}>
+                              <span className="font-semibold text-neutral-textPrimary">{d.label}:</span> {d.value}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
-            {job.acceptedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">You Accepted</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.acceptedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-            {job.startedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-primary-main rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">Service Started</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.startedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-            {job.completedAt && (
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-accent-green rounded-full mt-1.5 flex-shrink-0"></div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-textPrimary">Service Completed</div>
-                  <div className="text-xs text-neutral-textSecondary">{new Date(job.completedAt).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
           </div>
+
+          {/* Vertical timeline on mobile */}
+          <div className="md:hidden">
+            <div className="relative">
+              <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-neutral-border" />
+              <div
+                className="absolute left-3 top-0 w-0.5 bg-gradient-to-b from-primary-main to-primary-dark"
+                style={{
+                  height:
+                    currentStepIndex >= 0 && statusSteps.length > 1
+                      ? `${(currentStepIndex / (statusSteps.length - 1)) * 100}%`
+                      : '0%',
+                }}
+              />
+
+              <div className="space-y-4">
+                {statusSteps.map((step, index) => {
+                  const isActive = index <= currentStepIndex && currentStepIndex >= 0
+                  const isCurrent = index === currentStepIndex
+                  const details = getStepDetails(step.key)
+
+                  return (
+                    <div key={step.key} className="relative flex items-start gap-3">
+                      <div
+                        className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center border-2 text-xs font-semibold transition-all ${
+                          isCurrent
+                            ? 'bg-primary-main text-white border-primary-main shadow-md'
+                            : isActive
+                            ? 'bg-primary-main/10 text-primary-main border-primary-main/60'
+                            : 'bg-neutral-background text-neutral-textSecondary border-neutral-border'
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 pt-0.5">
+                        <p
+                          className={`text-sm font-semibold ${
+                            isCurrent
+                              ? 'text-primary-main'
+                              : isActive
+                              ? 'text-neutral-textPrimary'
+                              : 'text-neutral-textSecondary'
+                          }`}
+                        >
+                          {step.label}
+                        </p>
+                        <p className="text-xs text-neutral-textSecondary mt-0.5">{step.description}</p>
+                        {details.length > 0 && (
+                          <div className="mt-1 space-y-0.5 text-[11px] text-neutral-textSecondary">
+                            {details.map((d) => (
+                              <p key={d.label}>
+                                <span className="font-semibold text-neutral-textPrimary">{d.label}:</span> {d.value}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
+          className="mb-6 bg-white rounded-2xl p-6 border border-neutral-border"
+        >
+          <h2 className="text-lg font-bold text-neutral-textPrimary mb-3 font-display">What should you do now?</h2>
+          <p className="text-xs text-neutral-textSecondary mb-3">
+            These suggestions are based on the current job status coming from the backend, so they always stay in sync
+            with the actual workflow.
+          </p>
+
+          {job.status === 'ACCEPTED' && (
+            <div className="p-4 rounded-xl bg-primary-main/5 border border-primary-main/20 text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Job is accepted. Next steps:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Contact the customer if you need any clarification before starting.</li>
+                <li>Reach the service location at the preferred time.</li>
+                <li>Tap <span className="font-semibold">“Start Job”</span> when you actually begin the work.</li>
+              </ul>
+            </div>
+          )}
+
+          {job.status === 'IN_PROGRESS' && (
+            <div className="p-4 rounded-xl bg-primary-main/5 border border-primary-main/20 text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Job is in progress. Remember:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Keep the customer informed about any extra work or changes in price.</li>
+                <li>Decide the final amount with the customer before closing the job.</li>
+                <li>
+                  When work is done, click <span className="font-semibold">“Complete Job”</span>, enter final price in
+                  ₹ and choose the correct payment channel (Cash / Online).
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {job.status === 'PAYMENT_PENDING' && (
+            <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Waiting for customer payment</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Customer has to complete the final payment from their side (online / cash as per flow).</li>
+                <li>You will see updated payment status here once backend confirms the payment.</li>
+                <li>Avoid doing additional unpaid work until payment status is updated to completed or partial.</li>
+              </ul>
+            </div>
+          )}
+
+          {job.status === 'COMPLETED' && (
+            <div className="p-4 rounded-xl bg-accent-green/10 border border-accent-green/30 text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Job is completed.</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Verify that payment status below is correct as per platform rules.</li>
+                <li>Customer may submit a review from their app; this will impact your rating.</li>
+                <li>Final earnings for this job will be reflected in your Earnings page.</li>
+              </ul>
+            </div>
+          )}
+
+          {job.status === 'CANCELLED' && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Job has been cancelled.</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>No further action is required on this job.</li>
+                <li>Check your notifications for cancellation reason if provided.</li>
+                <li>Focus on other active or available jobs in your dashboard.</li>
+              </ul>
+            </div>
+          )}
+
+          {job.status === 'PENDING' || job.status === 'MATCHED' ? (
+            <div className="p-4 rounded-xl bg-neutral-background border border-neutral-border text-sm text-neutral-textSecondary space-y-1.5">
+              <p className="font-semibold text-neutral-textPrimary">Job is not yet accepted.</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Review the job details, location and estimated budget carefully.</li>
+                <li>Only accept the job from your “Available Jobs” list when you are sure you can serve it.</li>
+                <li>After accepting, this screen will show you Start / Complete actions based on backend status.</li>
+              </ul>
+            </div>
+          ) : null}
         </motion.div>
 
         {paymentSchedule && (

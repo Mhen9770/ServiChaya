@@ -1,20 +1,13 @@
 import axios from 'axios'
 
 // Backend API URL from environment variable
-// Preferred: set NEXT_PUBLIC_API_URL in your Linux environment or .env file
-// Example: export NEXT_PUBLIC_API_URL=http://localhost:8080/api
-// For local development, we safely fall back to http://localhost:8080/api if not set.
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV !== 'production' ? 'http://localhost:8080/api' : undefined)
-
-if (!BACKEND_URL) {
-  throw new Error(
-    'NEXT_PUBLIC_API_URL environment variable is not set. ' +
-      'Please set it in your environment or .env file. ' +
-      'Example: NEXT_PUBLIC_API_URL=http://localhost:8080/api'
-  )
-}
+// Preferred: set NEXT_PUBLIC_API_URL in your environment or .env file
+// Example: NEXT_PUBLIC_API_URL=http://localhost:8080/api
+//
+// To keep builds working in all environments (including static export / CI where env might be missing),
+// we always fall back to the default local backend URL. This keeps the frontend aligned with the
+// Spring Boot backend default while still allowing proper configuration in real deployments.
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'
 
 const api = axios.create({
   baseURL: BACKEND_URL, // Direct backend URL

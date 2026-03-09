@@ -23,6 +23,9 @@ import {
   Phone,
   Mail,
   ExternalLink,
+  Circle,
+  Loader2,
+  TrendingUp,
 } from 'lucide-react'
 import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
@@ -239,9 +242,99 @@ export default function CustomerJobDetailsPage() {
     return Math.round((idx / (statusOrder.length - 1)) * 100)
   }, [job])
 
+  const statusSteps = [
+    { key: 'PENDING', label: 'Request Created', icon: Circle, description: 'Your request is submitted' },
+    { key: 'MATCHING', label: 'Finding Provider', icon: Loader2, description: 'Matching with professionals' },
+    { key: 'MATCHED', label: 'Provider Matched', icon: User, description: 'Provider assigned' },
+    { key: 'PENDING_FOR_PAYMENT', label: 'Payment Due', icon: CreditCard, description: 'Upfront payment required' },
+    { key: 'ACCEPTED', label: 'Accepted', icon: CheckCircle2, description: 'Provider accepted job' },
+    { key: 'IN_PROGRESS', label: 'In Progress', icon: TrendingUp, description: 'Work is underway' },
+    { key: 'PAYMENT_PENDING', label: 'Final Payment', icon: CreditCard, description: 'Complete payment' },
+    { key: 'COMPLETED', label: 'Completed', icon: CheckCircle2, description: 'Job finished' },
+  ]
+
+  const getStatusStepIndex = (status: string) => {
+    return statusSteps.findIndex(step => step.key === status)
+  }
+
+  const currentStepIndex = useMemo(() => getStatusStepIndex(job?.status || ''), [job?.status])
+
+  const getStepDetails = (key: string): { label: string; value: string }[] => {
+    if (!job) return []
+    const details: { label: string; value: string }[] = []
+
+    switch (key) {
+      case 'PENDING':
+        details.push(
+          { label: 'Created at', value: new Date(job.createdAt).toLocaleString() },
+          { label: 'Requested by', value: `Customer ID ${job.customerId}` },
+          { label: 'Estimated budget', value: job.estimatedBudget ? `₹${job.estimatedBudget.toLocaleString()}` : 'Not specified' },
+        )
+        break
+      case 'MATCHING':
+        details.push({ label: 'Matching window', value: 'Searching nearest verified providers' })
+        break
+      case 'MATCHED':
+        if (provider) {
+          details.push(
+            { label: 'Provider', value: provider.businessName || provider.providerType },
+            { label: 'Jobs completed', value: `${provider.totalJobsCompleted || 0}` },
+            { label: 'Rating', value: typeof provider.rating === 'number' ? `${provider.rating.toFixed(1)}/5` : 'N/A' },
+          )
+        }
+        break
+      case 'PENDING_FOR_PAYMENT':
+        if (payment) {
+          details.push(
+            { label: 'Upfront amount', value: `₹${(payment.upfrontAmount || 0).toLocaleString()}` },
+            { label: 'Total job amount', value: `₹${(payment.totalAmount || 0).toLocaleString()}` },
+          )
+        }
+        break
+      case 'ACCEPTED':
+        if (job.acceptedAt) {
+          details.push({ label: 'Accepted at', value: new Date(job.acceptedAt).toLocaleString() })
+        }
+        break
+      case 'IN_PROGRESS':
+        if (job.startedAt) {
+          details.push({ label: 'Started at', value: new Date(job.startedAt).toLocaleString() })
+        }
+        break
+      case 'PAYMENT_PENDING':
+        if (payment) {
+          details.push(
+            { label: 'Final amount due', value: `₹${(payment.finalAmount || 0).toLocaleString()}` },
+            { label: 'Payment status', value: payment.paymentStatus },
+          )
+        }
+        break
+      case 'COMPLETED':
+        if (job.completedAt) {
+          details.push({ label: 'Completed at', value: new Date(job.completedAt).toLocaleString() })
+        }
+        if (payment?.finalPaid) {
+          details.push({ label: 'Final payment', value: 'Received' })
+        }
+        details.push({ label: 'Review', value: review ? 'Submitted' : 'Pending' })
+        break
+      default:
+        break
+    }
+
+    return details
+  }
+
   if (loading) return <PageLoader text="Loading request details..." />
   if (!job) {
-    return <div className="px-6 py-6 text-white">Request not found. <Link href="/customer/jobs" className="text-primary-light hover:underline">Back to requests</Link></div>
+    return (
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 text-white">
+        Request not found.{' '}
+        <Link href="/customer/jobs" className="text-primary-light hover:underline">
+          Back to requests
+        </Link>
+      </div>
+    )
   }
 
   const canCancel = ['PENDING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS', 'PENDING_FOR_PAYMENT'].includes(job.status)
@@ -259,7 +352,7 @@ export default function CustomerJobDetailsPage() {
   const canReview = job.status === 'COMPLETED' && !review
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -307,6 +400,155 @@ export default function CustomerJobDetailsPage() {
           </motion.div>
         </div>
       </motion.section>
+
+      {/* Status Timeline */}
+      <motion.article
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl glass-dark border border-white/10 p-6"
+      >
+        <h2 className="font-bold text-lg mb-5 text-white">Job Status Timeline</h2>
+
+        {/* Horizontal layout for larger screens */}
+        <div className="hidden md:block">
+          <div className="relative pb-8">
+            {/* Progress line */}
+            <div className="absolute left-4 right-4 top-4 h-0.5 bg-white/10" />
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="absolute left-4 top-4 h-0.5 bg-gradient-to-r from-primary-main to-primary-light origin-left"
+              style={{ width: `${(currentStepIndex / (statusSteps.length - 1)) * 100}%` }}
+            />
+
+            <div className="grid md:grid-cols-4 lg:grid-cols-8 gap-4 mt-6">
+              {statusSteps.map((step, index) => {
+                const StepIcon = step.icon
+                const isActive = index <= currentStepIndex
+                const isCurrent = index === currentStepIndex
+                const details = getStepDetails(step.key)
+
+                return (
+                  <div key={step.key} className="flex flex-col items-center text-center gap-2">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        isCurrent
+                          ? 'bg-primary-main border-primary-light shadow-lg shadow-primary-main/50'
+                          : isActive
+                          ? 'bg-primary-main/20 border-primary-main'
+                          : 'bg-white/5 border-white/20'
+                      }`}
+                    >
+                      <StepIcon
+                        className={`w-4 h-4 ${
+                          isCurrent ? 'text-white' : isActive ? 'text-primary-light' : 'text-slate-400'
+                        }`}
+                      />
+                    </motion.div>
+                    <p
+                      className={`text-[11px] font-semibold ${
+                        isCurrent ? 'text-primary-light' : isActive ? 'text-white' : 'text-slate-400'
+                      }`}
+                    >
+                      {step.label}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{step.description}</p>
+                    {details.length > 0 && (
+                      <div className="mt-1 space-y-0.5 text-[10px] text-slate-400">
+                        {details.map((d) => (
+                          <p key={d.label}>
+                            <span className="font-semibold text-slate-300">{d.label}:</span> {d.value}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Vertical layout for mobile */}
+        <div className="md:hidden">
+          <div className="relative">
+            {/* Progress line */}
+            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-white/10" />
+            <motion.div
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="absolute left-4 top-0 w-0.5 bg-gradient-to-b from-primary-main to-primary-light"
+              style={{ height: `${(currentStepIndex / (statusSteps.length - 1)) * 100}%` }}
+            />
+
+            <div className="space-y-4">
+              {statusSteps.map((step, index) => {
+                const StepIcon = step.icon
+                const isActive = index <= currentStepIndex
+                const isCurrent = index === currentStepIndex
+                const details = getStepDetails(step.key)
+
+                return (
+                  <div key={step.key} className="relative flex items-start gap-4">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                        isCurrent
+                          ? 'bg-primary-main border-primary-light shadow-lg shadow-primary-main/50'
+                          : isActive
+                          ? 'bg-primary-main/20 border-primary-main'
+                          : 'bg-white/5 border-white/20'
+                      }`}
+                    >
+                      <StepIcon
+                        className={`w-4 h-4 ${
+                          isCurrent ? 'text-white' : isActive ? 'text-primary-light' : 'text-slate-400'
+                        }`}
+                      />
+                    </motion.div>
+                    <div className="flex-1 pt-1">
+                      <p
+                        className={`font-semibold text-sm ${
+                          isCurrent ? 'text-primary-light' : isActive ? 'text-white' : 'text-slate-400'
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">{step.description}</p>
+                      {details.length > 0 && (
+                        <div className="mt-1 space-y-0.5 text-[11px] text-slate-400">
+                          {details.map((d) => (
+                            <p key={d.label}>
+                              <span className="font-semibold text-slate-300">{d.label}:</span> {d.value}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {isCurrent && job && (
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-main/20 border border-primary-main/30 text-xs text-primary-light"
+                        >
+                          <Clock className="w-3 h-3" />
+                          Current step
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </motion.article>
 
       <section className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
@@ -364,7 +606,6 @@ export default function CustomerJobDetailsPage() {
                   <CheckCircle2 className="w-4 h-4 text-accent-green" /> Jobs done: {provider.totalJobsCompleted || 0}
                 </p>
               </div>
-              {/* Contact options can be added when provider contact info is available in the DTO */}
             </motion.article>
           )}
 
@@ -476,6 +717,39 @@ export default function CustomerJobDetailsPage() {
             className="rounded-2xl glass-dark border border-white/10 p-6"
           >
             <h2 className="font-bold text-lg mb-3 text-white">Actions</h2>
+            
+            {/* Status-based guidance */}
+            {job.status === 'PENDING' && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-400/30">
+                <p className="text-xs text-amber-200 font-medium mb-1">⏳ What's next?</p>
+                <p className="text-xs text-amber-100">We're matching your request with verified providers. You'll be notified when a provider accepts.</p>
+              </div>
+            )}
+            {job.status === 'MATCHED' && (
+              <div className="mb-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-400/30">
+                <p className="text-xs text-indigo-200 font-medium mb-1">✅ Provider matched</p>
+                <p className="text-xs text-indigo-100">A provider has been assigned. They'll accept and start work soon.</p>
+              </div>
+            )}
+            {job.status === 'IN_PROGRESS' && (
+              <div className="mb-4 p-3 rounded-lg bg-primary-main/10 border border-primary-main/30">
+                <p className="text-xs text-primary-light font-medium mb-1">🔧 Work in progress</p>
+                <p className="text-xs text-slate-200">Your service is being completed. Track updates in real-time.</p>
+              </div>
+            )}
+            {canPay && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-400/30">
+                <p className="text-xs text-yellow-200 font-medium mb-1">💳 Payment required</p>
+                <p className="text-xs text-yellow-100">Complete payment to proceed with your service.</p>
+              </div>
+            )}
+            {canReview && (
+              <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-400/30">
+                <p className="text-xs text-emerald-200 font-medium mb-1">⭐ Share your experience</p>
+                <p className="text-xs text-emerald-100">Help us improve by rating your service experience.</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               {canCancel && (
                 <motion.button
@@ -521,7 +795,10 @@ export default function CustomerJobDetailsPage() {
                 </motion.button>
               )}
               {!canCancel && !canPay && !canReview && (
-                <p className="text-sm text-slate-300 text-center py-4">No actions available at this time</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-300 mb-1">No actions available</p>
+                  <p className="text-xs text-slate-400">All steps completed for this request.</p>
+                </div>
               )}
             </div>
           </motion.article>
@@ -545,32 +822,99 @@ export default function CustomerJobDetailsPage() {
 
       {showReviewModal && (
         <Modal title="Submit review" onClose={() => setShowReviewModal(false)}>
-          <label className="block text-sm font-semibold mb-1 text-white">Overall rating (1-5)</label>
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={reviewData.rating}
-            onChange={(e) => setReviewData((prev) => ({ ...prev, rating: Number(e.target.value) }))}
-            className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm mb-3 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 focus:border-primary-main/50"
-          />
-          <label className="block text-sm font-semibold mb-1 text-white">Feedback</label>
-          <textarea
-            rows={4}
-            value={reviewData.reviewText}
-            onChange={(e) => setReviewData((prev) => ({ ...prev, reviewText: e.target.value }))}
-            className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm mb-4 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 focus:border-primary-main/50"
-            placeholder="Write your experience with service quality, punctuality and communication"
-          />
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={submitReview} 
-            disabled={actionLoading} 
-            className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
-          >
-            {actionLoading ? 'Submitting...' : 'Submit review'}
-          </motion.button>
+          <div className="space-y-5">
+            {/* Star Rating */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-white">Overall rating</label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <motion.button
+                    key={star}
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setReviewData((prev) => ({ ...prev, rating: star }))}
+                    className="focus:outline-none"
+                  >
+                    <Star
+                      className={`w-8 h-8 transition-colors ${
+                        star <= reviewData.rating
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'fill-slate-600 text-slate-600'
+                      }`}
+                    />
+                  </motion.button>
+                ))}
+                <span className="ml-2 text-sm text-slate-300">{reviewData.rating}/5</span>
+              </div>
+            </div>
+
+            {/* Detailed Ratings */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'qualityRating', label: 'Quality' },
+                { key: 'punctualityRating', label: 'Punctuality' },
+                { key: 'communicationRating', label: 'Communication' },
+                { key: 'valueRating', label: 'Value for Money' },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium mb-1.5 text-slate-300">{label}</label>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <motion.button
+                        key={star}
+                        type="button"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setReviewData((prev) => ({ ...prev, [key]: star }))}
+                        className="focus:outline-none"
+                      >
+                        <Star
+                          className={`w-5 h-5 transition-colors ${
+                            star <= (reviewData[key as keyof typeof reviewData] as number)
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'fill-slate-600 text-slate-600'
+                          }`}
+                        />
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Feedback Text */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-white">Your feedback</label>
+              <textarea
+                rows={4}
+                value={reviewData.reviewText}
+                onChange={(e) => setReviewData((prev) => ({ ...prev, reviewText: e.target.value }))}
+                className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 focus:border-primary-main/50"
+                placeholder="Share your experience with service quality, punctuality, communication, and overall satisfaction..."
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                {reviewData.reviewText.length}/10 minimum characters
+              </p>
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={submitReview} 
+              disabled={actionLoading || reviewData.reviewText.trim().length < 10} 
+              className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+            >
+              {actionLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <ButtonLoader size="sm" />
+                  Submitting...
+                </span>
+              ) : (
+                'Submit review'
+              )}
+            </motion.button>
+          </div>
         </Modal>
       )}
     </div>

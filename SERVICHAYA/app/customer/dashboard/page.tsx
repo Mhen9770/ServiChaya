@@ -76,7 +76,7 @@ export default function CustomerDashboard() {
   ]
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.section 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -85,7 +85,7 @@ export default function CustomerDashboard() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-300">Customer Command Center</p>
-            <h1 className="text-3xl font-bold mt-2">Everything for your home services, in one place</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mt-2">Everything for your home services, in one place</h1>
             <p className="text-sm text-slate-300 mt-2">Track active jobs, spend, completion and next best actions without switching pages.</p>
           </div>
           <motion.div
@@ -183,23 +183,45 @@ export default function CustomerDashboard() {
                   transition={{ delay: index * 0.05 }}
                   whileHover={{ scale: 1.02, x: 5 }}
                 >
-                  <Link href={`/customer/jobs/${job.id}`} className="block rounded-xl border border-white/10 glass p-4 hover:border-primary-main/50 hover:bg-primary-main/10 transition-all group">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <p className="font-semibold text-white group-hover:text-primary-light transition-colors">{job.title}</p>
+                  <Link href={`/customer/jobs/${job.id}`} className="block rounded-xl border border-white/10 glass p-4 hover:border-primary-main/50 hover:bg-primary-main/10 transition-all group relative overflow-hidden">
+                    {/* Status indicator bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                      job.status === 'COMPLETED' ? 'bg-emerald-400' :
+                      job.status === 'IN_PROGRESS' || job.status === 'ACCEPTED' ? 'bg-primary-main' :
+                      job.status === 'MATCHED' ? 'bg-indigo-400' :
+                      job.status === 'PENDING' ? 'bg-amber-400' :
+                      'bg-slate-400'
+                    }`} />
+                    
+                    <div className="flex items-start justify-between gap-3 pl-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white group-hover:text-primary-light transition-colors line-clamp-1">{job.title}</p>
                         <p className="text-xs text-slate-300 mt-1">Code: {job.jobCode}</p>
-                        <div className="mt-2 flex items-center gap-3 text-xs text-slate-300">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
                           <span className="inline-flex items-center gap-1">
                             <MapPin className="w-3.5 h-3.5" />
-                            {job.addressLine1}
+                            <span className="truncate max-w-[120px]">{job.addressLine1}</span>
                           </span>
                           <span className="inline-flex items-center gap-1">
                             <Timer className="w-3.5 h-3.5" />
                             {new Date(job.preferredTime).toLocaleDateString()}
                           </span>
                         </div>
+                        {job.finalPrice || job.estimatedBudget ? (
+                          <p className="text-xs text-slate-400 mt-1.5">
+                            ₹{(job.finalPrice || job.estimatedBudget || 0).toLocaleString()}
+                          </p>
+                        ) : null}
                       </div>
-                      <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-primary-main/20 text-primary-light whitespace-nowrap border border-primary-main/30">{job.status}</span>
+                      <span className={`text-[10px] font-semibold rounded-full px-2.5 py-1 whitespace-nowrap border shrink-0 ${
+                        job.status === 'COMPLETED' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/60' :
+                        job.status === 'IN_PROGRESS' || job.status === 'ACCEPTED' ? 'bg-primary-main/15 text-primary-light border-primary-main/60' :
+                        job.status === 'MATCHED' ? 'bg-indigo-500/10 text-indigo-300 border-indigo-400/60' :
+                        job.status === 'PENDING' ? 'bg-amber-500/10 text-amber-300 border-amber-400/60' :
+                        'bg-slate-600/10 text-slate-200 border-slate-500/60'
+                      }`}>
+                        {job.status.replace('_', ' ')}
+                      </span>
                     </div>
                   </Link>
                 </motion.div>

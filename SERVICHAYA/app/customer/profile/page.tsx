@@ -62,10 +62,10 @@ export default function CustomerProfilePage() {
   }, [profile, name, imageUrl])
 
   if (loading) return <Loader fullScreen text="Loading profile..." />
-  if (!profile) return <div className="px-6 py-6 text-white">Profile not found.</div>
+  if (!profile) return <div className="w-full px-4 sm:px-6 lg:px-8 py-6 text-white">Profile not found.</div>
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.section 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

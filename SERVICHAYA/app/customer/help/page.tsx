@@ -44,14 +44,14 @@ const recommendedNext = [
 
 export default function CustomerHelpPage() {
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.section 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark border border-slate-800 text-white p-8"
       >
         <p className="text-xs uppercase tracking-wide text-slate-300">Customer Success Hub</p>
-        <h1 className="text-3xl font-bold mt-2">What we provide to customers</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2">What we provide to customers</h1>
         <p className="text-sm text-slate-300 mt-2 max-w-3xl">
           This page captures current customer features and the next business-ready capabilities to build a strong end-to-end service experience.
         </p>

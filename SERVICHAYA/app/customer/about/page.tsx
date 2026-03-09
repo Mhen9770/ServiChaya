@@ -31,14 +31,14 @@ const roadmap = [
 
 export default function CustomerAboutPage() {
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.section 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark text-white border border-slate-800 p-8"
       >
         <p className="text-xs uppercase tracking-wide text-slate-300">About ServiChaya</p>
-        <h1 className="text-3xl font-bold mt-2">Built for customer trust, speed and repeat satisfaction</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2">Built for customer trust, speed and repeat satisfaction</h1>
         <p className="text-sm text-slate-300 mt-3 max-w-3xl">
           ServiChaya is a customer-first home services marketplace where users can discover, evaluate and book professionals with confidence.
           We are product-led on quality, conversion and retention.

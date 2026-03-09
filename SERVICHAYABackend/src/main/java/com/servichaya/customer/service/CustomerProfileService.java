@@ -2,6 +2,7 @@ package com.servichaya.customer.service;
 
 import com.servichaya.customer.dto.AddressDto;
 import com.servichaya.customer.dto.CustomerProfileDto;
+import com.servichaya.customer.dto.UpdateCustomerProfileRequestDto;
 import com.servichaya.job.dto.JobDto;
 import com.servichaya.job.service.JobService;
 import com.servichaya.user.entity.UserAccount;
@@ -79,6 +80,37 @@ public class CustomerProfileService {
                 .averageRating(averageRating)
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    public CustomerProfileDto updateCustomerProfile(Long customerId, UpdateCustomerProfileRequestDto request) {
+        log.info("Updating customer profile for customerId: {}", customerId);
+
+        UserAccount user = userAccountRepository.findById(customerId)
+                .orElseThrow(() -> {
+                    log.error("Customer not found with id: {}", customerId);
+                    return new RuntimeException("Customer not found");
+                });
+
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            String name = request.getName().trim();
+            user.setFullName(name);
+
+            // Basic split into first/last name for better personalization
+            String[] parts = name.split(" ", 2);
+            user.setFirstName(parts[0]);
+            if (parts.length > 1) {
+                user.setLastName(parts[1]);
+            }
+        }
+
+        if (request.getProfileImageUrl() != null) {
+            user.setProfileImageUrl(request.getProfileImageUrl().trim());
+        }
+
+        userAccountRepository.save(user);
+
+        // Reuse existing mapping logic to return updated profile snapshot
+        return getCustomerProfile(customerId);
     }
 
     public Page<JobDto> getCustomerJobHistory(Long customerId, Pageable pageable) {

@@ -250,10 +250,11 @@ function CustomerPaymentPageContent() {
 
   if (!job) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-400" />
-          <p>Job not found</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center text-white rounded-2xl bg-white/5 border border-white/10 p-6">
+          <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-400" />
+          <p className="text-sm text-slate-200 mb-1">Job not found</p>
+          <p className="text-xs text-slate-400">Please go back to your requests and try again.</p>
         </div>
       </div>
     )
@@ -283,7 +284,7 @@ function CustomerPaymentPageContent() {
         onError={() => toast.error('Failed to load payment gateway')}
       />
       
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 py-6">
         <div className="max-w-2xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: -20 }}

@@ -39,11 +39,11 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-neutral-background to-white">
+    <div className="h-full bg-gradient-to-b from-neutral-background to-white overflow-hidden flex flex-col">
       <Header showUserMenu={true} />
-      <div className="flex">
+      <div className="flex-1 flex min-h-0">
         <AdminSidebar />
-        <main className="flex-1">
+        <main className="flex-1 overflow-y-auto min-h-0">
           {children}
         </main>
       </div>

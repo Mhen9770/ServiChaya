@@ -122,33 +122,46 @@ export default function Sidebar({ items }: SidebarProps) {
         )}
       </button>
 
+      {/* Mobile backdrop */}
+      <div
+        className={`fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-200 md:hidden ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden="true"
+        onClick={() => setIsOpen(false)}
+      />
+
       {/* Sidebar panel */}
       <aside
-        className={`w-64 glass-dark border-r border-white/10 h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40
+        className={`w-72 md:w-64 glass-dark border-r border-white/10 h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40
         fixed top-[73px] left-0 transform transition-transform duration-200 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         md:static md:self-start md:translate-x-0`}
       >
-        <div className="p-6">
-        {user && (
-          <div className="mb-8 pb-6 border-b border-white/10">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary-main to-primary-dark rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {(user?.name || user?.mobileNumber || 'U').charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">{user?.name || user?.mobileNumber || 'User'}</p>
-                <p className="text-xs text-slate-400 capitalize">{user?.role?.toLowerCase().replace('_', ' ') || 'User'}</p>
+        <div className="px-4 sm:px-5 md:px-6 py-5 md:py-6">
+          {user && (
+            <div className="mb-6 md:mb-8 pb-5 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 md:w-12 md:h-12 bg-gradient-to-br from-primary-main to-primary-dark rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                  {(user?.name || user?.mobileNumber || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {user?.name || user?.mobileNumber || 'User'}
+                  </p>
+                  <p className="text-xs text-slate-400 capitalize">
+                    {user?.role?.toLowerCase().replace('_', ' ') || 'User'}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <nav className="space-y-2">
-          {items.map((item) => (
-            <SidebarItem key={item.href} item={item} pathname={pathname} />
-          ))}
-        </nav>
+          <nav className="space-y-2">
+            {items.map((item) => (
+              <SidebarItem key={item.href} item={item} pathname={pathname} />
+            ))}
+          </nav>
         </div>
       </aside>
     </>

@@ -33,12 +33,10 @@ export default function PageLayout({
     else if (user.role === 'CUSTOMER') sidebarType = 'customer'
     else if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') sidebarType = 'admin'
   }
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-neutral-background to-white">
+    <div className="h-full bg-gradient-to-b from-neutral-background to-white overflow-hidden flex flex-col">
       <Header {...headerProps} />
-      
-      <div className="flex">
+      <div className="flex-1 flex min-h-0">
         {showSidebar && sidebarType && (
           <>
             {sidebarType === 'provider' && <ProviderSidebar />}
@@ -46,8 +44,12 @@ export default function PageLayout({
             {sidebarType === 'admin' && <AdminSidebar />}
           </>
         )}
-        
-        <main className={`flex-1 ${showSidebar ? '' : 'container mx-auto px-4 py-8'}`}>
+
+        <main
+          className={`flex-1 overflow-y-auto min-h-0 ${
+            showSidebar ? '' : 'container mx-auto px-4 py-8'
+          }`}
+        >
           {children}
         </main>
       </div>

@@ -311,7 +311,7 @@ export default function CreateJobPage() {
   }
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -327,7 +327,7 @@ export default function CreateJobPage() {
         className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark text-white p-7 border border-slate-800"
       >
         <p className="text-xs uppercase tracking-wide text-slate-300">Smart Request Builder</p>
-        <h1 className="text-3xl font-bold mt-2">Create a request that gets matched faster</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2">Create a request that gets matched faster</h1>
         <p className="text-sm text-slate-300 mt-2 max-w-3xl">Complete details improve match quality, reduce confusion, and help providers give better final outcomes.</p>
         <div className="mt-4 flex items-center gap-3">
           <div className="flex-1 h-2 rounded-full bg-white/20 overflow-hidden">
@@ -397,15 +397,30 @@ export default function CreateJobPage() {
               <InputField label="Estimated Budget (₹)" type="number" value={form.estimatedBudget || ''} onChange={(value) => setForm((prev) => ({ ...prev, estimatedBudget: value ? Number(value) : undefined }))} />
             </div>
 
-            <label className="block text-sm font-semibold mt-4 mb-1 text-white">Description *</label>
+            <label className="block text-sm font-semibold mt-4 mb-1 text-white">
+              Description *
+              <span className="ml-2 text-xs font-normal text-slate-400">
+                ({form.description.length} characters)
+              </span>
+            </label>
             <textarea
               required
               rows={4}
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-              className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400"
+              className={`w-full rounded-xl glass border px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                form.description.length < 20
+                  ? 'border-amber-400/50 focus:border-amber-400 focus:ring-amber-400/30'
+                  : 'border-white/20 focus:border-primary-main/50 focus:ring-primary-main/50'
+              }`}
               placeholder="Mention issue details, expected outcome, urgency and specific instructions"
             />
+            {form.description.length > 0 && form.description.length < 20 && (
+              <p className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Add more details (minimum 20 characters recommended)
+              </p>
+            )}
 
             <label className="mt-3 inline-flex items-center gap-2 text-sm text-white">
               <input type="checkbox" checked={!!form.isEmergency} onChange={(e) => setForm((prev) => ({ ...prev, isEmergency: e.target.checked }))} className="rounded" /> Emergency request

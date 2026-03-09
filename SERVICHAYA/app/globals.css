@@ -224,3 +224,33 @@
     color: #ffffff !important;
   }
 }
+
+/* Themed Scrollbars */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.7) transparent; /* thumb, track */
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

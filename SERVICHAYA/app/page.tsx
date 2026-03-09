@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   ArrowRight,
@@ -217,6 +218,7 @@ const getCategoryIcon = (category: ServiceCategory): any => {
 }
 
 export default function HomePage() {
+  const router = useRouter()
   const [currentBanner, setCurrentBanner] = useState(0)
   const [stats, setStats] = useState<PlatformStatsDto | null>(null)
   const [categories, setCategories] = useState<ServiceCategory[]>([])
@@ -225,6 +227,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0)
   const bannerIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const { scrollYProgress } = useScroll()
   const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0])
@@ -279,6 +283,13 @@ export default function HomePage() {
   
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSearch = (value?: string) => {
+    const query = (value ?? searchTerm).trim()
+    if (!query) return
+    router.push(`/services?search=${encodeURIComponent(query)}`)
+    setMobileMenuOpen(false)
   }
 
   const startBannerCarousel = () => {
@@ -354,28 +365,30 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#010B2A] text-white overflow-x-hidden">
       {/* Header */}
       <motion.header 
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="sticky top-0 z-50 border-b border-white/10 glass-dark backdrop-blur-xl"
+        initial={{ y: -60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/85 backdrop-blur-xl"
       >
-        <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-4 mb-3 sm:mb-4">
             <motion.div 
               whileHover={{ scale: 1.05 }} 
               whileTap={{ scale: 0.95 }}
               className="flex items-center gap-2"
             >
-              <Link href="/" className="text-2xl sm:text-3xl font-bold tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-primary-main to-primary-light rounded-xl flex items-center justify-center">
+              <Link href="/" className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight hover:opacity-90 transition-opacity flex items-center gap-2">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-primary-main to-primary-light rounded-xl flex items-center justify-center shadow-lg shadow-primary-main/40">
                   <Wrench className="w-6 h-6 text-white" />
                 </div>
-                <span>SERVI<span className="text-primary-light gradient-text">CHAYA</span></span>
+                <span className="leading-tight">
+                  SERVI<span className="text-primary-light gradient-text">CHAYA</span>
+                </span>
               </Link>
             </motion.div>
             
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-sm text-slate-300">
+            <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm text-slate-300">
               {[
                 { label: 'Services', id: 'services' },
                 { label: 'How it works', id: 'how-it-works' },
@@ -446,14 +459,41 @@ export default function HomePage() {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search for services... (e.g., Electrician, Plumber, AC Repair)"
-                className="w-full px-6 py-3 pl-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary-main/50 focus:border-primary-main transition-all"
-                onFocus={(e) => {
-                  // Future: AI search integration
-                  console.log('Search focused - AI integration coming soon')
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSearch()
+                  }
                 }}
+                placeholder="Search for services... (e.g., Electrician, Plumber, AC Repair)"
+                className="w-full px-6 py-3 pl-12 pr-24 rounded-full bg-white/5 backdrop-blur-sm border border-white/15 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary-main/60 focus:border-primary-main transition-all"
               />
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50" />
+              <button
+                type="button"
+                onClick={() => handleSearch()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 rounded-full bg-primary-main text-xs font-semibold hover:bg-primary-light transition-colors"
+              >
+                Find services
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+              <span className="text-slate-400">Popular:</span>
+              {['AC repair', 'Electrician', 'Home cleaning', 'Plumber'].map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm(label)
+                    handleSearch(label)
+                  }}
+                  className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-200 hover:bg-primary-main/20 hover:border-primary-main/60 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </motion.div>
         </div>
@@ -507,7 +547,7 @@ export default function HomePage() {
 
       <main className="w-full">
         {/* Banner Carousel Section */}
-        <section className="relative w-full h-[500px] sm:h-[600px] lg:h-[700px] overflow-hidden">
+        <section className="relative w-full h-[440px] sm:h-[540px] lg:h-[620px] overflow-hidden">
           <AnimatePresence mode="wait">
             {banners.map((banner, index) => (
               index === currentBanner && (
@@ -533,7 +573,7 @@ export default function HomePage() {
                       className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:50px_50px]"
                     />
                   </div>
-                  <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
+                  <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 lg:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                       <motion.div
                         initial={{ opacity: 0, y: 30, scale: 0.9 }}
@@ -606,6 +646,15 @@ export default function HomePage() {
                             </motion.div>
                           </Link>
                         </motion.div>
+                        <p className="mt-4 text-sm sm:text-base text-white/80">
+                          Are you a service professional?{' '}
+                          <Link
+                            href="/provider/onboarding"
+                            className="font-semibold text-white underline underline-offset-4 decoration-primary-light hover:text-primary-light"
+                          >
+                            Become a SERVICHAYA partner
+                          </Link>
+                        </p>
                       </motion.div>
                     </div>
                   </div>
@@ -658,8 +707,8 @@ export default function HomePage() {
 
         {/* Stats Section */}
         <section className="w-full py-8 sm:py-12 bg-gradient-to-b from-transparent to-[#010B2A] border-b border-white/10">
-          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
               {displayStats.map((stat, index) => (
                 <motion.div
                   key={stat.label}
@@ -718,7 +767,7 @@ export default function HomePage() {
         {/* Featured Categories Section */}
         {featuredCategories.length > 0 && (
           <section id="services" className="w-full py-12 sm:py-16 lg:py-20">
-            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -733,7 +782,7 @@ export default function HomePage() {
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6 max-w-7xl mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
                 {featuredCategories.map((category, index) => {
                   const IconComponent = getCategoryIcon(category)
                   return (
@@ -835,7 +884,7 @@ export default function HomePage() {
         {/* All Categories Grid */}
         {categories.length > 0 && (
           <section className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#010B2A] to-[#000510]">
-            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -850,7 +899,7 @@ export default function HomePage() {
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 max-w-7xl mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                 {categories.map((category, index) => {
                   const IconComponent = getCategoryIcon(category)
                   return (
@@ -929,7 +978,7 @@ export default function HomePage() {
 
         {/* How It Works Section */}
         <section id="how-it-works" className="w-full py-12 sm:py-16 lg:py-20 bg-[#010B2A]">
-          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -1005,7 +1054,7 @@ export default function HomePage() {
 
         {/* Why Choose Us Section */}
         <section id="why-us" className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#010B2A] to-[#000510]">
-          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -1082,7 +1131,7 @@ export default function HomePage() {
         {/* Testimonials */}
         {testimonials.length > 0 && (
           <section className="w-full py-12 sm:py-16 lg:py-20 bg-[#010B2A]">
-            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -1128,9 +1177,94 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* FAQ Section */}
+        <section className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#000510] to-[#010B2A]">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-center mb-8 sm:mb-10"
+            >
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-main/15 border border-primary-main/30 text-xs font-semibold uppercase tracking-wide text-primary-light">
+                <SparklesIcon className="w-4 h-4" />
+                FAQs
+              </span>
+              <h2 className="mt-4 text-2xl sm:text-3xl lg:text-4xl font-bold">
+                Everything you need to know before you{' '}
+                <span className="text-primary-light">book</span>
+              </h2>
+            </motion.div>
+
+            <div className="space-y-3 sm:space-y-4">
+              {[
+                {
+                  q: 'How does SERVICHAYA ensure service quality?',
+                  a: 'Every professional on SERVICHAYA is background-verified and skill-screened. We track ratings after every job and only keep top-performing providers active on the platform.'
+                },
+                {
+                  q: 'Are prices fixed or will they change later?',
+                  a: 'Indicative pricing is shared upfront based on your requirement. For many services, final pricing is confirmed after on-site inspection and always communicated before work starts.'
+                },
+                {
+                  q: 'Is my payment safe?',
+                  a: 'Yes. Payments are processed securely and released to providers only after the job is marked complete. Sensitive details are never shared with third parties.'
+                },
+                {
+                  q: 'What if I am not satisfied with the service?',
+                  a: 'Our support team will work with you and the provider to find the best resolution. Where applicable, we arrange rework or refunds as per our quality assurance policy.'
+                },
+              ].map((item, index) => {
+                const isOpen = openFaqIndex === index
+                return (
+                  <motion.div
+                    key={item.q}
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.05 }}
+                    className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                      className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 text-left"
+                    >
+                      <div>
+                        <p className="text-sm sm:text-base font-semibold text-white">{item.q}</p>
+                      </div>
+                      <motion.span
+                        animate={{ rotate: isOpen ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="shrink-0 w-6 h-6 rounded-full border border-white/30 flex items-center justify-center text-xs text-white"
+                      >
+                        {isOpen ? '-' : '+'}
+                      </motion.span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          key="content"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="px-4 sm:px-6 pb-3 sm:pb-5 text-sm text-slate-200"
+                        >
+                          <p className="pt-1 sm:pt-0">{item.a}</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* Final CTA */}
         <section className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-primary-main via-primary-dark to-[#010B2A]">
-          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -1164,7 +1298,7 @@ export default function HomePage() {
 
         {/* Footer */}
         <footer className="w-full border-t border-white/10 bg-gradient-to-b from-[#010B2A] to-[#000510] py-12 sm:py-16">
-          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 mb-12">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1267,7 +1401,7 @@ export default function HomePage() {
               whileHover={{ scale: 1.1, y: -5 }}
               whileTap={{ scale: 0.9 }}
               onClick={scrollToTop}
-              className="fixed bottom-8 right-8 w-12 h-12 bg-gradient-to-br from-primary-main to-primary-light rounded-full flex items-center justify-center shadow-2xl z-50 hover:shadow-primary-main/50 transition-all"
+              className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-main to-primary-light rounded-full flex items-center justify-center shadow-2xl z-50 hover:shadow-primary-main/50 transition-all"
               aria-label="Scroll to top"
             >
               <ArrowUp className="w-6 h-6 text-white" />
