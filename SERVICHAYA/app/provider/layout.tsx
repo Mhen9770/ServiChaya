@@ -40,21 +40,9 @@ export default function ProviderLayout({
     )
   }
 
-  // Don't show sidebar on onboarding page
+  // Don't show sidebar on onboarding page (but keep same fixed shell so header doesn't scroll)
   const isOnboarding = pathname.includes('/onboarding')
   const showSidebar = !isOnboarding
-
-  // For onboarding, keep layout simple and allow full-page scroll (no fixed shell)
-  if (isOnboarding) {
-    return (
-      <div className="min-h-screen bg-[#010B2A] text-white flex flex-col">
-        <Header showUserMenu={true} />
-        <main className="flex-1 w-full overflow-y-auto">
-          {children}
-        </main>
-      </div>
-    )
-  }
 
   return (
     <div className="h-screen bg-gradient-to-b from-neutral-background to-white overflow-hidden flex flex-col">

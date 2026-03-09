@@ -583,29 +583,85 @@ export default function CustomerJobDetailsPage() {
               animate={{ opacity: 1, y: 0 }}
               className="rounded-2xl glass-dark border border-white/10 p-6 hover:border-primary-main/50 transition-all"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-bold text-lg text-white">Assigned provider</h2>
-                <Link 
-                  href={`/provider/${provider.id}`}
-                  className="text-xs text-primary-light hover:text-primary-main inline-flex items-center gap-1"
-                >
-                  View profile <ExternalLink className="w-3 h-3" />
-                </Link>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary-main/30 flex items-center justify-center border border-primary-light/50">
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-lg text-white">
+                      {provider.businessName || provider.providerType}
+                    </h2>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Provider ID: <span className="font-mono text-primary-light">{provider.providerCode}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
+                      provider.verificationStatus === 'VERIFIED'
+                        ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/40'
+                        : 'bg-amber-500/15 text-amber-100 border border-amber-400/40'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3 h-3" />
+                    {provider.verificationStatus === 'VERIFIED' ? 'Verified by SERVICHAYA' : provider.verificationStatus}
+                  </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
+                      provider.isAvailable
+                        ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/40'
+                        : 'bg-slate-500/30 text-slate-200 border border-slate-400/40'
+                    }`}
+                  >
+                    <Circle className={`w-2 h-2 ${provider.isAvailable ? 'text-emerald-300 fill-emerald-300' : 'text-slate-300'} rounded-full`} />
+                    {provider.isAvailable ? 'Available for booking' : 'Currently unavailable'}
+                  </span>
+                </div>
               </div>
-              <div className="grid md:grid-cols-2 gap-3 text-sm">
-                <p className="inline-flex items-center gap-2 text-white font-medium">
-                  <User className="w-4 h-4 text-primary-light" /> {provider.businessName || provider.providerType}
-                </p>
-                <p className="inline-flex items-center gap-2 text-slate-300">
-                  <ShieldCheck className="w-4 h-4 text-accent-green" /> Verification: {provider.verificationStatus}
-                </p>
-                <p className="inline-flex items-center gap-2 text-slate-300">
-                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" /> Rating: {provider.rating || 0} ({provider.ratingCount || 0} reviews)
-                </p>
-                <p className="inline-flex items-center gap-2 text-slate-300">
-                  <CheckCircle2 className="w-4 h-4 text-accent-green" /> Jobs done: {provider.totalJobsCompleted || 0}
-                </p>
+
+              <div className="grid md:grid-cols-3 gap-3 text-sm">
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-300">Experience</p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {(provider.experienceYears || 0)}+ years
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-300 inline-flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                    Rating
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {typeof provider.rating === 'number'
+                      ? provider.rating.toFixed(1)
+                      : (provider.rating || 0)}
+                    /5
+                    <span className="ml-1 text-xs text-slate-300">
+                      ({provider.ratingCount || 0} reviews)
+                    </span>
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-300 inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-accent-green" />
+                    Jobs completed
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {provider.totalJobsCompleted || 0}+
+                  </p>
+                </div>
               </div>
+
+              {provider.bio && (
+                <div className="mt-4 rounded-xl bg-black/20 border border-white/10 p-3">
+                  <p className="text-xs text-slate-300 font-semibold mb-1">About this provider</p>
+                  <p className="text-sm text-slate-200 line-clamp-3">
+                    {provider.bio}
+                  </p>
+                </div>
+              )}
             </motion.article>
           )}
 

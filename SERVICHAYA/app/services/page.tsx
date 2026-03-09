@@ -22,7 +22,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { getCategoryById, getProvidersByCategory, type ServiceCategory } from '@/lib/services/service'
+import { getAllCategories, getCategoryById, getProvidersByCategory, type ServiceCategory } from '@/lib/services/service'
 import { type ProviderProfileDto } from '@/lib/services/provider'
 import { toast } from 'react-hot-toast'
 import { PageLoader, ContentLoader } from '@/components/ui/Loader'
@@ -169,13 +169,19 @@ function ServicesPageContent() {
   const categoryId = searchParams.get('category')
   
   const [category, setCategory] = useState<ServiceCategory | null>(null)
+  const [allCategories, setAllCategories] = useState<ServiceCategory[]>([])
   const [providers, setProviders] = useState<ProviderProfileDto[]>([])
   const [loading, setLoading] = useState(true)
+  const [mode, setMode] = useState<'CATEGORY' | 'BROWSE'>('BROWSE')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     if (categoryId) {
+      setMode('CATEGORY')
       loadCategoryData()
+    } else {
+      setMode('BROWSE')
+      loadAllCategories()
     }
   }, [categoryId])
 
@@ -196,11 +202,24 @@ function ServicesPageContent() {
     }
   }
 
-  if (loading) {
-    return <PageLoader text="Loading service category..." />
+  const loadAllCategories = async () => {
+    try {
+      setLoading(true)
+      const categories = await getAllCategories(true, undefined, true)
+      setAllCategories(categories || [])
+    } catch (error) {
+      console.error('Failed to load services:', error)
+      toast.error('Failed to load services')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (!category) {
+  if (loading) {
+    return <PageLoader text={mode === 'CATEGORY' ? 'Loading service category...' : 'Loading services...'} />
+  }
+
+  if (mode === 'CATEGORY' && !category) {
     return (
       <div className="min-h-screen bg-[#010B2A] text-white flex items-center justify-center">
         <div className="text-center">
@@ -209,6 +228,101 @@ function ServicesPageContent() {
             Browse all services
           </Link>
         </div>
+      </div>
+    )
+  }
+
+  // Browse-all mode (no category selected) – show list of service categories like a catalog
+  if (mode === 'BROWSE') {
+    return (
+      <div className="min-h-screen bg-[#010B2A] text-white">
+        {/* Simple header reusing brand */}
+        <motion.header
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="sticky top-0 z-50 border-b border-white/10 glass-dark backdrop-blur-xl"
+        >
+          <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+            <Link
+              href="/"
+              className="text-2xl sm:text-3xl font-bold tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2"
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-primary-main to-primary-light rounded-xl flex items-center justify-center">
+                <Wrench className="w-6 h-6 text-white" />
+              </div>
+              <span>
+                SERVI<span className="text-primary-light gradient-text">CHAYA</span>
+              </span>
+            </Link>
+            <Link
+              href="/customer/jobs/create"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary-main to-primary-light px-4 sm:px-5 py-2 text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all whitespace-nowrap"
+            >
+              <Zap className="w-4 h-4" />
+              Book Service
+            </Link>
+          </div>
+        </motion.header>
+
+        <main className="w-full">
+          <section className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#010B2A] to-[#000510]">
+            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+              <div className="text-center mb-10 sm:mb-12">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">All Services</h1>
+                <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto">
+                  Choose a service category to see verified providers and book a job with SERVICHAYA.
+                </p>
+              </div>
+
+              {allCategories.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-slate-300 mb-2">No services available yet.</p>
+                  <p className="text-slate-400 text-sm">
+                    Please try again later or contact support if this continues.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {allCategories.map((cat) => {
+                    const Icon = getCategoryIcon(cat)
+                    return (
+                      <Link
+                        key={cat.id}
+                        href={`/services?category=${cat.id}`}
+                        className="group rounded-2xl glass-dark border border-white/10 p-5 hover:border-primary-main/50 hover:bg-primary-main/5 transition-all flex flex-col gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-main to-primary-dark flex items-center justify-center">
+                            <Icon className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h2 className="text-base sm:text-lg font-semibold text-white line-clamp-1">
+                              {cat.name}
+                            </h2>
+                            <p className="text-[11px] text-slate-300 line-clamp-1">
+                              {(cat.description || '').length > 0 ? cat.description : 'Trusted local service'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-300 mt-1">
+                          <span className="inline-flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5 text-primary-light" />
+                            {(cat.providerCount || 0)} providers
+                          </span>
+                          <span className="inline-flex items-center gap-1 group-hover:text-primary-light transition-colors">
+                            View providers
+                            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                          </span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
       </div>
     )
   }
