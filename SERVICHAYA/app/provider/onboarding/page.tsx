@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import { getOnboardingStatus, completeStep1, completeStep2, completeStep3, completeStep4, completeStep5, type OnboardingStatus, getAllServiceSkills, getServiceSkillsByCategory, getProviderProfile, getOnboardingData, type OnboardingDataDto, uploadProviderDocuments } from '@/lib/services/provider'
-import { getAllCategories } from '@/lib/services/service'
 import { getAllActiveCities, getZonesByCity, getPodsByZone } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
 import Loader from '@/components/ui/Loader'
@@ -29,7 +28,6 @@ export default function ProviderOnboardingPage() {
   const [user, setUser] = useState<any>(null)
 
   // Dropdown data
-  const [categories, setCategories] = useState<any[]>([])
   const [skills, setSkills] = useState<any[]>([])
   const [cities, setCities] = useState<any[]>([])
   const [zones, setZones] = useState<any[]>([])
@@ -112,11 +110,7 @@ export default function ProviderOnboardingPage() {
   const loadSkillsData = async () => {
     try {
       setLoadingDropdowns(true)
-      const [catsData, skillsData] = await Promise.all([
-        getAllCategories(),
-        getAllServiceSkills()
-      ])
-      setCategories(catsData)
+      const skillsData = await getAllServiceSkills()
       setSkills(skillsData)
     } catch (error) {
       console.error('Failed to load skills data:', error)

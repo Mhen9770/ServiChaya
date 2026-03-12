@@ -298,88 +298,96 @@ export default function ProviderJobDetailsPage() {
   const canCancel = ['ACCEPTED', 'IN_PROGRESS'].includes(job.status)
 
   return (
-    <div className="px-6 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-4 sm:space-y-5 lg:space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <Link href="/provider/jobs" className="inline-flex items-center gap-2 text-sm text-neutral-textSecondary hover:text-primary-main mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Jobs
+        <Link href="/provider/jobs" className="inline-flex items-center gap-2 text-xs sm:text-sm text-slate-300 hover:text-primary-light mb-4 sm:mb-6 transition-colors group">
+          <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:-translate-x-1 transition-transform" />
+          <span className="hidden sm:inline">Back to Jobs</span>
+          <span className="sm:hidden">Back</span>
         </Link>
       </motion.div>
 
-      <motion.div
+      <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border mb-6"
+        className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 backdrop-blur-md shadow-lg shadow-black/20"
       >
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <h1 className="text-2xl font-bold text-neutral-textPrimary">{job.title}</h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${statusInfo.color}`}>
+        <div className="flex items-start justify-between mb-4 sm:mb-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 flex-wrap">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white leading-tight">{job.title}</h1>
+              <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-semibold flex items-center gap-1 border ${
+                job.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/60' :
+                job.status === 'IN_PROGRESS' || job.status === 'ACCEPTED' ? 'bg-primary-main/20 text-primary-light border-primary-main/60' :
+                job.status === 'MATCHED' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-400/60' :
+                job.status === 'PENDING' ? 'bg-amber-500/20 text-amber-300 border-amber-400/60' :
+                'bg-slate-700/50 text-slate-300 border-slate-600/60'
+              }`}>
                 <StatusIcon className="w-3 h-3" />
-                {statusInfo.text}
+                <span className="hidden sm:inline">{statusInfo.text}</span>
+                <span className="sm:hidden">{job.status.replace('_', ' ')}</span>
               </span>
               {job.isEmergency && (
-                <span className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold">
+                <span className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-red-500/20 text-red-300 border border-red-400/50 rounded-full text-[9px] sm:text-xs font-semibold animate-pulse">
                   <AlertCircle className="w-3 h-3" />
                   Emergency
                 </span>
               )}
             </div>
-            <p className="text-sm text-neutral-textSecondary mb-4">{job.description}</p>
-            <div className="text-xs text-neutral-textSecondary">Job Code: {job.jobCode}</div>
+            <p className="text-xs sm:text-sm text-slate-300 mb-3 sm:mb-4 leading-relaxed">{job.description}</p>
+            <div className="text-[10px] sm:text-xs text-slate-400">Job Code: {job.jobCode}</div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div className="flex items-center gap-3 text-sm">
-            <Calendar className="w-5 h-5 text-neutral-textSecondary" />
-            <div>
-              <div className="text-neutral-textSecondary">Preferred Time</div>
-              <div className="font-semibold text-neutral-textPrimary">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-2.5 sm:p-3 bg-slate-800/50 rounded-lg sm:rounded-xl border-2 border-primary-main/20">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="text-slate-400">Preferred Time</div>
+              <div className="font-semibold text-white truncate">
                 {new Date(job.preferredTime).toLocaleString()}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <MapPin className="w-5 h-5 text-neutral-textSecondary" />
-            <div>
-              <div className="text-neutral-textSecondary">Location</div>
-              <div className="font-semibold text-neutral-textPrimary">{job.addressLine1}</div>
+          <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-2.5 sm:p-3 bg-slate-800/50 rounded-lg sm:rounded-xl border-2 border-primary-main/20">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="text-slate-400">Location</div>
+              <div className="font-semibold text-white truncate">{job.addressLine1}</div>
             </div>
           </div>
           {job.estimatedBudget && (
-            <div className="flex items-center gap-3 text-sm">
-              <DollarSign className="w-5 h-5 text-neutral-textSecondary" />
+            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-2.5 sm:p-3 bg-slate-800/50 rounded-lg sm:rounded-xl border-2 border-purple-400/20">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400 flex-shrink-0" />
               <div>
-                <div className="text-neutral-textSecondary">Estimated Budget</div>
-                <div className="font-semibold text-neutral-textPrimary">₹{job.estimatedBudget}</div>
+                <div className="text-slate-400">Estimated Budget</div>
+                <div className="font-semibold text-white">₹{job.estimatedBudget.toLocaleString()}</div>
               </div>
             </div>
           )}
           {job.finalPrice && (
-            <div className="flex items-center gap-3 text-sm">
-              <DollarSign className="w-5 h-5 text-accent-green" />
+            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-2.5 sm:p-3 bg-gradient-to-br from-accent-green/20 to-green-600/20 rounded-lg sm:rounded-xl border-2 border-accent-green/40">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-accent-green flex-shrink-0" />
               <div>
-                <div className="text-neutral-textSecondary">Final Price</div>
-                <div className="font-semibold text-accent-green">₹{job.finalPrice}</div>
+                <div className="text-slate-300">Final Price</div>
+                <div className="font-semibold text-accent-green">₹{job.finalPrice.toLocaleString()}</div>
               </div>
             </div>
           )}
         </div>
 
         {job.specialInstructions && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              <div className="text-xs font-semibold text-blue-800">Special Instructions</div>
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-2 border-blue-400/40 rounded-lg sm:rounded-xl">
+            <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
+              <div className="text-[10px] sm:text-xs font-semibold text-blue-300">Special Instructions</div>
             </div>
-            <div className="text-sm text-blue-900">{job.specialInstructions}</div>
+            <div className="text-xs sm:text-sm text-slate-200 leading-relaxed">{job.specialInstructions}</div>
           </div>
         )}
 
@@ -417,45 +425,45 @@ export default function ProviderJobDetailsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.15 }}
-            className="mb-6 bg-gradient-to-br from-white to-purple-50/30 rounded-2xl p-6 border border-purple-100 shadow-sm"
+            className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl glass-dark border-2 border-purple-400/30 p-4 sm:p-5 lg:p-6 backdrop-blur-md shadow-lg shadow-purple-500/10"
           >
-            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-              <User className="w-5 h-5 text-primary-main" />
+            <h2 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4 font-display flex items-center gap-2">
+              <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light" />
               Customer Information
             </h2>
-            <div className="flex items-start gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center flex-shrink-0">
-                <User className="w-8 h-8 text-white" />
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/30">
+                <User className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-neutral-textPrimary mb-2">{customer.name}</h3>
-                <div className="flex flex-wrap gap-4 text-sm text-neutral-textSecondary mb-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-white mb-1.5 sm:mb-2">{customer.name}</h3>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3">
                   {customer.email && (
                     <div className="flex items-center gap-1.5">
-                      <Mail className="w-4 h-4" />
-                      <span>{customer.email}</span>
+                      <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                      <span className="truncate">{customer.email}</span>
                     </div>
                   )}
                   {customer.mobileNumber && (
                     <div className="flex items-center gap-1.5">
-                      <Phone className="w-4 h-4" />
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                       <span>{customer.mobileNumber}</span>
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-xs">
-                  <div>
-                    <div className="text-neutral-textSecondary mb-1">Total Jobs</div>
-                    <div className="font-semibold text-neutral-textPrimary">{customer.totalJobs}</div>
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 text-[10px] sm:text-xs">
+                  <div className="p-2 sm:p-3 bg-slate-800/30 rounded-lg border border-white/5">
+                    <div className="text-slate-400 mb-0.5 sm:mb-1">Total Jobs</div>
+                    <div className="font-semibold text-white text-sm sm:text-base">{customer.totalJobs}</div>
                   </div>
-                  <div>
-                    <div className="text-neutral-textSecondary mb-1">Completed</div>
-                    <div className="font-semibold text-accent-green">{customer.completedJobs}</div>
+                  <div className="p-2 sm:p-3 bg-slate-800/30 rounded-lg border border-white/5">
+                    <div className="text-slate-400 mb-0.5 sm:mb-1">Completed</div>
+                    <div className="font-semibold text-accent-green text-sm sm:text-base">{customer.completedJobs}</div>
                   </div>
                   {(customer.averageRating ?? 0) > 0 && (
-                    <div>
-                      <div className="text-neutral-textSecondary mb-1">Avg Rating</div>
-                      <div className="font-semibold text-neutral-textPrimary">{(customer.averageRating ?? 0).toFixed(1)}</div>
+                    <div className="p-2 sm:p-3 bg-slate-800/30 rounded-lg border border-white/5">
+                      <div className="text-slate-400 mb-0.5 sm:mb-1">Avg Rating</div>
+                      <div className="font-semibold text-white text-sm sm:text-base">{(customer.averageRating ?? 0).toFixed(1)}</div>
                     </div>
                   )}
                 </div>
@@ -468,19 +476,19 @@ export default function ProviderJobDetailsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="mb-6 bg-white rounded-2xl p-6 border border-neutral-border"
+          className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-4 sm:p-5 lg:p-6 backdrop-blur-md shadow-lg shadow-black/20"
         >
-          <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary-main" />
+          <h2 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4 font-display flex items-center gap-2">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light" />
             Job Timeline
           </h2>
 
           {/* Horizontal timeline on desktop */}
           <div className="hidden md:block">
             <div className="relative pb-4">
-              <div className="absolute left-6 right-6 top-5 h-0.5 bg-neutral-border" />
+              <div className="absolute left-6 right-6 top-5 h-0.5 bg-white/10" />
               <div
-                className="absolute left-6 top-5 h-0.5 bg-gradient-to-r from-primary-main to-primary-dark origin-left"
+                className="absolute left-6 top-5 h-0.5 bg-gradient-to-r from-primary-main to-primary-light origin-left"
                 style={{
                   width:
                     currentStepIndex >= 0 && statusSteps.length > 1
@@ -502,8 +510,8 @@ export default function ProviderJobDetailsPage() {
                           isCurrent
                             ? 'bg-primary-main text-white border-primary-main shadow-md'
                             : isActive
-                            ? 'bg-primary-main/10 text-primary-main border-primary-main/60'
-                            : 'bg-neutral-background text-neutral-textSecondary border-neutral-border'
+                            ? 'bg-primary-main/20 text-primary-light border-primary-main/60'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
                         }`}
                       >
                         {index + 1}
@@ -511,20 +519,20 @@ export default function ProviderJobDetailsPage() {
                       <p
                         className={`text-[11px] font-semibold ${
                           isCurrent
-                            ? 'text-primary-main'
+                            ? 'text-primary-light'
                             : isActive
-                            ? 'text-neutral-textPrimary'
-                            : 'text-neutral-textSecondary'
+                            ? 'text-white'
+                            : 'text-slate-400'
                         }`}
                       >
                         {step.label}
                       </p>
-                      <p className="text-[11px] text-neutral-textSecondary">{step.description}</p>
+                      <p className="text-[11px] text-slate-400">{step.description}</p>
                       {details.length > 0 && (
-                        <div className="mt-1 space-y-0.5 text-[10px] text-neutral-textSecondary">
+                        <div className="mt-1 space-y-0.5 text-[10px] text-slate-400">
                           {details.map((d) => (
                             <p key={d.label}>
-                              <span className="font-semibold text-neutral-textPrimary">{d.label}:</span> {d.value}
+                              <span className="font-semibold text-white">{d.label}:</span> {d.value}
                             </p>
                           ))}
                         </div>
@@ -539,9 +547,9 @@ export default function ProviderJobDetailsPage() {
           {/* Vertical timeline on mobile */}
           <div className="md:hidden">
             <div className="relative">
-              <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-neutral-border" />
+              <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-white/10" />
               <div
-                className="absolute left-3 top-0 w-0.5 bg-gradient-to-b from-primary-main to-primary-dark"
+                className="absolute left-3 top-0 w-0.5 bg-gradient-to-b from-primary-main to-primary-light"
                 style={{
                   height:
                     currentStepIndex >= 0 && statusSteps.length > 1
@@ -563,8 +571,8 @@ export default function ProviderJobDetailsPage() {
                           isCurrent
                             ? 'bg-primary-main text-white border-primary-main shadow-md'
                             : isActive
-                            ? 'bg-primary-main/10 text-primary-main border-primary-main/60'
-                            : 'bg-neutral-background text-neutral-textSecondary border-neutral-border'
+                            ? 'bg-primary-main/20 text-primary-light border-primary-main/60'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
                         }`}
                       >
                         {index + 1}
@@ -573,20 +581,20 @@ export default function ProviderJobDetailsPage() {
                         <p
                           className={`text-sm font-semibold ${
                             isCurrent
-                              ? 'text-primary-main'
+                              ? 'text-primary-light'
                               : isActive
-                              ? 'text-neutral-textPrimary'
-                              : 'text-neutral-textSecondary'
+                              ? 'text-white'
+                              : 'text-slate-400'
                           }`}
                         >
                           {step.label}
                         </p>
-                        <p className="text-xs text-neutral-textSecondary mt-0.5">{step.description}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{step.description}</p>
                         {details.length > 0 && (
-                          <div className="mt-1 space-y-0.5 text-[11px] text-neutral-textSecondary">
+                          <div className="mt-1 space-y-0.5 text-[11px] text-slate-400">
                             {details.map((d) => (
                               <p key={d.label}>
-                                <span className="font-semibold text-neutral-textPrimary">{d.label}:</span> {d.value}
+                                <span className="font-semibold text-white">{d.label}:</span> {d.value}
                               </p>
                             ))}
                           </div>
@@ -604,33 +612,33 @@ export default function ProviderJobDetailsPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.22 }}
-          className="mb-6 bg-white rounded-2xl p-6 border border-neutral-border"
+          className="mb-6 rounded-2xl glass-dark border border-white/10 p-6"
         >
-          <h2 className="text-lg font-bold text-neutral-textPrimary mb-3 font-display">What should you do now?</h2>
-          <p className="text-xs text-neutral-textSecondary mb-3">
+          <h2 className="text-base sm:text-lg font-bold text-white mb-2 sm:mb-3 font-display">What should you do now?</h2>
+          <p className="text-[10px] sm:text-xs text-slate-300 mb-2 sm:mb-3 leading-relaxed">
             These suggestions are based on the current job status coming from the backend, so they always stay in sync
             with the actual workflow.
           </p>
 
           {job.status === 'ACCEPTED' && (
-            <div className="p-4 rounded-xl bg-primary-main/5 border border-primary-main/20 text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Job is accepted. Next steps:</p>
-              <ul className="list-disc list-inside space-y-0.5">
+            <div className="p-3 sm:p-4 rounded-lg sm:rounded-xl bg-primary-main/10 border-2 border-primary-main/40 text-xs sm:text-sm text-slate-300 space-y-1 sm:space-y-1.5">
+              <p className="font-semibold text-white">Job is accepted. Next steps:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-[10px] sm:text-xs">
                 <li>Contact the customer if you need any clarification before starting.</li>
                 <li>Reach the service location at the preferred time.</li>
-                <li>Tap <span className="font-semibold">“Start Job”</span> when you actually begin the work.</li>
+                <li>Tap <span className="font-semibold">"Start Job"</span> when you actually begin the work.</li>
               </ul>
             </div>
           )}
 
           {job.status === 'IN_PROGRESS' && (
-            <div className="p-4 rounded-xl bg-primary-main/5 border border-primary-main/20 text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Job is in progress. Remember:</p>
-              <ul className="list-disc list-inside space-y-0.5">
+            <div className="p-3 sm:p-4 rounded-lg sm:rounded-xl bg-primary-main/10 border-2 border-primary-main/40 text-xs sm:text-sm text-slate-300 space-y-1 sm:space-y-1.5">
+              <p className="font-semibold text-white">Job is in progress. Remember:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-[10px] sm:text-xs">
                 <li>Keep the customer informed about any extra work or changes in price.</li>
                 <li>Decide the final amount with the customer before closing the job.</li>
                 <li>
-                  When work is done, click <span className="font-semibold">“Complete Job”</span>, enter final price in
+                  When work is done, click <span className="font-semibold">"Complete Job"</span>, enter final price in
                   ₹ and choose the correct payment channel (Cash / Online).
                 </li>
               </ul>
@@ -638,8 +646,8 @@ export default function ProviderJobDetailsPage() {
           )}
 
           {job.status === 'PAYMENT_PENDING' && (
-            <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Waiting for customer payment</p>
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-400/30 text-sm text-slate-300 space-y-1.5">
+              <p className="font-semibold text-white">Waiting for customer payment</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>Customer has to complete the final payment from their side (online / cash as per flow).</li>
                 <li>You will see updated payment status here once backend confirms the payment.</li>
@@ -649,8 +657,8 @@ export default function ProviderJobDetailsPage() {
           )}
 
           {job.status === 'COMPLETED' && (
-            <div className="p-4 rounded-xl bg-accent-green/10 border border-accent-green/30 text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Job is completed.</p>
+            <div className="p-4 rounded-xl bg-accent-green/10 border border-accent-green/30 text-sm text-slate-300 space-y-1.5">
+              <p className="font-semibold text-white">Job is completed.</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>Verify that payment status below is correct as per platform rules.</li>
                 <li>Customer may submit a review from their app; this will impact your rating.</li>
@@ -660,8 +668,8 @@ export default function ProviderJobDetailsPage() {
           )}
 
           {job.status === 'CANCELLED' && (
-            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Job has been cancelled.</p>
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-400/30 text-sm text-slate-300 space-y-1.5">
+              <p className="font-semibold text-white">Job has been cancelled.</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>No further action is required on this job.</li>
                 <li>Check your notifications for cancellation reason if provided.</li>
@@ -671,8 +679,8 @@ export default function ProviderJobDetailsPage() {
           )}
 
           {job.status === 'PENDING' || job.status === 'MATCHED' ? (
-            <div className="p-4 rounded-xl bg-neutral-background border border-neutral-border text-sm text-neutral-textSecondary space-y-1.5">
-              <p className="font-semibold text-neutral-textPrimary">Job is not yet accepted.</p>
+            <div className="p-4 rounded-xl bg-slate-800/50 border border-white/10 text-sm text-slate-300 space-y-1.5">
+              <p className="font-semibold text-white">Job is not yet accepted.</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>Review the job details, location and estimated budget carefully.</li>
                 <li>Only accept the job from your “Available Jobs” list when you are sure you can serve it.</li>
@@ -687,15 +695,15 @@ export default function ProviderJobDetailsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.25 }}
-            className="mb-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200"
+            className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl glass-dark border-2 border-accent-green/40 p-4 sm:p-5 lg:p-6 bg-gradient-to-br from-green-500/5 to-emerald-500/5 backdrop-blur-md shadow-lg shadow-accent-green/10"
           >
-            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-accent-green" />
+            <h2 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4 font-display flex items-center gap-2">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-accent-green" />
               Payment Information
             </h2>
-            <div className="mb-4 p-3 bg-white/60 rounded-xl border border-green-200">
-              <div className="text-xs text-neutral-textSecondary mb-1">Your Payment Preference</div>
-              <div className="text-sm font-semibold text-neutral-textPrimary">
+            <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-slate-800/50 rounded-lg sm:rounded-xl border-2 border-accent-green/40">
+              <div className="text-[10px] sm:text-xs text-slate-300 mb-0.5 sm:mb-1">Your Payment Preference</div>
+              <div className="text-xs sm:text-sm font-semibold text-white">
                 {paymentSchedule.paymentType === 'PARTIAL' && paymentSchedule.upfrontPercentage 
                   ? `Partial Payment (${paymentSchedule.upfrontPercentage}% upfront)`
                   : paymentSchedule.paymentType === 'FULL'
@@ -705,26 +713,26 @@ export default function ProviderJobDetailsPage() {
                   : paymentSchedule.paymentType}
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-neutral-textSecondary">Total Amount</span>
-                <span className="text-lg font-bold text-neutral-textPrimary">₹{paymentSchedule.totalAmount.toLocaleString()}</span>
+                <span className="text-xs sm:text-sm text-slate-300">Total Amount</span>
+                <span className="text-base sm:text-lg font-bold text-white">₹{paymentSchedule.totalAmount.toLocaleString()}</span>
               </div>
               {paymentSchedule.paymentType === 'PARTIAL' && (
                 <>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-neutral-textSecondary">Upfront ({paymentSchedule.upfrontPercentage}%)</span>
+                    <span className="text-sm text-slate-300">Upfront ({paymentSchedule.upfrontPercentage}%)</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-neutral-textPrimary">₹{paymentSchedule.upfrontAmount.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-white">₹{paymentSchedule.upfrontAmount.toLocaleString()}</span>
                       {paymentSchedule.upfrontPaid && (
                         <CheckCircle2 className="w-4 h-4 text-accent-green" />
                       )}
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-neutral-textSecondary">Final Amount</span>
+                    <span className="text-sm text-slate-300">Final Amount</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-neutral-textPrimary">₹{paymentSchedule.finalAmount.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-white">₹{paymentSchedule.finalAmount.toLocaleString()}</span>
                       {paymentSchedule.finalPaid && (
                         <CheckCircle2 className="w-4 h-4 text-accent-green" />
                       )}
@@ -732,21 +740,21 @@ export default function ProviderJobDetailsPage() {
                   </div>
                 </>
               )}
-              <div className="pt-3 border-t border-green-200">
+              <div className="pt-3 border-t border-white/10">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-semibold text-neutral-textSecondary">Payment Status</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  <span className="text-sm font-semibold text-slate-300">Payment Status</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
                     paymentSchedule.paymentStatus === 'COMPLETED' 
-                      ? 'bg-accent-green/20 text-accent-green'
+                      ? 'bg-accent-green/20 text-accent-green border-accent-green/50'
                       : paymentSchedule.paymentStatus === 'PARTIAL'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-neutral-background text-neutral-textSecondary'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+                      : 'bg-slate-700/50 text-slate-300 border-slate-600/50'
                   }`}>
                     {paymentSchedule.paymentStatus}
                   </span>
                 </div>
                 {paymentSchedule.paymentStatus === 'PENDING' && (
-                  <div className="text-xs text-neutral-textSecondary flex items-center gap-1.5">
+                  <div className="text-xs text-slate-400 flex items-center gap-1.5">
                     <Clock className="w-3 h-3" />
                     <span>Payment processing: 2 business days</span>
                   </div>
@@ -756,16 +764,16 @@ export default function ProviderJobDetailsPage() {
           </motion.div>
         )}
 
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
           {canStart && (
             <motion.button
               whileHover={{ scale: actionLoading ? 1 : 1.05 }}
               whileTap={{ scale: actionLoading ? 1 : 0.95 }}
               onClick={handleStartJob}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-accent-green/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {actionLoading ? 'Starting...' : 'Start Job'}
             </motion.button>
           )}
@@ -775,10 +783,11 @@ export default function ProviderJobDetailsPage() {
               whileTap={{ scale: actionLoading ? 1 : 0.95 }}
               onClick={() => setShowCompleteModal(true)}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-main to-primary-light text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              Complete Job
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Complete Job</span>
+              <span className="sm:hidden">Complete</span>
             </motion.button>
           )}
           {canCancel && (
@@ -787,26 +796,27 @@ export default function ProviderJobDetailsPage() {
               whileTap={{ scale: actionLoading ? 1 : 0.95 }}
               onClick={handleCancelJob}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 border-2 border-red-500 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-red-500/60 text-red-400 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:bg-red-500/10 hover:border-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <X className="w-4 h-4" />
-              {actionLoading ? 'Cancelling...' : 'Cancel Job'}
+              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{actionLoading ? 'Cancelling...' : 'Cancel Job'}</span>
+              <span className="sm:hidden">{actionLoading ? 'Cancelling' : 'Cancel'}</span>
             </motion.button>
           )}
         </div>
-      </motion.div>
+      </motion.section>
 
       {showCompleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-md w-full"
+            className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/30 p-4 sm:p-6 max-w-md w-full backdrop-blur-md shadow-2xl shadow-black/50"
           >
-            <h2 className="text-xl font-bold text-neutral-textPrimary mb-4">Complete Job</h2>
-            <div className="space-y-4">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">Complete Job</h2>
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <label className="text-sm font-semibold text-neutral-textPrimary mb-2 block">Final Price (₹) <span className="text-red-500">*</span></label>
+                <label className="text-xs sm:text-sm font-semibold text-white mb-1.5 sm:mb-2 block">Final Price (₹) <span className="text-red-400">*</span></label>
                 <input
                   type="number"
                   value={finalPrice}
@@ -814,60 +824,64 @@ export default function ProviderJobDetailsPage() {
                     const value = e.target.value.replace(/[^0-9.]/g, '')
                     setFinalPrice(value)
                   }}
-                  className="w-full p-3 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl glass border-2 border-white/20 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main focus:border-primary-main/50 transition-colors text-sm sm:text-base"
                   placeholder="Enter final amount charged"
                   min="0"
                   step="0.01"
                   required
                 />
                 {job.estimatedBudget && (
-                  <div className="text-xs text-neutral-textSecondary mt-1">
+                  <div className="text-[10px] sm:text-xs text-slate-400 mt-1">
                     Estimated: ₹{job.estimatedBudget.toLocaleString()}
                   </div>
                 )}
               </div>
               
               <div>
-                <label className="text-sm font-semibold text-neutral-textPrimary mb-2 block">Payment Channel <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
+                <label className="text-xs sm:text-sm font-semibold text-white mb-1.5 sm:mb-2 block">Payment Channel <span className="text-red-400">*</span></label>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <motion.button
                     type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setPaymentChannel('CASH')}
-                    className={`p-3 border-2 rounded-xl font-semibold transition-all ${
+                    className={`p-2.5 sm:p-3 border-2 rounded-lg sm:rounded-xl font-semibold transition-all ${
                       paymentChannel === 'CASH'
-                        ? 'border-primary-main bg-primary-main/10 text-primary-main'
-                        : 'border-neutral-border text-neutral-textSecondary hover:border-primary-main/50'
+                        ? 'border-primary-main bg-primary-main/20 text-primary-light'
+                        : 'border-white/30 text-slate-300 hover:border-primary-main/50'
                     }`}
                   >
                     <div className="flex flex-col items-center gap-1">
-                      <DollarSign className="w-5 h-5" />
-                      <span>CASH</span>
-                      <span className="text-xs opacity-75">Immediate</span>
+                      <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="text-xs sm:text-sm">CASH</span>
+                      <span className="text-[9px] sm:text-xs opacity-75">Immediate</span>
                     </div>
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setPaymentChannel('ONLINE')}
-                    className={`p-3 border-2 rounded-xl font-semibold transition-all ${
+                    className={`p-2.5 sm:p-3 border-2 rounded-lg sm:rounded-xl font-semibold transition-all ${
                       paymentChannel === 'ONLINE'
-                        ? 'border-primary-main bg-primary-main/10 text-primary-main'
-                        : 'border-neutral-border text-neutral-textSecondary hover:border-primary-main/50'
+                        ? 'border-primary-main bg-primary-main/20 text-primary-light'
+                        : 'border-white/30 text-slate-300 hover:border-primary-main/50'
                     }`}
                   >
                     <div className="flex flex-col items-center gap-1">
-                      <CreditCard className="w-5 h-5" />
-                      <span>ONLINE</span>
-                      <span className="text-xs opacity-75">Payment Link</span>
+                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="text-xs sm:text-sm">ONLINE</span>
+                      <span className="text-[9px] sm:text-xs opacity-75">Payment Link</span>
                     </div>
-                  </button>
+                  </motion.button>
                 </div>
-                <div className="text-xs text-neutral-textSecondary mt-2">
+                <div className="text-[10px] sm:text-xs text-slate-400 mt-1.5 sm:mt-2 leading-relaxed">
                   {paymentChannel === 'CASH' 
                     ? 'Job will be marked as completed immediately after cash payment confirmation.'
                     : 'Customer will receive a payment link. Job will be completed after payment confirmation.'}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -876,7 +890,7 @@ export default function ProviderJobDetailsPage() {
                     setFinalPrice('')
                   }}
                   disabled={actionLoading}
-                  className="flex-1 px-4 py-2.5 border-2 border-neutral-border text-neutral-textSecondary rounded-xl font-semibold hover:bg-neutral-background transition-all disabled:opacity-50"
+                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl border-2 border-white/30 text-white text-xs sm:text-sm font-semibold hover:bg-white/10 hover:border-white/50 transition-all disabled:opacity-50"
                 >
                   Cancel
                 </motion.button>
@@ -885,7 +899,7 @@ export default function ProviderJobDetailsPage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleCompleteJob}
                   disabled={actionLoading}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl font-semibold hover:shadow-md transition-all disabled:opacity-50"
+                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-accent-green/50 transition-all disabled:opacity-50"
                 >
                   {actionLoading ? 'Completing...' : 'Complete Job'}
                 </motion.button>

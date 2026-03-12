@@ -18,6 +18,8 @@ public class ProviderProfileDto {
     private String providerCode;
     private String businessName;
     private String providerType;
+    private String firstName;
+    private String lastName;
     private Integer experienceYears;
     private BigDecimal rating;
     private Integer ratingCount;

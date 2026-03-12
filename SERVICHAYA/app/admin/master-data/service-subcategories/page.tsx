@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { 
-  getAllServiceSubCategories, createServiceSubCategory, updateServiceSubCategory, deleteServiceSubCategory,
+  // NOTE: Legacy sub-category master is deprecated in backend. We keep this page for future use,
+  // but for MVP we only need categories. So we only load categories here and disable editing.
   getAllServiceCategories, type ServiceSubCategoryMasterDto, type ServiceCategoryMasterDto
 } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
@@ -38,7 +39,9 @@ export default function AdminServiceSubCategoriesPage() {
 
   useEffect(() => {
     loadCategories()
-    fetchSubCategories()
+    // Sub-category master is deprecated; do not call missing APIs to avoid build/runtime errors.
+    // fetchSubCategories()
+    setLoading(false)
   }, [currentPage, pageSize, sortKey, sortDirection])
 
   const loadCategories = async () => {
@@ -50,21 +53,11 @@ export default function AdminServiceSubCategoriesPage() {
     }
   }
 
+  // Legacy fetch function kept for reference; currently unused
   const fetchSubCategories = useCallback(async () => {
-    try {
-      setLoading(true)
-      const result = await getAllServiceSubCategories(currentPage, pageSize, sortKey, sortDirection)
-      setSubCategories(result.content || [])
-      setTotalPages(result.totalPages || 0)
-      setTotalElements(result.totalElements || 0)
-    } catch (error: any) {
-      console.error('Failed to fetch service subcategories:', error)
-      const errorMsg = error.response?.data?.message || 'Failed to load service subcategories'
-      toast.error(errorMsg)
-      setSubCategories([])
-    } finally {
-      setLoading(false)
-    }
+    setSubCategories([])
+    setTotalPages(0)
+    setTotalElements(0)
   }, [currentPage, pageSize, sortKey, sortDirection])
 
   const handleSort = (key: string, direction: 'asc' | 'desc') => {
@@ -98,17 +91,8 @@ export default function AdminServiceSubCategoriesPage() {
     setShowModal(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this service subcategory?')) return
-
-    try {
-      await deleteServiceSubCategory(id)
-      toast.success('Service subcategory deleted successfully')
-      fetchSubCategories()
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to delete service subcategory'
-      toast.error(errorMsg)
-    }
+  const handleDelete = async (_id: number) => {
+    toast.error('Service subcategory master is deprecated. Please manage hierarchy via Service Categories page.')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,15 +104,9 @@ export default function AdminServiceSubCategoriesPage() {
     }
 
     try {
-      if (editingSubCategory?.id) {
-        await updateServiceSubCategory(editingSubCategory.id, formData)
-        toast.success('Service subcategory updated successfully')
-      } else {
-        await createServiceSubCategory(formData)
-        toast.success('Service subcategory created successfully')
-      }
+      // Backend no longer supports separate sub-category master.
+      toast.error('Service subcategory master is deprecated. Please use Service Categories for hierarchy.')
       setShowModal(false)
-      fetchSubCategories()
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || 'Failed to save service subcategory'
       toast.error(errorMsg)

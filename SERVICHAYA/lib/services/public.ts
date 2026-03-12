@@ -27,6 +27,14 @@ export interface TestimonialDto {
   createdAt: string
 }
 
+export interface HomePageDataDto {
+  stats: PlatformStatsDto
+  featuredCategories: any[]
+  rootCategories: any[]
+  featuredReviews: any[]
+  featuredSubCategories: any[]
+}
+
 // Get platform statistics for home page
 export const getPlatformStats = async (): Promise<PlatformStatsDto> => {
   try {
@@ -36,7 +44,7 @@ export const getPlatformStats = async (): Promise<PlatformStatsDto> => {
     return {
       verifiedProviders: Number(data.verifiedProviders) || 0,
       completedJobs: Number(data.completedJobs) || 0,
-      averageRating: typeof data.averageRating === 'string' ? parseFloat(data.averageRating) : Number(data.averageRating) || 4.8,
+      averageRating: typeof data.averageRating === 'string' ? parseFloat(data.averageRating) : Number(data.averageRating) || 0,
       citiesCovered: Number(data.citiesCovered) || 0,
     }
   } catch (error) {
@@ -47,15 +55,17 @@ export const getPlatformStats = async (): Promise<PlatformStatsDto> => {
       return {
         verifiedProviders: Number(adminStats.activeProviders) || 0,
         completedJobs: Number(adminStats.totalJobs) || 0,
-        averageRating: 4.8, // Will be calculated from reviews
-        citiesCovered: 35, // Will be calculated from active cities
+        // When falling back to admin stats, do not invent ratings or cities;
+        // keep them neutral so UI never shows misleading numbers.
+        averageRating: 0,
+        citiesCovered: 0,
       }
     } catch {
       // Return default values if both fail
       return {
         verifiedProviders: 0,
         completedJobs: 0,
-        averageRating: 4.8,
+        averageRating: 0,
         citiesCovered: 0,
       }
     }
@@ -91,31 +101,62 @@ export const getFeaturedServices = async (limit: number = 4): Promise<FeaturedSe
   }
 }
 
-// Get featured testimonials/reviews
+// Get featured testimonials/reviews for homepage
 export const getFeaturedTestimonials = async (limit: number = 3): Promise<TestimonialDto[]> => {
   try {
     const response = await api.get(`/reviews/featured?limit=${limit}`)
-    return response.data.data || []
+    const reviews = response.data.data || []
+
+    // Map backend review DTOs to the testimonial shape expected by the homepage
+    return (reviews as any[])
+      .filter((r) => r.reviewText && String(r.reviewText).length > 20)
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        customerName: 'Customer', // Customer-identifying details are not exposed in public DTO
+        customerLocation: undefined,
+        rating: Number(r.rating) || 5,
+        reviewText: r.reviewText,
+        serviceName: undefined,
+        createdAt: r.createdAt,
+      }))
   } catch (error) {
-    // If endpoint doesn't exist, try to get recent reviews
-    try {
-      const response = await api.get(`/reviews?page=0&size=${limit}&sortBy=createdAt&sortDir=desc`)
-      const reviews = response.data.data?.content || []
-      
-      return reviews
-        .filter((r: any) => r.reviewText && r.reviewText.length > 20)
-        .slice(0, limit)
-        .map((r: any) => ({
-          id: r.id,
-          customerName: r.customerName || 'Customer',
-          customerLocation: r.customerLocation,
-          rating: r.rating,
-          reviewText: r.reviewText,
-          serviceName: r.serviceName,
-          createdAt: r.createdAt,
-        }))
-    } catch {
-      return []
-    }
+    console.error('Failed to fetch featured testimonials:', error)
+    return []
+  }
+}
+
+// Aggregated homepage data from backend public controller
+export const getHomePageData = async (): Promise<{
+  stats: PlatformStatsDto | null
+  featuredCategories: any[]
+  rootCategories: any[]
+  featuredReviews: TestimonialDto[]
+  featuredSubCategories: any[]
+}> => {
+  const response = await api.get('/public/home')
+  const data: HomePageDataDto = response.data.data
+
+  const stats = data?.stats ?? null
+  const featuredCategories = data?.featuredCategories ?? []
+  const rootCategories = data?.rootCategories ?? []
+
+  const featuredReviewsRaw = data?.featuredReviews ?? []
+  const featuredReviews: TestimonialDto[] = (featuredReviewsRaw as any[]).map((r) => ({
+    id: r.id,
+    customerName: 'Customer',
+    customerLocation: undefined,
+    rating: Number(r.rating) || 5,
+    reviewText: r.reviewText,
+    serviceName: undefined,
+    createdAt: r.createdAt,
+  }))
+
+  return {
+    stats,
+    featuredCategories,
+    rootCategories,
+    featuredReviews,
+    featuredSubCategories: data?.featuredSubCategories ?? [],
   }
 }

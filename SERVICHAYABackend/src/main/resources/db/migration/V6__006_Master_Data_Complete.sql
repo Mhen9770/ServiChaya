@@ -281,39 +281,94 @@ WHERE c.code = 'SANAWAD'
 AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'SANAWAD_CENTRAL_POD1');
 
 -- ============================================
--- 6. SERVICE CATEGORIES (if not exists)
+-- 6. SERVICE CATEGORIES (root, if not exists)
 -- ============================================
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'AC_REPAIR', 'AC Repair & Service', 'Air conditioner installation, repair, and maintenance services', '❄️', 1, true, true, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'AC_REPAIR');
-
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'PLUMBING', 'Plumbing', 'All plumbing services including repairs, installation, and maintenance', '🔧', 2, true, true, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'PLUMBING');
-
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'ELECTRICAL', 'Electrical', 'Electrical repairs, wiring, and installation services', '⚡', 3, true, true, NOW(), NOW()
+-- Keep SERVICE CATEGORY master consistent with hierarchical model:
+-- root categories (parent_id NULL, level 0) for top-level "All Service Categories"
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
+SELECT 'ELECTRICAL', 'Electronics & Electrical', 'All electronics and electrical repair / installation services', 'HOME_SERVICE', '⚡', 1, TRUE, TRUE, NULL, 0, 'Electronics & Electrical', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'ELECTRICAL');
 
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'CLEANING', 'Cleaning', 'Home and office cleaning services', '✨', 4, true, true, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'CLEANING');
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
+SELECT 'PLUMBING', 'Plumbing', 'Plumbing installation, repair, and maintenance services', 'HOME_SERVICE', '🔧', 2, TRUE, TRUE, NULL, 0, 'Plumbing', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'PLUMBING');
 
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'APPLIANCE_REPAIR', 'Appliance Repair', 'Home appliance repair and maintenance', '🔌', 5, true, false, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'APPLIANCE_REPAIR');
-
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'CARPENTRY', 'Carpentry', 'Furniture making, repair, and carpentry services', '🪚', 6, true, false, NOW(), NOW()
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
+SELECT 'CARPENTRY', 'Carpentry', 'Furniture making, repair, and carpentry services', 'HOME_SERVICE', '🪚', 3, TRUE, TRUE, NULL, 0, 'Carpentry', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'CARPENTRY');
 
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'PAINTING', 'Painting', 'Interior and exterior painting services', '🎨', 7, true, false, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'PAINTING');
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
+SELECT 'HOUSING', 'Housing Services', 'Home maintenance, cleaning and related services', 'HOME_SERVICE', '🏠', 4, TRUE, TRUE, NULL, 0, 'Housing Services', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'HOUSING');
 
-INSERT INTO service_category_master (code, name, description, icon_url, display_order, is_active, is_featured, created_at, updated_at) 
-SELECT 'PEST_CONTROL', 'Pest Control', 'Professional pest control and extermination services', '🐛', 8, true, false, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'PEST_CONTROL');
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
+SELECT 'WORKER', 'Worker & Staffing', 'Skilled and unskilled worker / staffing services', 'HOME_SERVICE', '🧑‍🔧', 5, TRUE, TRUE, NULL, 0, 'Worker & Staffing', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'WORKER');
+
+-- ============================================
+-- 6.1 SERVICE SUB-CATEGORIES (if not exists)
+-- ============================================
+-- Sub-categories are children under the root categories above (level = 1)
+
+-- Electronics & Electrical sub-categories
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'FAN', 'Fan Service', 'Ceiling and wall fan installation, repair and maintenance', 'HOME_SERVICE', '🌀', 1, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'ELECTRICAL' LIMIT 1),
+       1,
+       'Electronics & Electrical/Fan Service',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'FAN');
+
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'TV', 'TV Service', 'Television installation, wall mounting and repair services', 'HOME_SERVICE', '📺', 2, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'ELECTRICAL' LIMIT 1),
+       1,
+       'Electronics & Electrical/TV Service',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'TV');
+
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'COOLER', 'Cooler Service', 'Air cooler installation, cleaning and repair', 'HOME_SERVICE', '❄️', 3, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'ELECTRICAL' LIMIT 1),
+       1,
+       'Electronics & Electrical/Cooler Service',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'COOLER');
+
+-- Plumbing sub-categories
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'WATER_LEAKAGE', 'Water Leakage', 'Detection and repair of water leakage issues', 'HOME_SERVICE', '💧', 1, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'PLUMBING' LIMIT 1),
+       1,
+       'Plumbing/Water Leakage',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'WATER_LEAKAGE');
+
+-- Carpentry sub-categories
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'DOOR_REPAIR', 'Door Repair', 'Wooden door repair, alignment and hardware fixing', 'HOME_SERVICE', '🚪', 1, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'CARPENTRY' LIMIT 1),
+       1,
+       'Carpentry/Door Repair',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'DOOR_REPAIR');
+
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'TABLE_REPAIR', 'Table Repair', 'Table and furniture repair and polishing services', 'HOME_SERVICE', '🪑', 2, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'CARPENTRY' LIMIT 1),
+       1,
+       'Carpentry/Table Repair',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'TABLE_REPAIR');
+
+-- Worker / staffing sub-categories
+INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at)
+SELECT 'OFFICE_BOY', 'Office Boy', 'Office boy / helper staffing services', 'HOME_SERVICE', '👨‍💼', 1, TRUE, TRUE,
+       (SELECT id FROM service_category_master WHERE code = 'WORKER' LIMIT 1),
+       1,
+       'Worker & Staffing/Office Boy',
+       NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'OFFICE_BOY');
 
 -- ============================================
 -- 7. SERVICE SKILLS (if not exists)

@@ -21,6 +21,16 @@ export const completeJob = async (jobId: number, providerId: number, finalPrice:
   return response.data.data
 }
 
+export const getCancellationFee = async (jobId: number, userId: number, isProvider: boolean = false): Promise<{
+  cancellationFee: number
+  refundAmount: number
+  jobAmount: number
+  canCancel: boolean
+}> => {
+  const response = await api.get(`/jobs/${jobId}/cancellation-fee?userId=${userId}&isProvider=${isProvider}`)
+  return response.data.data
+}
+
 export const cancelJob = async (jobId: number, userId: number, cancelReason: string, isProvider: boolean = false): Promise<string> => {
   const response = await api.post(`/jobs/${jobId}/cancel?userId=${userId}&isProvider=${isProvider}`, { action: 'CANCEL', cancelReason })
   return response.data.data

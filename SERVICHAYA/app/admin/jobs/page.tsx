@@ -53,7 +53,8 @@ function AdminJobsPageContent() {
   const loadInitialData = async () => {
     try {
       const [catsRes, citiesRes] = await Promise.all([
-        getAllCategories().catch(() => []),
+        // Only load root categories for filters to avoid loading full tree
+        getAllCategories(false, undefined, true).catch(() => []),
         getAllActiveCities().catch(() => [])
       ])
       setCategories(catsRes)

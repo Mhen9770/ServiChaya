@@ -32,6 +32,7 @@ public class JobService {
     private final ConfigService configService;
     private final NotificationService notificationService;
     private final JobStateMachine stateMachine;
+    private final JobWorkflowService jobWorkflowService;
 
     @Transactional
     public JobDto createJob(Long customerId, CreateJobDto createJobDto) {
@@ -64,6 +65,12 @@ public class JobService {
 
         JobMaster savedJob = jobRepository.save(job);
         log.info("Job created successfully with jobCode: {}, jobId: {}", jobCode, savedJob.getId());
+
+        try {
+            jobWorkflowService.initializeWorkflowForJob(savedJob);
+        } catch (Exception e) {
+            log.error("Failed to initialize workflow for jobId: {}. Proceeding with default behaviour.", savedJob.getId(), e);
+        }
 
         // Notify customer about job creation
         try {
@@ -367,7 +374,15 @@ public class JobService {
         // Update status
         job.setStatus(newStatus);
         jobRepository.save(job);
-        
+
+        // Sync workflow instance with new status (if workflow is configured)
+        try {
+            jobWorkflowService.onStatusChanged(jobId, currentStatus, newStatus);
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> {}",
+                    jobId, currentStatus, newStatus, e);
+        }
+
         log.info("Job {} status updated to {}", jobId, newStatus);
     }
 }

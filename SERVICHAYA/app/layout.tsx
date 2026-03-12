@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 import { LoadingProvider } from '@/contexts/LoadingContext'
 import { NavigationLoader } from '@/components/navigation/NavigationLoader'
@@ -16,6 +17,32 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* OneSignal Web Push SDK */}
+        <Script
+          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+          defer
+        />
+        <Script id="onesignal-init" strategy="afterInteractive">
+          {`
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {
+              try {
+                const allowedOrigins = ["https://way2rental.com", "http://localhost:3000"];
+                if (allowedOrigins.includes(window.location.origin)) {
+                  await OneSignal.init({
+                    appId: "07f9fc72-b60b-419a-87ca-13a87bb97c72",
+                  });
+                } else {
+                  console.warn('OneSignal init skipped for origin', window.location.origin);
+                }
+              } catch (e) {
+                console.error('OneSignal init failed', e);
+              }
+            });
+          `}
+        </Script>
+      </head>
       <body className="font-sans antialiased">
         <LoadingProvider>
           <NavigationLoader />

@@ -27,4 +27,11 @@ public interface JobReviewRepository extends JpaRepository<JobReview, Long> {
 
     @Query("SELECT AVG(r.rating) FROM JobReview r WHERE r.isVisible = true AND r.rating IS NOT NULL")
     BigDecimal calculateAverageRating();
+
+    /**
+     * Featured reviews for public display.
+     * Uses explicit ordering and pagination instead of fetching all records.
+     */
+    @Query("SELECT r FROM JobReview r WHERE r.isVisible = true ORDER BY r.rating DESC, r.createdAt DESC")
+    Page<JobReview> findFeaturedReviews(Pageable pageable);
 }

@@ -175,6 +175,8 @@ export interface ProviderProfileDto {
   providerCode: string
   businessName?: string
   providerType: string
+  firstName?: string
+  lastName?: string
   experienceYears?: number
   rating?: number
   ratingCount?: number
@@ -229,6 +231,8 @@ export const getAllServiceSkills = async (): Promise<ServiceSkillDto[]> => {
 }
 
 export const getServiceSkillsByCategory = async (categoryId: number): Promise<ServiceSkillDto[]> => {
-  const response = await api.get(`/admin/master-data/service-skills?page=0&size=1000&serviceCategoryId=${categoryId}`)
+  const response = await api.get(
+    `/admin/master-data/service-skills?page=0&size=1000&serviceCategoryId=${categoryId}`
+  )
   return response.data.data.content || []
 }

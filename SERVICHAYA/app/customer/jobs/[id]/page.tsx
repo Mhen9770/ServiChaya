@@ -30,7 +30,7 @@ import {
 import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
 import { getJobById, type JobDto } from '@/lib/services/job'
-import { cancelJob } from '@/lib/services/jobStatus'
+import { cancelJob, getCancellationFee } from '@/lib/services/jobStatus'
 import { createReview, getJobReview, type ReviewDto } from '@/lib/services/review'
 import { getPaymentSchedule, processPayment, type PaymentScheduleDto } from '@/lib/services/payment'
 import { getProviderProfile, type ProviderProfileDto } from '@/lib/services/provider'
@@ -117,8 +117,15 @@ export default function CustomerJobDetailsPage() {
       if (jobData.providerId) {
         promises.push(
           getProviderProfile(jobData.providerId)
-            .then(setProvider)
-            .catch(() => setProvider(null))
+            .then((providerData) => {
+              console.log('Provider profile loaded:', providerData)
+              setProvider(providerData)
+            })
+            .catch((error) => {
+              console.error('Failed to load provider profile:', error)
+              toast.error('Failed to load provider details')
+              setProvider(null)
+            })
         )
       }
 
@@ -156,42 +163,33 @@ export default function CustomerJobDetailsPage() {
     const user = getCurrentUser()
     if (!user || !job) return
     
-    // Calculate cancellation fee based on job status
-    let cancellationFee = 0
-    let refundAmount = 0
-    const jobAmount = job.finalPrice || job.estimatedBudget || 0
-    
-    if (job.status === 'PENDING' || job.status === 'MATCHED') {
-      // Before provider accepts - no fee, 100% refund
-      refundAmount = jobAmount
-      cancellationFee = 0
-    } else if (job.status === 'ACCEPTED') {
-      // After provider accepts but before start - 10% fee (min ₹50)
-      const feePercent = 10
-      cancellationFee = Math.max(jobAmount * feePercent / 100, 50)
-      refundAmount = jobAmount - cancellationFee
-    } else if (job.status === 'IN_PROGRESS') {
-      // After provider started - 20% fee (min ₹100)
-      const feePercent = 20
-      cancellationFee = Math.max(jobAmount * feePercent / 100, 100)
-      refundAmount = jobAmount - cancellationFee
-    }
-    
-    const confirmMessage = cancellationFee > 0
-      ? `Cancelling this job will incur a cancellation fee of ₹${cancellationFee.toLocaleString()}. You will receive a refund of ₹${refundAmount.toLocaleString()}. Do you want to proceed?`
-      : 'Are you sure you want to cancel this request? You will receive a full refund.'
-    
-    if (!confirm(confirmMessage)) return
-
     try {
       setActionLoading(true)
+      
+      // Get cancellation fee estimate from backend
+      const feeInfo = await getCancellationFee(job.id, user.userId, false)
+      
+      const cancellationFee = feeInfo.cancellationFee || 0
+      const refundAmount = feeInfo.refundAmount || 0
+      
+      const confirmMessage = cancellationFee > 0
+        ? `Cancelling this job will incur a cancellation fee of ₹${cancellationFee.toLocaleString()}. You will receive a refund of ₹${refundAmount.toLocaleString()}. Do you want to proceed?`
+        : 'Are you sure you want to cancel this request? You will receive a full refund.'
+      
+      if (!confirm(confirmMessage)) {
+        setActionLoading(false)
+        return
+      }
+
+      // Proceed with cancellation
       await cancelJob(job.id, user.userId, 'Customer cancelled', false)
       toast.success(cancellationFee > 0 
         ? `Request cancelled. Cancellation fee: ₹${cancellationFee.toLocaleString()}. Refund: ₹${refundAmount.toLocaleString()}`
         : 'Request cancelled successfully. Full refund will be processed.')
       await fetchData()
-    } catch {
-      toast.error('Unable to cancel request')
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || 'Unable to cancel request'
+      toast.error(errorMsg)
     } finally {
       setActionLoading(false)
     }
@@ -276,8 +274,11 @@ export default function CustomerJobDetailsPage() {
         break
       case 'MATCHED':
         if (provider) {
+          const providerName = provider.providerType === 'INDIVIDUAL' 
+            ? `${provider.firstName || ''} ${provider.lastName || ''}`.trim() || provider.providerType
+            : provider.businessName || provider.providerType
           details.push(
-            { label: 'Provider', value: provider.businessName || provider.providerType },
+            { label: 'Provider', value: providerName },
             { label: 'Jobs completed', value: `${provider.totalJobsCompleted || 0}` },
             { label: 'Rating', value: typeof provider.rating === 'number' ? `${provider.rating.toFixed(1)}/5` : 'N/A' },
           )
@@ -590,7 +591,9 @@ export default function CustomerJobDetailsPage() {
                   </div>
                   <div>
                     <h2 className="font-bold text-lg text-white">
-                      {provider.businessName || provider.providerType}
+                      {provider.providerType === 'INDIVIDUAL' 
+                        ? `${provider.firstName || ''} ${provider.lastName || ''}`.trim() || provider.providerType
+                        : provider.businessName || provider.providerType}
                     </h2>
                     <p className="text-xs text-slate-300 mt-0.5">
                       Provider ID: <span className="font-mono text-primary-light">{provider.providerCode}</span>

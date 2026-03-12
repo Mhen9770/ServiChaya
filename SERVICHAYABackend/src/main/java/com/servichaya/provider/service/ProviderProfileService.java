@@ -10,6 +10,7 @@ import com.servichaya.provider.entity.ProviderPodMap;
 import com.servichaya.provider.repository.ServiceProviderProfileRepository;
 import com.servichaya.provider.repository.ProviderSkillMapRepository;
 import com.servichaya.provider.repository.ProviderPodMapRepository;
+import com.servichaya.user.repository.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class ProviderProfileService {
     private final ServiceProviderProfileRepository providerRepository;
     private final ProviderSkillMapRepository skillMapRepository;
     private final ProviderPodMapRepository podMapRepository;
+    private final UserAccountRepository userAccountRepository;
 
     public ProviderProfileDto getProviderProfile(Long providerId) {
         log.info("Fetching provider profile for providerId: {}", providerId);
@@ -36,8 +38,28 @@ public class ProviderProfileService {
                     return new RuntimeException("Provider not found");
                 });
 
+        // Check if provider is deleted
+        if (provider.getIsDeleted() != null && provider.getIsDeleted()) {
+            log.error("Provider {} is deleted", providerId);
+            throw new RuntimeException("Provider not found");
+        }
+
         List<ProviderSkillMap> skills = skillMapRepository.findByProviderId(providerId);
         List<ProviderPodMap> serviceAreas = podMapRepository.findByProviderId(providerId);
+
+        // Fetch user account for firstName and lastName (for INDIVIDUAL providers)
+        String firstName = null;
+        String lastName = null;
+        try {
+            var userAccount = userAccountRepository.findById(provider.getUserId());
+            if (userAccount.isPresent()) {
+                var user = userAccount.get();
+                firstName = user.getFirstName();
+                lastName = user.getLastName();
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch user account for userId: {}", provider.getUserId(), e);
+        }
 
         return ProviderProfileDto.builder()
                 .id(provider.getId())
@@ -45,6 +67,8 @@ public class ProviderProfileService {
                 .providerCode(provider.getProviderCode())
                 .businessName(provider.getBusinessName())
                 .providerType(provider.getProviderType())
+                .firstName(firstName)
+                .lastName(lastName)
                 .experienceYears(provider.getExperienceYears())
                 .rating(provider.getRating())
                 .ratingCount(provider.getRatingCount())

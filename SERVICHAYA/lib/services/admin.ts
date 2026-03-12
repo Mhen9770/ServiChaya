@@ -200,18 +200,8 @@ export interface ServiceCategoryMasterDto {
   isActive?: boolean
 }
 
-export interface ServiceSubCategoryMasterDto {
-  id?: number
-  code: string
-  name: string
-  description?: string
-  categoryId: number
-  categoryName?: string
-  iconUrl?: string
-  displayOrder?: number
-  isFeatured?: boolean
-  isActive?: boolean
-}
+// NOTE: Legacy ServiceSubCategoryMaster has been deprecated.
+// Sub-categories are now represented using ServiceCategoryMaster with parentId.
 
 export interface MatchingRuleMasterDto {
   id?: number
@@ -354,13 +344,15 @@ export const getAllServiceCategories = async (
   page: number = 0,
   size: number = 20,
   sortBy?: string,
-  sortDir?: string
+  sortDir?: string,
+  parentId?: number
 ): Promise<{ content: ServiceCategoryMasterDto[]; totalElements: number; totalPages: number }> => {
   const params = new URLSearchParams()
   params.append('page', page.toString())
   params.append('size', size.toString())
   if (sortBy) params.append('sortBy', sortBy)
   if (sortDir) params.append('sortDir', sortDir)
+  if (typeof parentId === 'number') params.append('parentId', parentId.toString())
   const response = await api.get(`/admin/master-data/service-categories?${params.toString()}`)
   return response.data.data
 }
@@ -384,40 +376,8 @@ export const deleteServiceCategory = async (id: number): Promise<void> => {
   await api.delete(`/admin/master-data/service-categories/${id}`)
 }
 
-// ========== Service SubCategory Master ==========
-export const getAllServiceSubCategories = async (
-  page: number = 0,
-  size: number = 20,
-  sortBy?: string,
-  sortDir?: string
-): Promise<{ content: ServiceSubCategoryMasterDto[]; totalElements: number; totalPages: number }> => {
-  const params = new URLSearchParams()
-  params.append('page', page.toString())
-  params.append('size', size.toString())
-  if (sortBy) params.append('sortBy', sortBy)
-  if (sortDir) params.append('sortDir', sortDir)
-  const response = await api.get(`/admin/master-data/service-subcategories?${params.toString()}`)
-  return response.data.data
-}
-
-export const getServiceSubCategoryById = async (id: number): Promise<ServiceSubCategoryMasterDto> => {
-  const response = await api.get(`/admin/master-data/service-subcategories/${id}`)
-  return response.data.data
-}
-
-export const createServiceSubCategory = async (data: ServiceSubCategoryMasterDto): Promise<ServiceSubCategoryMasterDto> => {
-  const response = await api.post('/admin/master-data/service-subcategories', data)
-  return response.data.data
-}
-
-export const updateServiceSubCategory = async (id: number, data: ServiceSubCategoryMasterDto): Promise<ServiceSubCategoryMasterDto> => {
-  const response = await api.put(`/admin/master-data/service-subcategories/${id}`, data)
-  return response.data.data
-}
-
-export const deleteServiceSubCategory = async (id: number): Promise<void> => {
-  await api.delete(`/admin/master-data/service-subcategories/${id}`)
-}
+// ========== Service SubCategory Master (deprecated) ==========
+// Sub-categories are now managed via the hierarchical service-categories endpoints (parentId filter).
 
 // ========== Matching Rule Master ==========
 export const getAllMatchingRules = async (
@@ -469,13 +429,15 @@ export const getAllServiceSkills = async (
   page: number = 0,
   size: number = 20,
   sortBy?: string,
-  sortDir?: string
+  sortDir?: string,
+  serviceCategoryId?: number
 ): Promise<{ content: ServiceSkillMasterDto[]; totalElements: number; totalPages: number }> => {
   const params = new URLSearchParams()
   params.append('page', page.toString())
   params.append('size', size.toString())
   if (sortBy) params.append('sortBy', sortBy)
   if (sortDir) params.append('sortDir', sortDir)
+  if (serviceCategoryId) params.append('serviceCategoryId', serviceCategoryId.toString())
   const response = await api.get(`/admin/master-data/service-skills?${params.toString()}`)
   return response.data.data
 }
@@ -497,6 +459,159 @@ export const updateServiceSkill = async (id: number, data: ServiceSkillMasterDto
 
 export const deleteServiceSkill = async (id: number): Promise<void> => {
   await api.delete(`/admin/master-data/service-skills/${id}`)
+}
+
+// ========== Service Category - Skill Mapping ==========
+export interface ServiceCategorySkillMapDto {
+  id?: number
+  serviceCategoryId: number
+  serviceCategoryName?: string
+  serviceSkillId: number
+  serviceSkillName?: string
+  isActive?: boolean
+}
+
+export const getCategorySkillMappings = async (categoryId: number): Promise<ServiceCategorySkillMapDto[]> => {
+  const response = await api.get(`/admin/master-data/category-skill-mappings?categoryId=${categoryId}`)
+  return response.data.data || []
+}
+
+export const createCategorySkillMapping = async (categoryId: number, skillId: number): Promise<ServiceCategorySkillMapDto> => {
+  const response = await api.post(`/admin/master-data/category-skill-mappings?categoryId=${categoryId}&skillId=${skillId}`)
+  return response.data.data
+}
+
+export const deleteCategorySkillMapping = async (id: number): Promise<void> => {
+  await api.delete(`/admin/master-data/category-skill-mappings/${id}`)
+}
+
+export const bulkUpdateCategorySkillMappings = async (categoryId: number, skillIds: number[]): Promise<void> => {
+  await api.put(`/admin/master-data/category-skill-mappings/bulk?categoryId=${categoryId}`, skillIds)
+}
+
+// ========== Job Workflow Engine (Templates, Steps, Assignments) ==========
+
+export interface JobWorkflowTemplateDto {
+  id?: number
+  workflowCode: string
+  workflowName: string
+  description?: string
+  isActive?: boolean
+}
+
+export interface JobWorkflowStepTemplateDto {
+  id?: number
+  workflowTemplateId: number
+  stepOrder: number
+  stepCode: string
+  stepType: string
+  statusValue?: string
+  paymentType?: string
+  isMandatory?: boolean
+  autoAdvance?: boolean
+  configJson?: string
+}
+
+export interface JobWorkflowAssignmentDto {
+  id?: number
+  workflowTemplateId: number
+  workflowCode?: string
+  serviceTypeId?: number
+  serviceCategoryId?: number
+  serviceSubCategoryId?: number
+  priority?: number
+  isActive?: boolean
+}
+
+export const getAllWorkflowTemplates = async (
+  page: number = 0,
+  size: number = 20,
+  sortBy?: string,
+  sortDir?: string
+): Promise<{ content: JobWorkflowTemplateDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  if (sortBy) params.append('sortBy', sortBy)
+  if (sortDir) params.append('sortDir', sortDir)
+  const response = await api.get(`/admin/workflows/templates?${params.toString()}`)
+  return response.data.data
+}
+
+export const createWorkflowTemplate = async (data: JobWorkflowTemplateDto): Promise<JobWorkflowTemplateDto> => {
+  const response = await api.post('/admin/workflows/templates', data)
+  return response.data.data
+}
+
+export const updateWorkflowTemplate = async (
+  id: number,
+  data: JobWorkflowTemplateDto
+): Promise<JobWorkflowTemplateDto> => {
+  const response = await api.put(`/admin/workflows/templates/${id}`, data)
+  return response.data.data
+}
+
+export const deleteWorkflowTemplate = async (id: number): Promise<void> => {
+  await api.delete(`/admin/workflows/templates/${id}`)
+}
+
+export const getWorkflowSteps = async (templateId: number): Promise<JobWorkflowStepTemplateDto[]> => {
+  const response = await api.get(`/admin/workflows/templates/${templateId}/steps`)
+  return response.data.data
+}
+
+export const createWorkflowStep = async (
+  templateId: number,
+  data: JobWorkflowStepTemplateDto
+): Promise<JobWorkflowStepTemplateDto> => {
+  const response = await api.post(`/admin/workflows/templates/${templateId}/steps`, data)
+  return response.data.data
+}
+
+export const updateWorkflowStep = async (
+  stepId: number,
+  data: JobWorkflowStepTemplateDto
+): Promise<JobWorkflowStepTemplateDto> => {
+  const response = await api.put(`/admin/workflows/steps/${stepId}`, data)
+  return response.data.data
+}
+
+export const deleteWorkflowStep = async (stepId: number): Promise<void> => {
+  await api.delete(`/admin/workflows/steps/${stepId}`)
+}
+
+export const getAllWorkflowAssignments = async (
+  page: number = 0,
+  size: number = 20,
+  sortBy?: string,
+  sortDir?: string
+): Promise<{ content: JobWorkflowAssignmentDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  if (sortBy) params.append('sortBy', sortBy)
+  if (sortDir) params.append('sortDir', sortDir)
+  const response = await api.get(`/admin/workflows/assignments?${params.toString()}`)
+  return response.data.data
+}
+
+export const createWorkflowAssignment = async (
+  data: JobWorkflowAssignmentDto
+): Promise<JobWorkflowAssignmentDto> => {
+  const response = await api.post('/admin/workflows/assignments', data)
+  return response.data.data
+}
+
+export const updateWorkflowAssignment = async (
+  id: number,
+  data: JobWorkflowAssignmentDto
+): Promise<JobWorkflowAssignmentDto> => {
+  const response = await api.put(`/admin/workflows/assignments/${id}`, data)
+  return response.data.data
+}
+
+export const deleteWorkflowAssignment = async (id: number): Promise<void> => {
+  await api.delete(`/admin/workflows/assignments/${id}`)
 }
 
 // ========== Country Master ==========

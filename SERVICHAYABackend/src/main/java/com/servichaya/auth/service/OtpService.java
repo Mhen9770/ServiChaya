@@ -23,6 +23,8 @@ public class OtpService {
     
     @Value("${otp.length:6}")
     private int otpLength;
+    @Value("${otp.max.count.per.hour:100}")
+    private long maxOtpInOneHour;
 
     @Transactional
     public String generateAndSendOtp(String mobileNumber, String ipAddress) {
@@ -32,7 +34,7 @@ public class OtpService {
         // Check rate limiting (max 5 OTPs per hour)
         LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
         Long recentOtps = otpRepository.countByMobileNumberSince(mobileNumber, oneHourAgo);
-        if (recentOtps >= 5) {
+        if (recentOtps >= maxOtpInOneHour) {
             throw new RuntimeException("Too many OTP requests. Please try again later.");
         }
         

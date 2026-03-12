@@ -10,6 +10,7 @@ import com.servichaya.service.entity.ServiceCategoryMaster;
 import com.servichaya.service.repository.ServiceCategoryMasterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,7 @@ public class ServiceCategoryService {
     private final ServiceProviderProfileRepository providerRepository;
     private final ProviderProfileService providerProfileService;
 
+    @Cacheable(value = "categories", key = "'all-active'")
     public List<ServiceCategoryDto> getAllActiveCategories() {
         log.debug("Getting all active service categories");
         try {
@@ -42,6 +44,7 @@ public class ServiceCategoryService {
         }
     }
 
+    @Cacheable(value = "categories", key = "'root'")
     public List<ServiceCategoryDto> getRootCategories() {
         log.debug("Getting root categories (no parent)");
         try {
@@ -78,6 +81,7 @@ public class ServiceCategoryService {
         }
     }
 
+    @Cacheable(value = "categories", key = "'featured'")
     public List<ServiceCategoryDto> getFeaturedCategories() {
         log.debug("Getting featured service categories");
         try {
@@ -92,6 +96,7 @@ public class ServiceCategoryService {
         }
     }
 
+    @Cacheable(value = "categories", key = "'id:' + #id")
     public ServiceCategoryDto getCategoryById(Long id) {
         log.debug("Getting service category by id: {}", id);
         try {
@@ -108,6 +113,7 @@ public class ServiceCategoryService {
         }
     }
 
+    @Cacheable(value = "categories", key = "'tree:' + #id")
     public ServiceCategoryDto getCategoryTreeById(Long id) {
         log.debug("Getting category tree by id: {}", id);
         try {

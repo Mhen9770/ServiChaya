@@ -69,8 +69,8 @@ import {
   Tv,
   Radio,
 } from 'lucide-react'
-import { getPlatformStats, getFeaturedTestimonials, type PlatformStatsDto, type TestimonialDto } from '@/lib/services/public'
-import { getRootCategories, getAllCategories, type ServiceCategory } from '@/lib/services/service'
+import { getHomePageData, getPlatformStats, getFeaturedTestimonials, type PlatformStatsDto, type TestimonialDto } from '@/lib/services/public'
+import { getRootCategories, getAllCategories, getAllSubCategories, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { PageLoader, ContentLoader } from '@/components/ui/Loader'
 
 // Banner carousel data
@@ -222,6 +222,7 @@ export default function HomePage() {
   const [currentBanner, setCurrentBanner] = useState(0)
   const [stats, setStats] = useState<PlatformStatsDto | null>(null)
   const [categories, setCategories] = useState<ServiceCategory[]>([])
+  const [subCategories, setSubCategories] = useState<ServiceSubCategory[]>([])
   const [featuredCategories, setFeaturedCategories] = useState<ServiceCategory[]>([])
   const [testimonials, setTestimonials] = useState<TestimonialDto[]>([])
   const [loading, setLoading] = useState(true)
@@ -301,17 +302,33 @@ export default function HomePage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [statsData, categoriesData, featuredData, testimonialsData] = await Promise.all([
+
+      // Prefer single aggregated backend call for homepage data
+      const aggregated = await getHomePageData().catch(() => null)
+
+      if (aggregated) {
+        setStats(aggregated.stats)
+        setCategories((aggregated.rootCategories || []).slice(0, 8))
+        setFeaturedCategories((aggregated.featuredCategories || []).slice(0, 6))
+        setTestimonials(aggregated.featuredReviews || [])
+        setSubCategories((aggregated.featuredSubCategories || []) as ServiceSubCategory[])
+        return
+      }
+
+      // Fallback to individual calls if aggregated endpoint is unavailable
+      const [statsData, categoriesData, featuredData, testimonialsData, subCategoryData] = await Promise.all([
         getPlatformStats().catch(() => null),
         getRootCategories().catch(() => []),
         getAllCategories(true).catch(() => []),
         getFeaturedTestimonials(3).catch(() => []),
+        getAllSubCategories(undefined, true).catch(() => []),
       ])
-      
+
       setStats(statsData)
       setCategories(categoriesData.slice(0, 8)) // Show top 8 categories
       setFeaturedCategories(featuredData.slice(0, 6)) // Show top 6 featured
       setTestimonials(testimonialsData)
+      setSubCategories(subCategoryData || [])
     } catch (error) {
       console.error('Failed to load home page data:', error)
     } finally {
@@ -343,16 +360,33 @@ export default function HomePage() {
     }
   }
 
-  const displayStats = stats ? [
-    { value: `${(stats.verifiedProviders || 0).toLocaleString()}+`, label: 'Verified Providers', icon: Users, color: 'text-blue-400' },
-    { value: `${(stats.completedJobs || 0).toLocaleString()}+`, label: 'Jobs Completed', icon: CheckCircle2, color: 'text-green-400' },
-    { value: `${(typeof stats.averageRating === 'number' ? stats.averageRating : parseFloat(String(stats.averageRating || 0))).toFixed(1)}/5`, label: 'Avg Rating', icon: Star, color: 'text-amber-400' },
-    { value: `${(stats.citiesCovered || 0).toLocaleString()}+`, label: 'Cities', icon: MapPin, color: 'text-purple-400' },
-  ] : [
-    { value: '2,500+', label: 'Verified Providers', icon: Users, color: 'text-blue-400' },
-    { value: '120K+', label: 'Jobs Completed', icon: CheckCircle2, color: 'text-green-400' },
-    { value: '4.8/5', label: 'Avg Rating', icon: Star, color: 'text-amber-400' },
-    { value: '35+', label: 'Cities', icon: MapPin, color: 'text-purple-400' },
+  const displayStats = [
+    {
+      value: stats ? `${(stats.verifiedProviders || 0).toLocaleString()}+` : '0',
+      label: 'Verified Providers',
+      icon: Users,
+      color: 'text-blue-400',
+    },
+    {
+      value: stats ? `${(stats.completedJobs || 0).toLocaleString()}+` : '0',
+      label: 'Jobs Completed',
+      icon: CheckCircle2,
+      color: 'text-green-400',
+    },
+    {
+      value: stats
+        ? `${(typeof stats.averageRating === 'number' ? stats.averageRating : parseFloat(String(stats.averageRating || 0))).toFixed(1)}/5`
+        : '0.0/5',
+      label: 'Avg Rating',
+      icon: Star,
+      color: 'text-amber-400',
+    },
+    {
+      value: stats ? `${(stats.citiesCovered || 0).toLocaleString()}+` : '0',
+      label: 'Cities',
+      icon: MapPin,
+      color: 'text-purple-400',
+    },
   ]
 
   // getCategoryIcon function is now defined above as a const
@@ -785,6 +819,11 @@ export default function HomePage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
                 {featuredCategories.map((category, index) => {
                   const IconComponent = getCategoryIcon(category)
+                  const providerLabel =
+                    category.providerCount && category.providerCount > 0
+                      ? `${category.providerCount}+ providers`
+                      : 'Onboarding providers'
+
                   return (
                     <motion.div
                       key={category.id}
@@ -851,12 +890,26 @@ export default function HomePage() {
                             transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
                           />
                         </motion.div>
-                        <h3 className="font-bold text-sm sm:text-base mb-1 group-hover:text-primary-light transition-colors relative z-10">
-                          {category.name}
-                        </h3>
-                        {category.providerCount > 0 && (
-                          <p className="text-xs text-slate-400 relative z-10">{category.providerCount}+ providers</p>
-                        )}
+                        <div className="relative z-10 space-y-1">
+                          {/* Small pill to highlight popularity for the first 1–2 cards */}
+                          {index < 2 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary-main/15 border border-primary-main/30 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-light">
+                              <SparklesIcon className="w-3 h-3" />
+                              Top choice
+                            </span>
+                          )}
+                          <h3 className="font-bold text-sm sm:text-base group-hover:text-primary-light transition-colors">
+                            {category.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-300 line-clamp-2">
+                            {category.description && category.description.trim().length > 0
+                              ? category.description
+                              : providerLabel}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {providerLabel}
+                          </p>
+                        </div>
                       </Link>
                     </motion.div>
                   )
@@ -881,97 +934,114 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* All Categories Grid */}
-        {categories.length > 0 && (
+        {/* All Categories – structured list of subcategories, limited preview */}
+        {subCategories.length > 0 && (
           <section className="w-full py-12 sm:py-16 lg:py-20 bg-gradient-to-b from-[#010B2A] to-[#000510]">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="text-center mb-10 sm:mb-12"
+                className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8 sm:mb-10"
               >
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
-                  Explore All <span className="text-primary-light">Categories</span>
-                </h2>
-                <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto">
-                  Find exactly what you need from our comprehensive service list
-                </p>
+                <div>
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
+                    Explore All <span className="text-primary-light">Services</span>
+                  </h2>
+                  <p className="text-slate-300 text-sm sm:text-base max-w-xl">
+                    Browse the full catalog of sub‑services available on SERVICHAYA and deep–dive into any category.
+                  </p>
+                </div>
+                <div className="text-xs sm:text-sm text-slate-400">
+                  Showing&nbsp;
+                  <span className="font-semibold text-slate-200">
+                    {Math.min(5, subCategories.length)}
+                  </span>
+                  &nbsp;of&nbsp;
+                  <span className="font-semibold text-slate-200">{subCategories.length}</span> services
+                </div>
               </motion.div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                {categories.map((category, index) => {
-                  const IconComponent = getCategoryIcon(category)
+              <div className="space-y-3">
+                {subCategories.slice(0, 5).map((sub, index) => {
+                  const IconComponent = getCategoryIcon({
+                    id: sub.id,
+                    code: sub.code,
+                    name: sub.name,
+                    description: sub.description,
+                    iconUrl: sub.iconUrl,
+                    displayOrder: sub.displayOrder,
+                    isFeatured: sub.isFeatured,
+                    providerCount: sub.providerCount,
+                  } as ServiceCategory)
+                  const providerLabel =
+                    sub.providerCount && sub.providerCount > 0
+                      ? `${sub.providerCount} active providers`
+                      : 'Providers onboarding'
+
                   return (
                     <motion.div
-                      key={category.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      whileInView={{ opacity: 1, scale: 1 }}
+                      key={sub.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
-                      transition={{ delay: index * 0.05 }}
-                      whileHover={{ scale: 1.03, y: -3 }}
+                      transition={{ delay: index * 0.03 }}
                     >
                       <Link
-                        href={`/services?category=${category.id}`}
-                        className="block rounded-xl glass-dark border border-white/10 hover:border-primary-main/50 p-5 sm:p-6 transition-all group"
+                        href={`/services?subcategory=${sub.id}`}
+                        className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 rounded-2xl bg-slate-950/60 hover:bg-slate-900/80 border border-white/10 hover:border-primary-main/50 px-4 sm:px-5 py-3 sm:py-4 transition-all group"
                       >
-                        <div className="flex items-center gap-3 sm:gap-4 mb-3">
-                          <motion.div 
-                            className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-main/20 to-primary-dark/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform relative overflow-hidden"
-                            whileHover={{ scale: 1.15, rotate: 5 }}
+                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                          <motion.div
+                            className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-primary-main/20 to-primary-dark/20 rounded-lg flex items-center justify-center relative overflow-hidden"
+                            whileHover={{ scale: 1.05, rotate: 3 }}
                           >
                             {IconComponent && (
-                              <motion.div
-                                animate={{ 
-                                  rotate: [0, 10],
-                                  scale: [1, 1.18, 1],
-                                  y: [0, -3, 0]
-                                }}
-                                transition={{ 
-                                  rotate: { duration: 4, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" },
-                                  scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
-                                  y: { duration: 3, repeat: Infinity, ease: "easeInOut" }
-                                }}
-                                className="relative z-10"
-                              >
-                                <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 text-primary-light drop-shadow-md" />
-                              </motion.div>
+                              <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light drop-shadow-md" />
                             )}
-                            {/* Pulsing background */}
-                            <motion.div
-                              className="absolute inset-0 bg-primary-main/30 rounded-lg"
-                              animate={{ 
-                                scale: [1, 1.6],
-                                opacity: [0.5, 0]
-                              }}
-                              transition={{ duration: 2.5, repeat: Infinity, ease: "easeOut" }}
-                            />
-                            {/* Rotating shine */}
-                            <motion.div
-                              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-lg"
-                              animate={{ 
-                                x: ['-100%', '200%']
-                              }}
-                              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                            />
                           </motion.div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-sm sm:text-base group-hover:text-primary-light transition-colors truncate">
-                              {category.name}
+                            <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary-light transition-colors truncate">
+                              {sub.name}
                             </h3>
-                            {category.providerCount > 0 && (
-                              <p className="text-xs text-slate-400">{category.providerCount} providers</p>
-                            )}
+                            <p className="text-[11px] sm:text-xs text-slate-400 line-clamp-2">
+                              {sub.description && sub.description.trim().length > 0
+                                ? sub.description
+                                : `View all providers offering ${sub.name.toLowerCase()} services.`}
+                            </p>
                           </div>
                         </div>
-                        {category.description && (
-                          <p className="text-xs text-slate-400 line-clamp-2">{category.description}</p>
-                        )}
+                        <div className="flex items-center justify-between gap-3 w-full sm:w-auto">
+                          <span className="inline-flex items-center gap-2 text-[11px] sm:text-xs text-slate-300">
+                            <Users className="w-3.5 h-3.5 text-primary-light" />
+                            {providerLabel}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-primary-light font-semibold group-hover:translate-x-0.5 transition-transform whitespace-nowrap">
+                            View details
+                            <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
                       </Link>
                     </motion.div>
                   )
                 })}
               </div>
+
+              {/* CTA to view the complete list in Services page */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="mt-6 flex justify-center"
+              >
+                <Link
+                  href="/services"
+                  className="inline-flex items-center gap-2 rounded-xl border border-primary-main/60 bg-primary-main/10 px-6 py-2.5 text-sm font-semibold text-primary-light hover:bg-primary-main/20 transition-all"
+                >
+                  View all categories
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </motion.div>
             </div>
           </section>
         )}

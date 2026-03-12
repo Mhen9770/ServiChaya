@@ -13,6 +13,7 @@ import com.servichaya.review.repository.JobReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,6 +94,27 @@ public class ReviewService {
         log.info("Fetching reviews for providerId: {}", providerId);
         return reviewRepository.findByProviderId(providerId, pageable)
                 .map(this::mapToDto);
+    }
+
+    /**
+     * Get featured reviews for public display on landing / marketing pages.
+     * Uses limited page size for performance and avoids fetching entire table.
+     */
+    public List<ReviewDto> getFeaturedReviews(int limit) {
+        int pageSize = Math.max(1, Math.min(limit, 10));
+        log.info("Fetching up to {} featured reviews for public display", pageSize);
+
+        PageRequest pageRequest = PageRequest.of(0, pageSize);
+        Page<JobReview> page = reviewRepository.findFeaturedReviews(pageRequest);
+
+        List<JobReview> reviews = page.getContent();
+        log.debug("Retrieved {} featured reviews", reviews.size());
+
+        List<ReviewDto> dtos = new ArrayList<>();
+        for (JobReview review : reviews) {
+            dtos.add(mapToDto(review));
+        }
+        return dtos;
     }
 
     public ReviewDto getJobReview(Long jobId) {

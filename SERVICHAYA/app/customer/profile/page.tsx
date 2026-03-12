@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
-import { BadgeCheck, Mail, MapPin, Phone, Save, ShieldCheck, UserCircle2, Edit, TrendingUp, ArrowRight } from 'lucide-react'
+import { BadgeCheck, Mail, MapPin, Phone, Save, ShieldCheck, UserCircle2, Edit, TrendingUp, ArrowRight, X } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
-import { getCustomerProfile, type CustomerProfileDto, updateCustomerProfile } from '@/lib/services/customer'
-import Loader from '@/components/ui/Loader'
+import { getCustomerProfile, type CustomerProfileDto, updateCustomerProfile, createCustomerAddress, type CreateAddressRequest } from '@/lib/services/customer'
+import { getAllActiveCities, getZonesByCity, getPodsByZone, type CityMasterDto, type ZoneMasterDto, type PodMasterDto } from '@/lib/services/admin'
+import Loader, { ButtonLoader } from '@/components/ui/Loader'
 
 export default function CustomerProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -15,12 +16,77 @@ export default function CustomerProfilePage() {
   const [profile, setProfile] = useState<CustomerProfileDto | null>(null)
   const [name, setName] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  
+  // Address form state
+  const [showAddressForm, setShowAddressForm] = useState(false)
+  const [savingAddress, setSavingAddress] = useState(false)
+  const [loadingCities, setLoadingCities] = useState(false)
+  const [loadingZones, setLoadingZones] = useState(false)
+  const [loadingPods, setLoadingPods] = useState(false)
+  const [cities, setCities] = useState<CityMasterDto[]>([])
+  const [zones, setZones] = useState<ZoneMasterDto[]>([])
+  const [pods, setPods] = useState<PodMasterDto[]>([])
+  const [addressForm, setAddressForm] = useState<CreateAddressRequest>({
+    addressLabel: '',
+    addressLine1: '',
+    addressLine2: '',
+    landmark: '',
+    cityId: 0,
+    zoneId: undefined,
+    podId: undefined,
+    pincode: '',
+    isPrimary: false,
+  })
 
   useEffect(() => {
     const user = getCurrentUser()
     if (!user) return
     load(user.userId)
+    loadCities()
   }, [])
+
+  const loadCities = async () => {
+    try {
+      setLoadingCities(true)
+      const cityRes = await getAllActiveCities()
+      setCities(cityRes)
+    } catch {
+      toast.error('Failed to load cities')
+    } finally {
+      setLoadingCities(false)
+    }
+  }
+
+  const handleCityChange = async (cityId: number) => {
+    setAddressForm(prev => ({ ...prev, cityId, zoneId: undefined, podId: undefined }))
+    setZones([])
+    setPods([])
+    if (!cityId) return
+    try {
+      setLoadingZones(true)
+      const zoneRes = await getZonesByCity(cityId)
+      setZones(zoneRes)
+    } catch {
+      toast.error('Failed to load zones')
+    } finally {
+      setLoadingZones(false)
+    }
+  }
+
+  const handleZoneChange = async (zoneId: number) => {
+    setAddressForm(prev => ({ ...prev, zoneId, podId: undefined }))
+    setPods([])
+    if (!zoneId) return
+    try {
+      setLoadingPods(true)
+      const podRes = await getPodsByZone(zoneId)
+      setPods(podRes)
+    } catch {
+      toast.error('Failed to load PODs')
+    } finally {
+      setLoadingPods(false)
+    }
+  }
 
   const load = async (customerId: number) => {
     try {
@@ -49,6 +115,47 @@ export default function CustomerProfilePage() {
       toast.error('Could not save profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const addAddress = async () => {
+    const user = getCurrentUser()
+    if (!user) return
+
+    if (!addressForm.addressLine1 || !addressForm.cityId) {
+      toast.error('Please fill address line 1 and select city')
+      return
+    }
+
+    try {
+      setSavingAddress(true)
+      const newAddress = await createCustomerAddress(user.userId, {
+        ...addressForm,
+        cityId: Number(addressForm.cityId) || 0,
+        zoneId: addressForm.zoneId,
+        podId: addressForm.podId,
+      })
+      setProfile(prev => prev ? { ...prev, addresses: [...(prev.addresses || []), newAddress] } : prev)
+      toast.success('Address added successfully')
+      setShowAddressForm(false)
+      // Reset form
+      setAddressForm({
+        addressLabel: '',
+        addressLine1: '',
+        addressLine2: '',
+        landmark: '',
+        cityId: 0,
+        zoneId: undefined,
+        podId: undefined,
+        pincode: '',
+        isPrimary: false,
+      })
+      setZones([])
+      setPods([])
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Could not add address')
+    } finally {
+      setSavingAddress(false)
     }
   }
 
@@ -172,10 +279,219 @@ export default function CustomerProfilePage() {
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-white">Saved addresses</h3>
-          <Link href="/customer/jobs/create" className="text-xs text-primary-light hover:text-primary-main inline-flex items-center gap-1">
-            Add new <ArrowRight className="w-3 h-3" />
-          </Link>
+          {!showAddressForm && (
+            <button
+              type="button"
+              onClick={() => setShowAddressForm(true)}
+              className="text-xs text-primary-light hover:text-primary-main inline-flex items-center gap-1"
+            >
+              Add new <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
+        
+        {showAddressForm && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl glass border border-primary-main/30 p-4 mb-4 bg-primary-main/5"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-white">Add New Address</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddressForm(false)
+                  setAddressForm({
+                    addressLabel: '',
+                    addressLine1: '',
+                    addressLine2: '',
+                    landmark: '',
+                    cityId: 0,
+                    zoneId: undefined,
+                    podId: undefined,
+                    pincode: '',
+                    isPrimary: false,
+                  })
+                  setZones([])
+                  setPods([])
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-white">Address Label (optional)</label>
+                <input
+                  type="text"
+                  value={addressForm.addressLabel || ''}
+                  onChange={(e) => setAddressForm(prev => ({ ...prev, addressLabel: e.target.value }))}
+                  placeholder="Home, Office, etc."
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-white">City *</label>
+                <select
+                  value={addressForm.cityId || 0}
+                  onChange={(e) => handleCityChange(Number(e.target.value))}
+                  disabled={loadingCities}
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary-main/50 disabled:opacity-50"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  <option value={0}>Select city</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>{city.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {addressForm.cityId > 0 && zones.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold mb-1 text-white">Zone (optional)</label>
+                  <select
+                    value={addressForm.zoneId || ''}
+                    onChange={(e) => handleZoneChange(e.target.value ? Number(e.target.value) : 0)}
+                    disabled={loadingZones}
+                    className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary-main/50 disabled:opacity-50"
+                    style={{ colorScheme: 'dark' }}
+                  >
+                    <option value="">Select zone</option>
+                    {zones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>{zone.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {addressForm.zoneId && pods.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold mb-1 text-white">POD (optional)</label>
+                  <select
+                    value={addressForm.podId || ''}
+                    onChange={(e) => setAddressForm(prev => ({ ...prev, podId: e.target.value ? Number(e.target.value) : undefined }))}
+                    disabled={loadingPods}
+                    className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary-main/50 disabled:opacity-50"
+                    style={{ colorScheme: 'dark' }}
+                  >
+                    <option value="">Select POD</option>
+                    {pods.map((pod) => (
+                      <option key={pod.id} value={pod.id}>{pod.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold mb-1 text-white">Address Line 1 *</label>
+                <input
+                  type="text"
+                  value={addressForm.addressLine1}
+                  onChange={(e) => setAddressForm(prev => ({ ...prev, addressLine1: e.target.value }))}
+                  placeholder="Street address, building name"
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold mb-1 text-white">Address Line 2 (optional)</label>
+                <input
+                  type="text"
+                  value={addressForm.addressLine2 || ''}
+                  onChange={(e) => setAddressForm(prev => ({ ...prev, addressLine2: e.target.value }))}
+                  placeholder="Apartment, suite, unit, etc."
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-white">Landmark (optional)</label>
+                <input
+                  type="text"
+                  value={addressForm.landmark || ''}
+                  onChange={(e) => setAddressForm(prev => ({ ...prev, landmark: e.target.value }))}
+                  placeholder="Nearby landmark"
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-white">Pincode (optional)</label>
+                <input
+                  type="text"
+                  value={addressForm.pincode || ''}
+                  onChange={(e) => setAddressForm(prev => ({ ...prev, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                  placeholder="6-digit pincode"
+                  maxLength={6}
+                  className="w-full rounded-lg glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="inline-flex items-center gap-2 text-xs text-white">
+                  <input
+                    type="checkbox"
+                    checked={addressForm.isPrimary || false}
+                    onChange={(e) => setAddressForm(prev => ({ ...prev, isPrimary: e.target.checked }))}
+                    className="rounded"
+                  />
+                  Set as default address
+                </label>
+              </div>
+              
+              <div className="md:col-span-2 flex gap-2">
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: savingAddress ? 1 : 1.02 }}
+                  whileTap={{ scale: savingAddress ? 1 : 0.98 }}
+                  onClick={addAddress}
+                  disabled={savingAddress}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2 text-sm font-semibold disabled:opacity-60 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                >
+                  {savingAddress ? (
+                    <>
+                      <ButtonLoader size="sm" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Address
+                    </>
+                  )}
+                </motion.button>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setShowAddressForm(false)
+                    setAddressForm({
+                      addressLabel: '',
+                      addressLine1: '',
+                      addressLine2: '',
+                      landmark: '',
+                      cityId: 0,
+                      zoneId: undefined,
+                      podId: undefined,
+                      pincode: '',
+                      isPrimary: false,
+                    })
+                    setZones([])
+                    setPods([])
+                  }}
+                  className="px-4 py-2 rounded-lg border border-white/20 text-white text-sm font-semibold hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
         {profile.addresses?.length ? (
           <div className="grid md:grid-cols-2 gap-3">
             {profile.addresses.map((address, index) => (
@@ -203,9 +519,15 @@ export default function CustomerProfilePage() {
           <div className="text-center py-6">
             <MapPin className="w-12 h-12 mx-auto text-slate-400 mb-3 opacity-50" />
             <p className="text-sm text-slate-300 mb-3">No saved addresses available.</p>
-            <Link href="/customer/jobs/create" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2 text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all">
-              Add address
-            </Link>
+            {!showAddressForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddressForm(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2 text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+              >
+                Add address
+              </button>
+            )}
           </div>
         )}
       </motion.section>

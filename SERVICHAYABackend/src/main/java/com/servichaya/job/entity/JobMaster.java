@@ -92,4 +92,13 @@ public class JobMaster extends BaseEntity {
 
     @Column(name = "special_instructions", columnDefinition = "TEXT")
     private String specialInstructions;
+
+    @Column(name = "cancellation_fee", precision = 10, scale = 2)
+    private BigDecimal cancellationFee;
+
+    @Column(name = "cancellation_refund_amount", precision = 10, scale = 2)
+    private BigDecimal cancellationRefundAmount;
+
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
 }

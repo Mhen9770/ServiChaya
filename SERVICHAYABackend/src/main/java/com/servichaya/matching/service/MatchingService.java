@@ -564,6 +564,27 @@ public class MatchingService {
         // Use provided rankOrder or set to 1 (highest priority for manual assignment)
         Integer finalRankOrder = rankOrder != null ? rankOrder : 1;
 
+        // Ensure job status is moved from PENDING -> MATCHING -> MATCHED before provider can accept
+        String currentStatus = job.getStatus();
+        try {
+            if ("PENDING".equals(currentStatus)) {
+                // PENDING -> MATCHING
+                stateMachine.validateTransition(currentStatus, "MATCHING");
+                job.setStatus("MATCHING");
+                currentStatus = "MATCHING";
+            }
+            if ("MATCHING".equals(currentStatus)) {
+                // MATCHING -> MATCHED
+                stateMachine.validateTransition(currentStatus, "MATCHED");
+                job.setStatus("MATCHED");
+            }
+            jobRepository.save(job);
+            log.info("Job {} status after manual assignment is {}", jobId, job.getStatus());
+        } catch (Exception e) {
+            log.error("Failed to update job {} status during manual assignment: {}", jobId, e.getMessage());
+            throw new RuntimeException("Failed to update job status for manual assignment: " + e.getMessage());
+        }
+
         JobProviderMatch match = JobProviderMatch.builder()
                 .jobId(jobId)
                 .providerId(providerId)

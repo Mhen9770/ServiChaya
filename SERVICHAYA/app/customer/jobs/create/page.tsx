@@ -11,6 +11,7 @@ import { getCurrentUser, sendOtp, verifyOtp } from '@/lib/auth'
 import { createJob, type CreateJobDto } from '@/lib/services/job'
 import { getAllCategories, getRootCategories, getCategoryTree, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { getServiceSkillsByCategory, type ServiceSkillDto } from '@/lib/services/provider'
+import { getCustomerProfile, type AddressDto } from '@/lib/services/customer'
 import {
   getAllActiveCities,
   getPodsByZone,
@@ -55,6 +56,8 @@ export default function CreateJobPage() {
   const [pods, setPods] = useState<PodMasterDto[]>([])
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
   const [currentUser, setCurrentUser] = useState(getCurrentUser())
+  const [savedAddresses, setSavedAddresses] = useState<AddressDto[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null)
 
   // Guest mobile + OTP state
   const [guestMobile, setGuestMobile] = useState('')
@@ -78,6 +81,18 @@ export default function CreateJobPage() {
       ])
       setCategories(categoryRes)
       setCities(cityRes)
+
+      // Load saved addresses if user is logged in
+      const user = getCurrentUser()
+      if (user) {
+        try {
+          const profile = await getCustomerProfile(user.userId)
+          setSavedAddresses(profile.addresses || [])
+        } catch (e) {
+          // Silently fail - addresses are optional
+          console.warn('Could not load saved addresses:', e)
+        }
+      }
     } catch {
       toast.error('Failed to load create job form data')
     } finally {
@@ -432,6 +447,65 @@ export default function CreateJobPage() {
           {currentStep === 2 && (
           <section>
             <h2 className="font-bold text-lg text-white">Schedule & location</h2>
+            
+            {savedAddresses.length > 0 && (
+              <div className="mb-4 rounded-xl bg-white/5 border border-white/10 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-white">Saved addresses</p>
+                  <Link
+                    href="/customer/profile"
+                    className="text-xs text-primary-light hover:text-primary-main"
+                    target="_blank"
+                  >
+                    Add new address
+                  </Link>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {savedAddresses.map((addr) => (
+                    <label
+                      key={addr.id}
+                      className="flex items-start gap-2 text-xs text-slate-200 cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="savedAddress"
+                        className="mt-1"
+                        checked={selectedAddressId === addr.id}
+                        onChange={() => {
+                          setSelectedAddressId(addr.id)
+                          setForm(prev => ({
+                            ...prev,
+                            cityId: addr.cityId || 0,
+                            zoneId: addr.zoneId,
+                            podId: addr.podId,
+                            addressLine1: addr.addressLine1,
+                            addressLine2: addr.addressLine2 || '',
+                            pincode: addr.pincode || '',
+                          }))
+                          // Load zones if city is selected
+                          if (addr.cityId) {
+                            handleCity(addr.cityId)
+                            // Load pods if zone is selected
+                            if (addr.zoneId) {
+                              handleZone(addr.zoneId)
+                            }
+                          }
+                        }}
+                      />
+                      <span className="flex-1">
+                        <span className="font-semibold">{addr.addressLabel || 'Address'}</span>
+                        <br />
+                        {addr.addressLine1}
+                        {addr.addressLine2 && `, ${addr.addressLine2}`}
+                        <br />
+                        {addr.cityName} {addr.pincode && `- ${addr.pincode}`}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               <InputField required label="Preferred Date & Time" type="datetime-local" icon={CalendarDays} value={form.preferredTime} onChange={(value) => setForm((prev) => ({ ...prev, preferredTime: value }))} />
               <div className="relative">

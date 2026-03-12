@@ -1,5 +1,6 @@
 package com.servichaya.job.repository;
 
+import com.servichaya.admin.dto.AdminDashboardStatsProjection;
 import com.servichaya.job.entity.JobMaster;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +38,34 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
 
     @Query("SELECT COUNT(j) FROM JobMaster j WHERE j.status = :status AND (j.isDeleted IS NULL OR j.isDeleted = false)")
     long countByStatus(@Param("status") String status);
+
+    // Native query to fetch admin dashboard statistics in a single round-trip
+    @Query(value = """
+            SELECT 
+              (SELECT COUNT(*) 
+                 FROM job_master jm 
+                WHERE jm.is_deleted IS NULL OR jm.is_deleted = FALSE) AS totalJobs,
+              (SELECT COUNT(*) 
+                 FROM job_master jm 
+                WHERE jm.status = 'PENDING' 
+                  AND (jm.is_deleted IS NULL OR jm.is_deleted = FALSE)) AS pendingJobs,
+              (SELECT COUNT(*) 
+                 FROM service_provider_profile spp 
+                WHERE spp.profile_status = 'ACTIVE' 
+                  AND (spp.is_deleted IS NULL OR spp.is_deleted = FALSE)) AS activeProviders,
+              (SELECT COUNT(*) 
+                 FROM service_provider_profile spp 
+                WHERE spp.profile_status = 'PENDING_VERIFICATION' 
+                  AND (spp.is_deleted IS NULL OR spp.is_deleted = FALSE)) AS pendingVerifications,
+              (SELECT COUNT(*) 
+                 FROM user_account ua 
+                WHERE ua.is_deleted IS NULL OR ua.is_deleted = FALSE) AS totalCustomers,
+              (SELECT COALESCE(SUM(pt.amount), 0) 
+                 FROM payment_transaction pt 
+                WHERE pt.transaction_status = 'SUCCESS') AS totalEarnings
+            """,
+            nativeQuery = true)
+    AdminDashboardStatsProjection getAdminDashboardStatsNative();
 
     @Query("SELECT j FROM JobMaster j WHERE j.isDeleted is null OR j.isDeleted = false")
     Page<JobMaster> findAllByIsDeletedNotTrue(Pageable pageable);
