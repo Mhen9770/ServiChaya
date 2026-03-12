@@ -196,6 +196,18 @@ export interface UpdateProviderProfileDto {
   isAvailable?: boolean
 }
 
+export interface ProviderCustomerSummary {
+  customerId: number
+  name: string
+  mobileNumber: string
+  email?: string
+  totalJobsTogether: number
+  completedJobsTogether: number
+  totalEarningsFromCustomer: number
+  primaryForThisProvider: boolean
+  source: string
+}
+
 export const getProviderProfile = async (providerId: number): Promise<ProviderProfileDto> => {
   const response = await api.get(`/provider/profile?providerId=${providerId}`)
   return response.data.data
@@ -214,6 +226,17 @@ export const updateProviderSkills = async (providerId: number, skills: Onboardin
 export const updateProviderServiceAreas = async (providerId: number, serviceAreas: OnboardingStep4Dto['serviceAreas']): Promise<ProviderProfileDto> => {
   const response = await api.put(`/provider/profile/service-areas?providerId=${providerId}`, { serviceAreas })
   return response.data.data
+}
+
+// Referral: link customer with provider using referral code
+export const linkCustomerWithProviderReferral = async (customerId: number, providerCode: string): Promise<void> => {
+  if (!providerCode) return
+  await api.post(`/provider/referral/link?customerId=${customerId}&providerCode=${encodeURIComponent(providerCode)}`)
+}
+
+export const getProviderCustomers = async (providerId: number): Promise<ProviderCustomerSummary[]> => {
+  const response = await api.get(`/provider/customers?providerId=${providerId}`)
+  return response.data.data || []
 }
 
 // Helper functions for onboarding dropdowns

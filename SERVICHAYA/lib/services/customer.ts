@@ -33,6 +33,7 @@ export interface AddressDto {
   latitude?: number
   longitude?: number
   isDefault: boolean
+  addressLabel?: string
 }
 
 export interface UpdateCustomerProfileDto {

@@ -19,6 +19,7 @@ import {
   MapPin,
 } from 'lucide-react'
 import { sendOtp, verifyOtp, googleAuth } from '@/lib/auth'
+import { linkCustomerWithProviderReferral } from '@/lib/services/provider'
 import { toast } from 'react-hot-toast'
 import { ButtonLoader, PageLoader } from '@/components/ui/Loader'
 
@@ -31,11 +32,16 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false)
   const [otpDisplay, setOtpDisplay] = useState('')
   const [redirectPath, setRedirectPath] = useState<string | null>(null)
+  const [referralCode, setReferralCode] = useState<string | null>(null)
 
   useEffect(() => {
     const redirect = searchParams.get('redirect')
     if (redirect) {
       setRedirectPath(redirect)
+    }
+    const ref = searchParams.get('ref')
+    if (ref) {
+      setReferralCode(ref)
     }
   }, [searchParams])
 
@@ -103,6 +109,15 @@ function LoginPageContent() {
     try {
       setLoading(true)
       const response = await verifyOtp(mobile, otp)
+
+      // If customer role and referral code present, link to provider on backend
+      if (response.role === 'CUSTOMER' && referralCode) {
+        try {
+          await linkCustomerWithProviderReferral(response.userId, referralCode)
+        } catch (e) {
+          console.error('Failed to link referral code', e)
+        }
+      }
       
       const redirect = searchParams.get('redirect')
       const finalRedirectPath = redirect || redirectPath

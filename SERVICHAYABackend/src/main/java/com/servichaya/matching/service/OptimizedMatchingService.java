@@ -47,6 +47,7 @@ public class OptimizedMatchingService {
 
     private final JobMasterRepository jobRepository;
     private final MatchingRepository matchingRepository;
+    private final com.servichaya.provider.repository.ProviderCustomerLinkRepository providerCustomerLinkRepository;
     private final MatchingRuleMasterRepository ruleRepository;
     private final JobProviderMatchRepository matchRepository;
     private final ConfigService configService;
@@ -135,6 +136,28 @@ public class OptimizedMatchingService {
 
         // Step 5: Calculate scores in batch (parallel processing)
         List<ProviderMatchDto> matches = calculateScoresBatch(job, candidates, rules);
+
+        // Step 5b: Boost matches for referred / primary providers, if any
+        try {
+            List<com.servichaya.provider.entity.ProviderCustomerLink> primaryLinks =
+                    providerCustomerLinkRepository.findByCustomerIdAndCategoryIdAndIsPrimaryTrue(
+                            job.getCustomerId(), job.getServiceSkillId());
+
+            if (!primaryLinks.isEmpty()) {
+                Long preferredProviderId = primaryLinks.get(0).getProviderId();
+                log.info("Found primary provider {} for customer {} and serviceSkillId {}. Applying priority boost.",
+                        preferredProviderId, job.getCustomerId(), job.getServiceSkillId());
+
+                for (ProviderMatchDto match : matches) {
+                    if (match.getProviderId().equals(preferredProviderId)) {
+                        // Small boost to ensure preferred provider floats to top if otherwise eligible
+                        match.setMatchScore(match.getMatchScore().add(new BigDecimal("5.0")));
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.error("Error applying referral-based priority in matching for jobId: {}", jobId, ex);
+        }
 
         // Step 6: Filter by minimum match score (from business rule)
         BigDecimal minMatchScore = configService.getMinMatchScore();
