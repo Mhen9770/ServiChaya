@@ -234,21 +234,26 @@ public class OptimizedMatchingService {
                         .orElse(null);
                 
                 if (provider != null && provider.getUserId() != null) {
+                    Map<String, Object> metadata = new HashMap<>();
+                    metadata.put("jobCode", job.getJobCode());
+                    metadata.put("jobId", job.getId());
+                    if (match.getMatchId() != null) {
+                        metadata.put("matchId", match.getMatchId());
+                    }
+                    if (match.getMatchScore() != null) {
+                        metadata.put("matchScore", match.getMatchScore());
+                    }
+                    metadata.put("estimatedBudget", job.getEstimatedBudget() != null ? job.getEstimatedBudget() : BigDecimal.ZERO);
+                    metadata.put("isEmergency", job.getIsEmergency() != null ? job.getIsEmergency() : false);
+
                     notificationService.createNotification(
                             provider.getUserId(), "PROVIDER", "JOB_MATCHED",
                             "New Job Available",
-                            String.format("New job '%s' matches your profile. Match score: %.0f%%. Respond within 2 minutes!", 
+                            String.format("New job '%s' matches your profile. Match score: %.0f%%. Respond within 2 minutes!",
                                     job.getTitle(), match.getMatchScore()),
                             "JOB", job.getId(),
                             String.format("/provider/jobs/available"),
-                            Map.of(
-                                    "jobCode", job.getJobCode(),
-                                    "jobId", job.getId(),
-                                    "matchId", match.getMatchId(),
-                                    "matchScore", match.getMatchScore(),
-                                    "estimatedBudget", job.getEstimatedBudget() != null ? job.getEstimatedBudget() : 0,
-                                    "isEmergency", job.getIsEmergency() != null ? job.getIsEmergency() : false
-                            )
+                            metadata
                     );
                     log.info("Notification sent to provider {} for job {}", match.getProviderId(), job.getId());
                 }

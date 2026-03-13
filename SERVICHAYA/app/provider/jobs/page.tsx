@@ -13,6 +13,7 @@ import FilterBar from '@/components/ui/FilterBar'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Briefcase, Calendar, MapPin, DollarSign, ArrowRight } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function ProviderJobsPage() {
   const router = useRouter()
@@ -27,6 +28,43 @@ export default function ProviderJobsPage() {
   })
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
+
+  // Capture provider's current browser location once, for distance chips
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCurrentLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        })
+      },
+      () => {
+        // silently ignore failure; distance chips will just not show
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    )
+  }, [])
+
+  const computeDistanceKm = (job: JobDto): number | null => {
+    if (!currentLocation || job.latitude == null || job.longitude == null) return null
+    const R = 6371 // km
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const dLat = toRad(job.latitude - currentLocation.lat)
+    const dLon = toRad(job.longitude - currentLocation.lng)
+    const lat1 = toRad(currentLocation.lat)
+    const lat2 = toRad(job.latitude)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return Math.round(R * c * 10) / 10
+  }
 
   const fetchJobs = useCallback(async (providerId: number) => {
     try {
@@ -223,6 +261,7 @@ export default function ProviderJobsPage() {
               'PENDING': { border: 'border-amber-400/40', bg: 'bg-amber-500/5', bar: 'bg-amber-400' },
             }
             const colors = statusColors[job.status as keyof typeof statusColors] || { border: 'border-slate-400/40', bg: 'bg-slate-500/5', bar: 'bg-slate-400' }
+            const distanceKm = computeDistanceKm(job)
             return (
             <motion.div
               key={job.id}
@@ -238,7 +277,7 @@ export default function ProviderJobsPage() {
                 {/* Status indicator bar */}
                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${colors.bar}`} />
                 
-                  <div className="flex items-start justify-between gap-2 sm:gap-3 pl-2">
+                  <div className="flex flex-col md:flex-row items-stretch justify-between gap-3 sm:gap-4 pl-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-primary-light transition-colors line-clamp-1">{job.title}</h3>
@@ -268,13 +307,31 @@ export default function ProviderJobsPage() {
                           <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                           <span className="truncate max-w-[100px] sm:max-w-[120px]">{job.addressLine1}</span>
                         </span>
+                        {distanceKm != null && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/70 border border-white/10 text-[10px] sm:text-xs text-slate-100">
+                            <MapPin className="w-3 h-3 text-primary-light" />
+                            {distanceKm} km away
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] sm:text-xs text-slate-400 mt-2">
                         {job.jobCode}
                       </div>
                     </div>
-                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0 ml-2 sm:ml-3 group-hover:text-primary-light group-hover:translate-x-1 transition-all" />
+                    <div className="flex flex-col items-end gap-2 min-w-[110px] sm:min-w-[140px]">
+                      {job.latitude != null && job.longitude != null && (
+                        <div className="w-full">
+                          <LocationPicker
+                            center={{ lat: job.latitude, lng: job.longitude }}
+                            value={{ lat: job.latitude, lng: job.longitude }}
+                            height={110}
+                            readOnly
+                          />
+                        </div>
+                      )}
+                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0 group-hover:text-primary-light group-hover:translate-x-1 transition-all" />
                     </div>
+                  </div>
               </Link>
             </motion.div>
             )

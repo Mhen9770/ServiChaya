@@ -16,6 +16,7 @@ import {
   Image as ImageIcon, Building2, Phone, Mail, Shield, CreditCard
 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function ProviderJobDetailsPage() {
   const router = useRouter()
@@ -30,6 +31,7 @@ export default function ProviderJobDetailsPage() {
   const [finalPrice, setFinalPrice] = useState('')
   const [paymentChannel, setPaymentChannel] = useState<'CASH' | 'ONLINE'>('ONLINE')
   const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [distanceFromCurrentKm, setDistanceFromCurrentKm] = useState<number | null>(null)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -74,6 +76,31 @@ export default function ProviderJobDetailsPage() {
       }
       
       await Promise.all(promises)
+
+      // After we have job data, estimate distance from provider's current location (browser)
+      if (jobData.latitude && jobData.longitude && typeof window !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const toRad = (v: number) => (v * Math.PI) / 180
+            const R = 6371 // km
+            const dLat = toRad(jobData.latitude! - pos.coords.latitude)
+            const dLon = toRad(jobData.longitude! - pos.coords.longitude)
+            const lat1 = toRad(pos.coords.latitude)
+            const lat2 = toRad(jobData.latitude!)
+
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2)
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+            const d = R * c
+            setDistanceFromCurrentKm(Math.round(d * 10) / 10)
+          },
+          () => {
+            setDistanceFromCurrentKm(null)
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        )
+      }
     } catch (error: any) {
       console.error('Failed to fetch job:', error)
       if (error.response?.status === 404) {
@@ -380,6 +407,30 @@ export default function ProviderJobDetailsPage() {
             </div>
           )}
         </div>
+
+        {/* Small map with customer's exact location (and approximate distance from provider) */}
+        {(job.latitude && job.longitude) && (
+          <div className="mb-4 sm:mb-6 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs sm:text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary-light" />
+                <span>Job location on map</span>
+              </div>
+              {distanceFromCurrentKm !== null && (
+                <span className="text-[11px] sm:text-xs text-slate-300">
+                  Approx. {distanceFromCurrentKm} km from your current location
+                </span>
+              )}
+            </div>
+            <LocationPicker
+              center={{ lat: job.latitude, lng: job.longitude }}
+              value={{ lat: job.latitude, lng: job.longitude }}
+              radiusKm={undefined}
+              readOnly
+              height={220}
+            />
+          </div>
+        )}
 
         {job.specialInstructions && (
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-2 border-blue-400/40 rounded-lg sm:rounded-xl">

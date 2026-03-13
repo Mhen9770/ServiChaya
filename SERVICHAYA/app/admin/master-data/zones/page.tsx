@@ -12,6 +12,7 @@ import DataTable, { Column } from '@/components/ui/DataTable'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { Plus, Edit, Trash2, MapPin, CheckCircle2, XCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function AdminZonesPage() {
   const [zones, setZones] = useState<ZoneMasterDto[]>([])
@@ -388,6 +389,31 @@ export default function AdminZonesPage() {
                     min="0"
                   />
                 </div>
+              </div>
+              {/* Map picker for zone center */}
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-neutral-textPrimary mb-1">
+                  Zone center on map
+                </label>
+                <LocationPicker
+                  center={{
+                    lat: formData.latitude ?? 22.9734,
+                    lng: formData.longitude ?? 78.6569,
+                  }}
+                  value={
+                    formData.latitude !== undefined && formData.longitude !== undefined
+                      ? { lat: formData.latitude, lng: formData.longitude }
+                      : undefined
+                  }
+                  onChange={({ lat, lng }) =>
+                    setFormData(prev => ({
+                      ...prev,
+                      latitude: lat,
+                      longitude: lng,
+                    }))
+                  }
+                  height={220}
+                />
               </div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
