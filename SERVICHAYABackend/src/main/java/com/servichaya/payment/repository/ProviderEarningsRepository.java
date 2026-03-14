@@ -16,6 +16,9 @@ public interface ProviderEarningsRepository extends JpaRepository<ProviderEarnin
 
     Optional<ProviderEarnings> findByJobId(Long jobId);
 
+    @Query("SELECT e FROM ProviderEarnings e WHERE e.jobId = :jobId AND e.providerId = :providerId")
+    Optional<ProviderEarnings> findByJobIdAndProviderId(@Param("jobId") Long jobId, @Param("providerId") Long providerId);
+
     @Query("SELECT e FROM ProviderEarnings e WHERE e.providerId = :providerId ORDER BY e.createdAt DESC")
     Page<ProviderEarnings> findByProviderId(@Param("providerId") Long providerId, Pageable pageable);
 

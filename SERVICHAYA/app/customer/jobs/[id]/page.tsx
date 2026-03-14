@@ -16,6 +16,7 @@ import {
   List,
   MapPin,
   MessageSquareText,
+  MessageSquare,
   ShieldCheck,
   Star,
   User,
@@ -29,13 +30,22 @@ import {
 } from 'lucide-react'
 import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
 import { getCurrentUser } from '@/lib/auth'
-import { getJobById, type JobDto } from '@/lib/services/job'
-import { cancelJob, getCancellationFee } from '@/lib/services/jobStatus'
+import { type JobDto } from '@/lib/services/job'
+import {
+  getCustomerJobDetails,
+  cancelCustomerJob,
+  getCustomerCancellationFee,
+  completeCustomerCancellation,
+  trackCustomerJob,
+  type JobTrackingInfo,
+} from '@/lib/services/customerJob'
 import { createReview, getJobReview, type ReviewDto } from '@/lib/services/review'
 import { getPaymentSchedule, processPayment, type PaymentScheduleDto } from '@/lib/services/payment'
 import { getProviderProfile, type ProviderProfileDto } from '@/lib/services/provider'
 import { getSubCategoryById, type ServiceSubCategory } from '@/lib/services/service'
 import { getCategoryById, type ServiceCategory } from '@/lib/services/service'
+import { getMatchedProviders } from '@/lib/services/providerSelection'
+import { getMessagesWithProvider } from '@/lib/services/jobMessaging'
 
 const statusOrder = ['PENDING', 'MATCHING', 'MATCHED', 'PENDING_FOR_PAYMENT', 'ACCEPTED', 'IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED']
 
@@ -63,6 +73,16 @@ export default function CustomerJobDetailsPage() {
     valueRating: 5,
     reviewText: '',
   })
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellationFeeInfo, setCancellationFeeInfo] = useState<{
+    cancellationFee: number
+    refundAmount: number
+    jobAmount: number
+    canCancel: boolean
+  } | null>(null)
+  const [showTrackModal, setShowTrackModal] = useState(false)
+  const [trackingInfo, setTrackingInfo] = useState<JobTrackingInfo | null>(null)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -91,7 +111,7 @@ export default function CustomerJobDetailsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const jobData = await getJobById(jobId)
+      const jobData = await getCustomerJobDetails(jobId)
       setJob(jobData)
 
       // Fetch additional details in parallel
@@ -159,37 +179,80 @@ export default function CustomerJobDetailsPage() {
     }
   }
 
-  const cancelCurrentJob = async () => {
-    const user = getCurrentUser()
-    if (!user || !job) return
+  const handleCancelClick = async () => {
+    if (!job) return
     
     try {
       setActionLoading(true)
-      
-      // Get cancellation fee estimate from backend
-      const feeInfo = await getCancellationFee(job.id, user.userId, false)
-      
-      const cancellationFee = feeInfo.cancellationFee || 0
-      const refundAmount = feeInfo.refundAmount || 0
-      
-      const confirmMessage = cancellationFee > 0
-        ? `Cancelling this job will incur a cancellation fee of ₹${cancellationFee.toLocaleString()}. You will receive a refund of ₹${refundAmount.toLocaleString()}. Do you want to proceed?`
-        : 'Are you sure you want to cancel this request? You will receive a full refund.'
-      
-      if (!confirm(confirmMessage)) {
-        setActionLoading(false)
-        return
-      }
+      const feeInfo = await getCustomerCancellationFee(job.id)
+      setCancellationFeeInfo(feeInfo)
+      setShowCancelModal(true)
+    } catch (error: any) {
+      toast.error('Failed to load cancellation details')
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
-      // Proceed with cancellation
-      await cancelJob(job.id, user.userId, 'Customer cancelled', false)
-      toast.success(cancellationFee > 0 
-        ? `Request cancelled. Cancellation fee: ₹${cancellationFee.toLocaleString()}. Refund: ₹${refundAmount.toLocaleString()}`
-        : 'Request cancelled successfully. Full refund will be processed.')
+  const cancelCurrentJob = async () => {
+    if (!job || !cancelReason.trim()) {
+      toast.error('Please provide a cancellation reason')
+      return
+    }
+    
+    try {
+      setActionLoading(true)
+      await cancelCustomerJob(job.id, cancelReason)
+      
+      const fee = cancellationFeeInfo?.cancellationFee || 0
+      const refund = cancellationFeeInfo?.refundAmount || 0
+      
+      if (fee > 0) {
+        toast.success(`Request cancelled. Cancellation fee: ₹${fee.toLocaleString()}. Refund: ₹${refund.toLocaleString()}`)
+        // If cancellation fee required, show payment option
+        if (job.status === 'CANCELLATION_PAYMENT_PENDING') {
+          toast.info('Please complete cancellation fee payment to finalize cancellation')
+        }
+      } else {
+        toast.success('Request cancelled successfully. Full refund will be processed.')
+      }
+      
+      setShowCancelModal(false)
+      setCancelReason('')
       await fetchData()
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || error.message || 'Unable to cancel request'
       toast.error(errorMsg)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCompleteCancellation = async () => {
+    if (!job) return
+    
+    try {
+      setActionLoading(true)
+      await completeCustomerCancellation(job.id)
+      toast.success('Cancellation completed successfully')
+      await fetchData()
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to complete cancellation')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleTrackJob = async () => {
+    if (!job) return
+    
+    try {
+      setActionLoading(true)
+      const info = await trackCustomerJob(job.id)
+      setTrackingInfo(info)
+      setShowTrackModal(true)
+    } catch (error: any) {
+      toast.error('Failed to load tracking information')
     } finally {
       setActionLoading(false)
     }
@@ -351,6 +414,12 @@ export default function CustomerJobDetailsPage() {
     !payment.finalPaid
   const canPay = canPayUpfront || canPayFinal
   const canReview = job.status === 'COMPLETED' && !review
+  // Show provider selection when PENDING or MATCHED (even if providerId is set, customer might want to see/confirm)
+  const canSelectProvider = ['PENDING', 'MATCHED'].includes(job.status)
+  // Check if provider has accepted and needs customer confirmation
+  const providerNeedsConfirmation = job.status === 'MATCHED' && job.subStatus === 'PROVIDER_ACCEPTED' && job.providerId
+  // Can chat with provider when provider is assigned (ACCEPTED, IN_PROGRESS, PAYMENT_PENDING, COMPLETED)
+  const canChatWithProvider = job.providerId && ['ACCEPTED', 'IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED'].includes(job.status)
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -784,16 +853,45 @@ export default function CustomerJobDetailsPage() {
                 <p className="text-xs text-amber-100">We're matching your request with verified providers. You'll be notified when a provider accepts.</p>
               </div>
             )}
-            {job.status === 'MATCHED' && (
+            {job.status === 'MATCHED' && !providerNeedsConfirmation && (
               <div className="mb-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-400/30">
                 <p className="text-xs text-indigo-200 font-medium mb-1">✅ Provider matched</p>
-                <p className="text-xs text-indigo-100">A provider has been assigned. They'll accept and start work soon.</p>
+                <p className="text-xs text-indigo-100">Providers have been matched to your job. Click "View Providers" below to communicate with them and negotiate.</p>
+              </div>
+            )}
+            {providerNeedsConfirmation && (
+              <div className="mb-4 p-3 rounded-lg bg-accent-green/10 border-2 border-accent-green/50">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-accent-green flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-accent-green font-bold mb-1">Provider Has Accepted Your Request!</p>
+                    <p className="text-xs text-slate-200 mb-3">
+                      A provider has accepted your job. Please confirm to proceed, or you can view all providers and choose a different one.
+                    </p>
+                    <Link href={`/customer/jobs/${jobId}/select-provider`}>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-accent-green to-emerald-500 text-white text-sm font-semibold hover:shadow-lg hover:shadow-accent-green/50 transition-all inline-flex items-center gap-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Confirm or View Providers
+                      </motion.button>
+                    </Link>
+                  </div>
+                </div>
               </div>
             )}
             {job.status === 'IN_PROGRESS' && (
               <div className="mb-4 p-3 rounded-lg bg-primary-main/10 border border-primary-main/30">
                 <p className="text-xs text-primary-light font-medium mb-1">🔧 Work in progress</p>
-                <p className="text-xs text-slate-200">Your service is being completed. Track updates in real-time.</p>
+                <p className="text-xs text-slate-200">Your service is being completed. Track updates in real-time. You can chat with your provider if needed.</p>
+              </div>
+            )}
+            {job.status === 'ACCEPTED' && job.providerId && (
+              <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-400/30">
+                <p className="text-xs text-blue-200 font-medium mb-1">✅ Provider Assigned</p>
+                <p className="text-xs text-blue-100">Your provider is ready to start. You can chat with them or track the job status.</p>
               </div>
             )}
             {canPay && (
@@ -810,17 +908,64 @@ export default function CustomerJobDetailsPage() {
             )}
 
             <div className="space-y-2">
-              {canCancel && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={cancelCurrentJob} 
-                  disabled={actionLoading} 
-                  className="w-full rounded-xl border border-red-400/30 bg-red-500/20 text-red-200 px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-red-500/30 transition-colors"
-                >
-                  Cancel request
-                </motion.button>
+              {canSelectProvider && !providerNeedsConfirmation && (
+                <Link href={`/customer/jobs/${jobId}/select-provider`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    View Providers
+                  </motion.button>
+                </Link>
               )}
+              {canSelectProvider && providerNeedsConfirmation && (
+                <Link href={`/customer/jobs/${jobId}/select-provider`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-accent-green to-emerald-500 text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-accent-green/50 transition-all"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confirm Provider or View All
+                  </motion.button>
+                </Link>
+              )}
+              {canCancel && (
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCancelClick} 
+                    disabled={actionLoading} 
+                    className="w-full rounded-xl border border-red-400/30 bg-red-500/20 text-red-200 px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-red-500/30 transition-colors"
+                  >
+                    Cancel request
+                  </motion.button>
+                  {job.status === 'CANCELLATION_PAYMENT_PENDING' && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCompleteCancellation} 
+                      disabled={actionLoading} 
+                      className="w-full rounded-xl border border-yellow-400/30 bg-yellow-500/20 text-yellow-200 px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-yellow-500/30 transition-colors"
+                    >
+                      Complete Cancellation Payment
+                    </motion.button>
+                  )}
+                </>
+              )}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleTrackJob}
+                disabled={actionLoading}
+                className="w-full rounded-xl border border-blue-400/30 bg-blue-500/20 text-blue-200 px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-blue-500/30 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <Clock className="w-4 h-4" />
+                Track Job Status
+              </motion.button>
               {canPayUpfront && payment && (
                 <Link href={`/customer/jobs/${jobId}/payment?type=upfront`}>
                   <motion.button
@@ -843,6 +988,18 @@ export default function CustomerJobDetailsPage() {
                   </motion.button>
                 </Link>
               )}
+              {canChatWithProvider && job.providerId && (
+                <Link href={`/customer/chat/${jobId}?customerId=${job.customerId}&providerId=${job.providerId}`}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary-main/50 transition-all"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Chat with Provider
+                  </motion.button>
+                </Link>
+              )}
               {canReview && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -853,7 +1010,7 @@ export default function CustomerJobDetailsPage() {
                   <MessageSquareText className="w-4 h-4" /> Write review
                 </motion.button>
               )}
-              {!canCancel && !canPay && !canReview && (
+              {!canCancel && !canPay && !canReview && !canChatWithProvider && (
                 <div className="text-center py-4">
                   <p className="text-sm text-slate-300 mb-1">No actions available</p>
                   <p className="text-xs text-slate-400">All steps completed for this request.</p>
@@ -877,6 +1034,140 @@ export default function CustomerJobDetailsPage() {
             {actionLoading ? 'Processing...' : 'Confirm payment'}
           </motion.button>
         </Modal>
+      )}
+
+      {/* Cancel Modal */}
+      {showCancelModal && cancellationFeeInfo && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 rounded-2xl border border-white/20 p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">Cancel Request</h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false)
+                  setCancelReason('')
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {cancellationFeeInfo.cancellationFee > 0 ? (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-400/30">
+                  <p className="text-sm text-yellow-200 mb-1">Cancellation Fee: ₹{cancellationFeeInfo.cancellationFee.toLocaleString()}</p>
+                  <p className="text-sm text-yellow-100">Refund Amount: ₹{cancellationFeeInfo.refundAmount.toLocaleString()}</p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-400/30">
+                  <p className="text-sm text-green-200">Full refund will be processed</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-white">Cancellation Reason</label>
+                <textarea
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                  placeholder="Please provide a reason for cancellation..."
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setShowCancelModal(false)
+                    setCancelReason('')
+                  }}
+                  className="flex-1 rounded-xl border border-slate-600 text-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={cancelCurrentJob}
+                  disabled={actionLoading || !cancelReason.trim()}
+                  className="flex-1 rounded-xl bg-red-500 text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-red-600 transition-colors"
+                >
+                  {actionLoading ? 'Cancelling...' : 'Confirm Cancellation'}
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Track Job Modal */}
+      {showTrackModal && trackingInfo && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 rounded-2xl border border-white/20 p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">Job Tracking</h2>
+              <button
+                onClick={() => setShowTrackModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Job Code:</span>
+                <span className="text-white font-semibold">{trackingInfo.jobCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status:</span>
+                <span className="text-white font-semibold">{trackingInfo.status}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Provider:</span>
+                <span className="text-white font-semibold">{trackingInfo.providerId || 'Not assigned'}</span>
+              </div>
+              {trackingInfo.acceptedAt && trackingInfo.acceptedAt !== 'Not accepted' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Accepted At:</span>
+                  <span className="text-white">{new Date(trackingInfo.acceptedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {trackingInfo.startedAt && trackingInfo.startedAt !== 'Not started' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Started At:</span>
+                  <span className="text-white">{new Date(trackingInfo.startedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {trackingInfo.completedAt && trackingInfo.completedAt !== 'Not completed' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Completed At:</span>
+                  <span className="text-white">{new Date(trackingInfo.completedAt).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowTrackModal(false)}
+              className="w-full mt-4 rounded-xl bg-primary-main text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary-light transition-colors"
+            >
+              Close
+            </motion.button>
+          </motion.div>
+        </div>
       )}
 
       {showReviewModal && (

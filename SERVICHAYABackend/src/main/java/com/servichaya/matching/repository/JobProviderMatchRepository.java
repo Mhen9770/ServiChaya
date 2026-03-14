@@ -23,4 +23,9 @@ public interface JobProviderMatchRepository extends JpaRepository<JobProviderMat
 
     @Query("SELECT jpm FROM JobProviderMatch jpm WHERE jpm.providerId = :providerId AND jpm.status IN ('PENDING', 'NOTIFIED') ORDER BY jpm.matchScore DESC")
     List<JobProviderMatch> findAvailableJobsForProvider(@Param("providerId") Long providerId);
+
+    @Query("SELECT jpm FROM JobProviderMatch jpm WHERE jpm.status IN :statuses AND jpm.notifiedAt < :threshold")
+    List<JobProviderMatch> findByStatusInAndNotifiedAtBefore(
+            @Param("statuses") List<String> statuses,
+            @Param("threshold") java.time.LocalDateTime threshold);
 }

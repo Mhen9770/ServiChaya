@@ -397,6 +397,43 @@ public class PaymentService {
         log.info("Test payment marked as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
     }
 
+    /**
+     * Mark payment as failed (for webhook handling)
+     */
+    @Transactional
+    public void markPaymentFailed(Long jobId, String transactionCode) {
+        log.info("Marking payment as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+
+        PaymentTransaction transaction = paymentTransactionRepository.findByTransactionCode(transactionCode)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionCode));
+
+        if (!transaction.getJobId().equals(jobId)) {
+            throw new RuntimeException("Transaction does not belong to this job");
+        }
+
+        transaction.setStatus("FAILED");
+        transaction.setCompletedAt(LocalDateTime.now());
+        paymentTransactionRepository.save(transaction);
+
+        // Notify customer about payment failure
+        try {
+            JobMaster job = jobRepository.findById(jobId).orElse(null);
+            if (job != null) {
+                notificationService.createNotification(
+                        job.getCustomerId(), "CUSTOMER", "PAYMENT_FAILED",
+                        "Payment Failed",
+                        String.format("Payment failed for job: %s. Please try again.", job.getTitle()),
+                        "PAYMENT", jobId,
+                        String.format("/customer/jobs/%d/payment", jobId),
+                        Map.of("jobCode", job.getJobCode(), "transactionCode", transactionCode));
+            }
+        } catch (Exception e) {
+            log.error("Failed to send payment failure notification", e);
+        }
+
+        log.info("Payment marked as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+    }
+
     @Transactional
     public String createPaymentLink(Long jobId, Long userId, BigDecimal amount) {
         log.info("Creating payment link for jobId: {}, userId: {}, amount: {}", jobId, userId, amount);

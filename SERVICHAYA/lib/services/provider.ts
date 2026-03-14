@@ -234,6 +234,22 @@ export const linkCustomerWithProviderReferral = async (customerId: number, provi
   await api.post(`/provider/referral/link?customerId=${customerId}&providerCode=${encodeURIComponent(providerCode)}`)
 }
 
+// Referral stats
+export interface ProviderReferralStatsDto {
+  referralCode: string
+  shareableLink: string
+  totalReferred: number
+  activeCustomers: number
+  totalEarningsFromReferrals: number
+  totalJobsFromReferrals: number
+  conversionRate: number
+}
+
+export const getReferralStats = async (providerId: number): Promise<ProviderReferralStatsDto> => {
+  const response = await api.get(`/provider/referral/stats?providerId=${providerId}`)
+  return response.data.data
+}
+
 export const getProviderCustomers = async (providerId: number): Promise<ProviderCustomerSummary[]> => {
   const response = await api.get(`/provider/customers?providerId=${providerId}`)
   return response.data.data || []

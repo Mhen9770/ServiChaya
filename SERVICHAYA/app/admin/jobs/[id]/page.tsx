@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getJobById, type JobDto } from '@/lib/services/job'
 import { 
   getAvailableProvidersForJob, assignJobToProvider, getJobAssignments, removeJobAssignment,
+  getAdminJobDetails, forceMatchJob, cancelAdminJob, updateJobStatus, getJobAnalytics,
   type ProviderMatchDto 
 } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
@@ -41,7 +42,7 @@ export default function AdminJobDetailPage() {
   const fetchJobDetails = async () => {
     try {
       setLoading(true)
-      const data = await getJobById(jobId)
+      const data = await getAdminJobDetails(jobId)
       setJob(data)
     } catch (error: any) {
       console.error('Failed to fetch job:', error)
@@ -121,6 +122,61 @@ export default function AdminJobDetailPage() {
       toast.error(error.response?.data?.message || 'Failed to assign job')
     } finally {
       setAssigning(false)
+    }
+  }
+
+  const handleForceMatch = async () => {
+    try {
+      setForceMatching(true)
+      await forceMatchJob(jobId)
+      toast.success('Matching triggered successfully')
+      setShowForceMatchModal(false)
+      await fetchJobDetails()
+      await fetchAssignedProviders()
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to trigger matching')
+    } finally {
+      setForceMatching(false)
+    }
+  }
+
+  const handleCancelJob = async () => {
+    if (!cancelReason.trim()) {
+      toast.error('Please provide a cancellation reason')
+      return
+    }
+
+    try {
+      setCancelling(true)
+      await cancelAdminJob(jobId, cancelReason, cancelledBy)
+      toast.success('Job cancelled successfully')
+      setShowCancelModal(false)
+      setCancelReason('')
+      await fetchJobDetails()
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to cancel job')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const handleUpdateStatus = async () => {
+    if (!newStatus.trim()) {
+      toast.error('Please select a status')
+      return
+    }
+
+    try {
+      setUpdatingStatus(true)
+      await updateJobStatus(jobId, newStatus)
+      toast.success('Job status updated successfully')
+      setShowStatusModal(false)
+      setNewStatus('')
+      await fetchJobDetails()
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update status')
+    } finally {
+      setUpdatingStatus(false)
     }
   }
 
@@ -292,6 +348,48 @@ export default function AdminJobDetailPage() {
           transition={{ duration: 0.3, delay: 0.2 }}
           className="space-y-6"
         >
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
+            <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display">Admin Actions</h2>
+            <div className="space-y-2 mb-6">
+              {job.status === 'PENDING' && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowForceMatchModal(true)}
+                  disabled={forceMatching}
+                  className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  {forceMatching ? 'Triggering...' : 'Force Match'}
+                </motion.button>
+              )}
+              {!['COMPLETED', 'CANCELLED'].includes(job.status) && (
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowCancelModal(true)}
+                    disabled={cancelling}
+                    className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    {cancelling ? 'Cancelling...' : 'Cancel Job'}
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowStatusModal(true)}
+                    disabled={updatingStatus}
+                    className="w-full px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    {updatingStatus ? 'Updating...' : 'Update Status'}
+                  </motion.button>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-border">
             <h2 className="text-lg font-bold text-neutral-textPrimary mb-4 font-display">Timeline</h2>
             <div className="space-y-3">
@@ -556,6 +654,172 @@ export default function AdminJobDetailPage() {
           )}
         </motion.div>
       </div>
+
+      {/* Force Match Modal */}
+      {showForceMatchModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Force Match Job</h2>
+              <button onClick={() => setShowForceMatchModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">This will trigger the matching algorithm to find providers for this job.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowForceMatchModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceMatch}
+                disabled={forceMatching}
+                className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50"
+              >
+                {forceMatching ? 'Triggering...' : 'Force Match'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Cancel Job</h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false)
+                  setCancelReason('')
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Cancel on behalf of</label>
+                <select
+                  value={cancelledBy}
+                  onChange={(e) => setCancelledBy(e.target.value as 'CUSTOMER' | 'PROVIDER')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-main"
+                >
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="PROVIDER">Provider</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Cancellation Reason</label>
+                <textarea
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-main"
+                  placeholder="Please provide a reason for cancellation..."
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false)
+                    setCancelReason('')
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCancelJob}
+                  disabled={cancelling || !cancelReason.trim()}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Update Status Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Update Job Status</h2>
+              <button
+                onClick={() => {
+                  setShowStatusModal(false)
+                  setNewStatus('')
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Current Status</label>
+                <div className="px-3 py-2 bg-gray-100 rounded-lg text-sm">{job.status}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">New Status</label>
+                <select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-main"
+                >
+                  <option value="">Select status</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="MATCHING">MATCHING</option>
+                  <option value="MATCHED">MATCHED</option>
+                  <option value="PENDING_FOR_PAYMENT">PENDING_FOR_PAYMENT</option>
+                  <option value="ACCEPTED">ACCEPTED</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="PAYMENT_PENDING">PAYMENT_PENDING</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowStatusModal(false)
+                    setNewStatus('')
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateStatus}
+                  disabled={updatingStatus || !newStatus.trim()}
+                  className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+                >
+                  {updatingStatus ? 'Updating...' : 'Update Status'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

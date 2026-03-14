@@ -12,9 +12,9 @@ import com.servichaya.matching.repository.MatchingRepository;
 import com.servichaya.matching.repository.MatchingRuleMasterRepository;
 import com.servichaya.matching.repository.ProviderMatchCandidateProjection;
 import com.servichaya.common.service.ConfigService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
  * - Elasticsearch function_score (weighted scoring)
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class OptimizedMatchingService {
 
@@ -54,6 +53,30 @@ public class OptimizedMatchingService {
     private final com.servichaya.notification.service.NotificationService notificationService;
     private final com.servichaya.job.service.JobStateMachine stateMachine;
     private final com.servichaya.provider.repository.ServiceProviderProfileRepository providerRepository;
+    private final com.servichaya.job.service.JobWorkflowService jobWorkflowService;
+
+    public OptimizedMatchingService(
+            JobMasterRepository jobRepository,
+            MatchingRepository matchingRepository,
+            com.servichaya.provider.repository.ProviderCustomerLinkRepository providerCustomerLinkRepository,
+            MatchingRuleMasterRepository ruleRepository,
+            JobProviderMatchRepository matchRepository,
+            ConfigService configService,
+            com.servichaya.notification.service.NotificationService notificationService,
+            com.servichaya.job.service.JobStateMachine stateMachine,
+            com.servichaya.provider.repository.ServiceProviderProfileRepository providerRepository,
+            @Lazy com.servichaya.job.service.JobWorkflowService jobWorkflowService) {
+        this.jobRepository = jobRepository;
+        this.matchingRepository = matchingRepository;
+        this.providerCustomerLinkRepository = providerCustomerLinkRepository;
+        this.ruleRepository = ruleRepository;
+        this.matchRepository = matchRepository;
+        this.configService = configService;
+        this.notificationService = notificationService;
+        this.stateMachine = stateMachine;
+        this.providerRepository = providerRepository;
+        this.jobWorkflowService = jobWorkflowService;
+    }
 
     private static final int DEFAULT_TOP_N = 5;
     private static final int MAX_CANDIDATES = 100; // Limit candidates for scoring
@@ -100,9 +123,18 @@ public class OptimizedMatchingService {
             // Update job status back to PENDING if no providers found
             try {
                 if ("MATCHING".equals(job.getStatus())) {
-                    stateMachine.validateTransition("MATCHING", "PENDING");
+                    String oldStatus = job.getStatus();
+                    stateMachine.validateTransition(oldStatus, "PENDING");
                     job.setStatus("PENDING");
                     jobRepository.save(job);
+                    
+                    // Sync workflow with status change
+                    try {
+                        jobWorkflowService.onStatusChanged(jobId, oldStatus, "PENDING");
+                    } catch (Exception workflowEx) {
+                        log.error("Failed to sync workflow for jobId: {} on status change {} -> PENDING",
+                                jobId, oldStatus, workflowEx);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to update job status when no providers found", e);
@@ -184,9 +216,19 @@ public class OptimizedMatchingService {
         // Step 9: Update job status to MATCHED
         try {
             if ("MATCHING".equals(job.getStatus()) || "PENDING".equals(job.getStatus())) {
-                stateMachine.validateTransition(job.getStatus(), "MATCHED");
+                String oldStatus = job.getStatus();
+                stateMachine.validateTransition(oldStatus, "MATCHED");
                 job.setStatus("MATCHED");
                 jobRepository.save(job);
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, oldStatus, "MATCHED");
+                } catch (Exception workflowEx) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> MATCHED",
+                            jobId, oldStatus, workflowEx);
+                }
+                
                 log.info("Job {} status updated to MATCHED", jobId);
             }
         } catch (Exception e) {
@@ -527,38 +569,79 @@ public class OptimizedMatchingService {
 
     /**
      * Batch save matches (bulk insert)
+     * Prevents duplicates by checking existing matches first
      */
     private void saveMatchesBatch(Long jobId, List<ProviderMatchDto> matches, List<ProviderMatchDto> topMatches) {
+        // Get existing matches for this job to avoid duplicates
+        List<JobProviderMatch> existingMatches = matchRepository.findByJobIdOrderByMatchScoreDesc(jobId);
+        Map<Long, JobProviderMatch> existingMatchesMap = existingMatches.stream()
+                .collect(Collectors.toMap(
+                    JobProviderMatch::getProviderId,
+                    m -> m,
+                    (existing, replacement) -> existing // Keep first if duplicates exist
+                ));
+        
         int rank = 1;
         List<JobProviderMatch> matchEntities = new ArrayList<>();
+        List<JobProviderMatch> matchesToUpdate = new ArrayList<>();
         
         for (ProviderMatchDto match : matches) {
-            JobProviderMatch matchEntity = JobProviderMatch.builder()
-                    .jobId(jobId)
-                    .providerId(match.getProviderId())
-                    .matchScore(match.getMatchScore())
-                    .status("PENDING")
-                    .rankOrder(rank++)
-                    .build();
-            matchEntities.add(matchEntity);
+            JobProviderMatch existingMatch = existingMatchesMap.get(match.getProviderId());
+            
+            if (existingMatch != null) {
+                // Update existing match instead of creating new one
+                existingMatch.setMatchScore(match.getMatchScore());
+                existingMatch.setRankOrder(rank++);
+                // Don't change status if it's already ACCEPTED or NOTIFIED
+                if (!"ACCEPTED".equals(existingMatch.getStatus()) && !"NOTIFIED".equals(existingMatch.getStatus())) {
+                    existingMatch.setStatus("PENDING");
+                }
+                matchesToUpdate.add(existingMatch);
+            } else {
+                // Create new match record
+                JobProviderMatch matchEntity = JobProviderMatch.builder()
+                        .jobId(jobId)
+                        .providerId(match.getProviderId())
+                        .matchScore(match.getMatchScore())
+                        .status("PENDING")
+                        .rankOrder(rank++)
+                        .build();
+                matchEntities.add(matchEntity);
+            }
         }
         
-        // Bulk save
-        matchRepository.saveAll(matchEntities);
+        // Save new matches
+        if (!matchEntities.isEmpty()) {
+            matchRepository.saveAll(matchEntities);
+        }
+        
+        // Update existing matches
+        if (!matchesToUpdate.isEmpty()) {
+            matchRepository.saveAll(matchesToUpdate);
+        }
+        
+        // Combine all matches for status update
+        List<JobProviderMatch> allMatches = new ArrayList<>(matchEntities);
+        allMatches.addAll(matchesToUpdate);
         
         // Update top matches to NOTIFIED
         Set<Long> topProviderIds = topMatches.stream()
                 .map(ProviderMatchDto::getProviderId)
                 .collect(Collectors.toSet());
         
-        matchEntities.stream()
+        allMatches.stream()
                 .filter(m -> topProviderIds.contains(m.getProviderId()))
                 .forEach(m -> {
-                    m.setStatus("NOTIFIED");
-                    m.setNotifiedAt(LocalDateTime.now());
+                    // Only update to NOTIFIED if not already ACCEPTED
+                    if (!"ACCEPTED".equals(m.getStatus())) {
+                        m.setStatus("NOTIFIED");
+                        m.setNotifiedAt(LocalDateTime.now());
+                    }
                 });
         
-        matchRepository.saveAll(matchEntities);
+        if (!allMatches.isEmpty()) {
+            matchRepository.saveAll(allMatches);
+        }
         
         // Update DTOs
         for (ProviderMatchDto match : topMatches) {

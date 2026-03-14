@@ -346,7 +346,10 @@ export default function CreateJobPage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault()
 
-    if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
+    // Fix: Check for 0 values explicitly (since !0 is true in JavaScript)
+    if (!form.serviceCategoryId || form.serviceCategoryId === 0 || 
+        !form.title || !form.description || !form.preferredTime || 
+        !form.cityId || form.cityId === 0 || !form.addressLine1) {
       toast.error('Please fill all required fields before submitting')
       return
     }
@@ -368,12 +371,21 @@ export default function CreateJobPage() {
 
     try {
       setSaving(true)
-      await createJob(user.userId, {
+      // Fix: Don't send fields with value 0, send undefined instead
+      const payload: CreateJobDto = {
         ...form,
+        serviceCategoryId: form.serviceCategoryId === 0 ? undefined : form.serviceCategoryId,
+        cityId: form.cityId === 0 ? undefined : form.cityId,
+        serviceSubCategoryId: form.serviceSubCategoryId === 0 ? undefined : form.serviceSubCategoryId,
+        serviceSkillId: form.serviceSkillId === 0 ? undefined : form.serviceSkillId,
+        zoneId: form.zoneId === 0 ? undefined : form.zoneId,
+        podId: form.podId === 0 ? undefined : form.podId,
         estimatedBudget: form.estimatedBudget || undefined,
-      })
-      toast.success('Request submitted successfully')
-      router.push('/customer/jobs')
+      }
+      const createdJob = await createJob(user.userId, payload)
+      toast.success('Request submitted successfully! Now select a provider.')
+      // Redirect to provider selection page
+      router.push(`/customer/jobs/${createdJob.id}/select-provider`)
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Could not create request')
     } finally {
@@ -407,10 +419,26 @@ export default function CreateJobPage() {
   }
 
   const handleNextFromStep2 = () => {
-    if (!form.preferredTime || !form.cityId || !form.addressLine1) {
-      toast.error('Please fill schedule & location before continuing')
+    // Fix: Check for 0 values explicitly and ensure preferredTime is not empty string
+    const missingFields: string[] = []
+    
+    if (!form.preferredTime || form.preferredTime === '' || form.preferredTime.trim() === '') {
+      missingFields.push('Preferred Date & Time')
+    }
+    
+    if (!form.cityId || form.cityId === 0) {
+      missingFields.push('City')
+    }
+    
+    if (!form.addressLine1 || form.addressLine1.trim() === '') {
+      missingFields.push('Address Line 1')
+    }
+    
+    if (missingFields.length > 0) {
+      toast.error(`Please fill: ${missingFields.join(', ')}`)
       return
     }
+    
     setCurrentStep(3)
   }
 
@@ -492,7 +520,7 @@ export default function CreateJobPage() {
             <h2 className="font-bold text-lg text-white">Service scope</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               <div className="relative">
-                <SelectField required label="Category" value={form.serviceCategoryId} onChange={(value) => handleCategory(Number(value))} disabled={loadingCategory || loadingInitialData}>
+                <SelectField required label="Category" value={form.serviceCategoryId || 0} onChange={(value) => handleCategory(Number(value))} disabled={loadingCategory || loadingInitialData}>
                   <option value={0}>Select category</option>
                   {allCategoriesFlat.map((category) => (
                     <option key={category.id} value={category.id}>
@@ -507,7 +535,7 @@ export default function CreateJobPage() {
                 )}
               </div>
 
-              {form.serviceCategoryId > 0 && subCategories.length > 0 && (
+              {form.serviceCategoryId && form.serviceCategoryId > 0 && subCategories.length > 0 && (
                 <div className="relative">
                   <SelectField label="Sub Category (optional)" value={form.serviceSubCategoryId || ''} onChange={(value) => handleSubCategory(value ? Number(value) : 0)} disabled={loadingSubCategory}>
                     <option value="">Select subcategory</option>
@@ -683,7 +711,7 @@ export default function CreateJobPage() {
                 minDate={new Date()} // Can't select past dates
               />
               <div className="relative">
-                <SelectField required label="City" value={form.cityId} onChange={(value) => handleCity(Number(value))} disabled={loadingCity || loadingInitialData}>
+                <SelectField required label="City" value={form.cityId || 0} onChange={(value) => handleCity(Number(value))} disabled={loadingCity || loadingInitialData}>
                   <option value={0}>Select city</option>
                   {cities.map((city) => (
                     <option key={city.id} value={city.id}>{city.name}</option>
@@ -729,7 +757,7 @@ export default function CreateJobPage() {
                 </div>
               )}
 
-              {form.cityId > 0 && zones.length > 0 && (
+              {form.cityId && form.cityId > 0 && zones.length > 0 && (
                 <div className="relative">
                   <SelectField label="Zone" value={form.zoneId || ''} onChange={(value) => handleZone(value ? Number(value) : 0)} disabled={loadingZone}>
                     <option value="">Select zone</option>
@@ -767,7 +795,7 @@ export default function CreateJobPage() {
             />
 
             {/* Map-based precise location picker */}
-            {(form.cityId > 0 || form.podId) && (
+            {((form.cityId && form.cityId > 0) || form.podId) && (
               <div className="mt-4 space-y-2">
                 <label className="block text-sm font-semibold text-white">
                   Exact job location on map{' '}

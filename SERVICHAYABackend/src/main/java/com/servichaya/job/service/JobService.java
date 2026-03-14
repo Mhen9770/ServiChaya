@@ -171,7 +171,13 @@ public class JobService {
             }
         } catch (Exception e) {
             log.error("Error checking AUTO_MATCHING_FEATURE or triggering matching for jobId: {}", savedJob.getId(), e);
-            // Revert status to PENDING if matching fails
+            // CRITICAL FIX: Revert status to PENDING if matching fails
+            try {
+                updateJobStatus(savedJob.getId(), "MATCHING", "PENDING");
+                log.info("Reverted job {} status from MATCHING to PENDING due to matching failure", savedJob.getId());
+            } catch (Exception revertException) {
+                log.error("Failed to revert job status after matching failure", revertException);
+            }
             try {
                 updateJobStatus(savedJob.getId(), "MATCHING", "PENDING");
             } catch (Exception ex) {
@@ -362,6 +368,7 @@ public class JobService {
                 .estimatedBudget(job.getEstimatedBudget())
                 .finalPrice(job.getFinalPrice())
                 .status(job.getStatus())
+                .subStatus(job.getSubStatus()) // Include subStatus for frontend
                 .podId(job.getPodId())
                 .zoneId(job.getZoneId())
                 .cityId(job.getCityId())

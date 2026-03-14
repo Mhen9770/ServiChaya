@@ -52,7 +52,17 @@ public class JobMaster extends BaseEntity {
 
     @Column(name = "status", length = 50, nullable = false)
     @Builder.Default
-    private String status = "PENDING"; // PENDING, MATCHED, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED
+    private String status = "PENDING"; // PENDING, MATCHING, MATCHED, ACCEPTED, IN_PROGRESS, PAYMENT_PENDING, COMPLETED, CANCELLED
+
+    /**
+     * Sub-status for detailed state tracking
+     * Examples:
+     * - MATCHED + PROVIDER_ACCEPTED: Provider accepted, waiting for customer confirmation
+     * - MATCHED + WAITING_FOR_PROVIDER: Waiting for any provider to accept
+     * - MATCHED + CUSTOMER_SELECTED: Customer manually selected a provider
+     */
+    @Column(name = "sub_status", length = 50)
+    private String subStatus;
 
     @Column(name = "pod_id")
     private Long podId;

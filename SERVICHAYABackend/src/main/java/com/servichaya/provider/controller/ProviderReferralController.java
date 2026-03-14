@@ -1,6 +1,7 @@
 package com.servichaya.provider.controller;
 
 import com.servichaya.common.response.ApiResponse;
+import com.servichaya.provider.dto.ProviderReferralStatsDto;
 import com.servichaya.provider.service.ProviderReferralService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,18 @@ public class ProviderReferralController {
         log.info("Linking customerId: {} with providerCode: {}", customerId, providerCode);
         referralService.linkCustomerWithReferralCode(customerId, providerCode);
         return ResponseEntity.ok(ApiResponse.success("Referral linked successfully", null));
+    }
+
+    /**
+     * Get referral statistics for a provider
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<ProviderReferralStatsDto>> getReferralStats(
+            @RequestParam Long providerId
+    ) {
+        log.info("Fetching referral stats for providerId: {}", providerId);
+        ProviderReferralStatsDto stats = referralService.getReferralStats(providerId);
+        return ResponseEntity.ok(ApiResponse.success("Referral stats fetched successfully", stats));
     }
 }
 

@@ -1,19 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
-import { getJobById, type JobDto } from '@/lib/services/job'
-import { startJob, completeJob, cancelJob } from '@/lib/services/jobStatus'
+import { 
+  getProviderJobDetails, 
+  startProviderJob, 
+  completeProviderJob, 
+  cancelProviderJob, 
+  getProviderCancellationFee, 
+  trackProviderJob,
+  type JobDto,
+  type JobTrackingInfo,
+} from '@/lib/services/providerJob'
 import { getCustomerProfile, type CustomerProfileDto } from '@/lib/services/customer'
 import { getPaymentSchedule, type PaymentScheduleDto } from '@/lib/services/payment'
+import { submitBid, getProviderBid, type SubmitBidRequest } from '@/lib/services/providerSelection'
+import { getOnboardingStatus } from '@/lib/services/provider'
+import { sendMessage, getConversationMessages, getConversationId, uploadAttachment, getAttachmentUrl, markMessagesAsRead, type JobMessageDto } from '@/lib/services/jobMessaging'
+import { useMessageNotifications } from '@/lib/hooks/useMessageNotifications'
 import { toast } from 'react-hot-toast'
-import Loader from '@/components/ui/Loader'
+import Loader, { ButtonLoader } from '@/components/ui/Loader'
 import { 
   Calendar, MapPin, DollarSign, AlertCircle, CheckCircle2, 
   X, Clock, Play, ArrowLeft, MessageSquare, User, FileText, 
-  Image as ImageIcon, Building2, Phone, Mail, Shield, CreditCard
+  Image as ImageIcon, Building2, Phone, Mail, Shield, CreditCard, TrendingUp
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import LocationPicker from '@/components/map/LocationPicker'
@@ -32,6 +44,32 @@ export default function ProviderJobDetailsPage() {
   const [paymentChannel, setPaymentChannel] = useState<'CASH' | 'ONLINE'>('ONLINE')
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [distanceFromCurrentKm, setDistanceFromCurrentKm] = useState<number | null>(null)
+  const [showBidModal, setShowBidModal] = useState(false)
+  const [bidAmount, setBidAmount] = useState('')
+  const [proposedPrice, setProposedPrice] = useState('')
+  const [bidNotes, setBidNotes] = useState('')
+  const [submittingBid, setSubmittingBid] = useState(false)
+  const [currentBid, setCurrentBid] = useState<any>(null)
+  const [showChatPanel, setShowChatPanel] = useState(true) // Always show chat panel by default
+  const [chatMessages, setChatMessages] = useState<JobMessageDto[]>([])
+  const [chatMessageText, setChatMessageText] = useState('')
+  const [sendingChatMessage, setSendingChatMessage] = useState(false)
+  const [uploadingChatFile, setUploadingChatFile] = useState(false)
+  const [selectedChatFile, setSelectedChatFile] = useState<File | null>(null)
+  const [chatAttachmentUrl, setChatAttachmentUrl] = useState<string | undefined>(undefined)
+  const [chatAttachmentType, setChatAttachmentType] = useState<string | undefined>(undefined)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellationFeeInfo, setCancellationFeeInfo] = useState<{
+    cancellationFee: number
+    refundAmount: number
+    jobAmount: number
+    canCancel: boolean
+  } | null>(null)
+  const [showTrackModal, setShowTrackModal] = useState(false)
+  const [trackingInfo, setTrackingInfo] = useState<JobTrackingInfo | null>(null)
+  const [providerProfileId, setProviderProfileId] = useState<number | null>(null)
+  const [conversationId, setConversationId] = useState<number | null>(null)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -39,13 +77,23 @@ export default function ProviderJobDetailsPage() {
       router.push('/login?redirect=/provider/jobs/' + jobId)
       return
     }
+    // Get provider profile ID from onboarding status
+    getOnboardingStatus(currentUser.userId)
+      .then(status => {
+        if (status.providerId) {
+          setProviderProfileId(status.providerId)
+        }
+      })
+      .catch(() => {
+        // Silently fail - will try to use job.providerId
+      })
     fetchJobDetails()
   }, [jobId])
 
   const fetchJobDetails = async () => {
     try {
       setLoading(true)
-      const jobData = await getJobById(jobId)
+      const jobData = await getProviderJobDetails(jobId)
       setJob(jobData)
       
       // Fetch additional details in parallel
@@ -114,9 +162,8 @@ export default function ProviderJobDetailsPage() {
   }
 
   const handleStartJob = async () => {
-    const currentUser = getCurrentUser()
-    if (!currentUser || !job) {
-      toast.error('Please login first')
+    if (!job) {
+      toast.error('Job not found')
       return
     }
 
@@ -127,7 +174,7 @@ export default function ProviderJobDetailsPage() {
 
     try {
       setActionLoading(true)
-      await startJob(jobId, currentUser.userId)
+      await startProviderJob(jobId)
       toast.success('Job started successfully!')
       await fetchJobDetails()
     } catch (error: any) {
@@ -163,7 +210,7 @@ export default function ProviderJobDetailsPage() {
 
     try {
       setActionLoading(true)
-      await completeJob(jobId, currentUser.userId, Number(finalPrice), paymentChannel)
+      await completeProviderJob(jobId, Number(finalPrice), paymentChannel)
       toast.success(paymentChannel === 'CASH' 
         ? 'Job completed! Payment received via cash.' 
         : 'Job completed! Payment link sent to customer.')
@@ -180,12 +227,24 @@ export default function ProviderJobDetailsPage() {
     }
   }
 
-  const handleCancelJob = async () => {
-    if (!confirm('Are you sure you want to cancel this job? This action cannot be undone and may affect your rating.')) return
+  const handleCancelClick = async () => {
+    if (!job) return
     
-    const currentUser = getCurrentUser()
-    if (!currentUser || !job) {
-      toast.error('Please login first')
+    try {
+      setActionLoading(true)
+      const feeInfo = await getProviderCancellationFee(jobId)
+      setCancellationFeeInfo(feeInfo)
+      setShowCancelModal(true)
+    } catch (error: any) {
+      toast.error('Failed to load cancellation details')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCancelJob = async () => {
+    if (!job || !cancelReason.trim()) {
+      toast.error('Please provide a cancellation reason')
       return
     }
 
@@ -196,8 +255,10 @@ export default function ProviderJobDetailsPage() {
 
     try {
       setActionLoading(true)
-      await cancelJob(jobId, currentUser.userId, 'Provider cancelled', true)
+      await cancelProviderJob(jobId, cancelReason)
       toast.success('Job cancelled successfully')
+      setShowCancelModal(false)
+      setCancelReason('')
       await fetchJobDetails()
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || 'Failed to cancel job. Please try again.'
@@ -205,6 +266,143 @@ export default function ProviderJobDetailsPage() {
       console.error('Cancel job error:', error)
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const handleTrackJob = async () => {
+    if (!job) return
+    
+    try {
+      setActionLoading(true)
+      const info = await trackProviderJob(jobId)
+      setTrackingInfo(info)
+      setShowTrackModal(true)
+    } catch (error: any) {
+      toast.error('Failed to load tracking information')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const fetchChatMessages = useCallback(async () => {
+    if (!job) return
+    const currentUser = getCurrentUser()
+    if (!currentUser?.userId) return
+    
+    try {
+      // First, try to get conversationId
+      let convId = conversationId
+      if (!convId) {
+        convId = await getConversationId(jobId)
+        if (convId) {
+          setConversationId(convId)
+        }
+      }
+      
+      if (convId) {
+        // Use new conversation-based API
+        const data = await getConversationMessages(convId, 0, 100)
+        setChatMessages(data.content)
+      } else {
+        // Fallback to old API if conversation doesn't exist yet
+        const messages = await getMessagesWithProvider(jobId, currentUser.userId)
+        setChatMessages(messages)
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch messages:', error)
+    }
+  }, [job, jobId, conversationId])
+
+  // Auto-fetch messages when job loads and periodically
+  useEffect(() => {
+    if (job && (job.status === 'PENDING' || job.status === 'MATCHED' || job.status === 'ACCEPTED' || job.status === 'IN_PROGRESS')) {
+      fetchChatMessages()
+      const interval = setInterval(fetchChatMessages, 3000) // Poll every 3 seconds
+      return () => clearInterval(interval)
+    }
+  }, [job, fetchChatMessages])
+
+  const handleSubmitBid = async () => {
+    if (!bidAmount || isNaN(Number(bidAmount)) || Number(bidAmount) <= 0) {
+      toast.error('Please enter a valid bid amount')
+      return
+    }
+
+    const currentUser = getCurrentUser()
+    if (!currentUser?.userId) {
+      toast.error('Please login first')
+      return
+    }
+
+    try {
+      setSubmittingBid(true)
+      const bidRequest: SubmitBidRequest = {
+        bidAmount: Number(bidAmount),
+        proposedPrice: proposedPrice ? Number(proposedPrice) : undefined,
+        notes: bidNotes || undefined,
+      }
+      await submitBid(jobId, currentUser.userId, bidRequest)
+      toast.success(currentBid ? 'Bid updated successfully!' : 'Bid submitted successfully!')
+      setShowBidModal(false)
+      setBidAmount('')
+      setProposedPrice('')
+      setBidNotes('')
+      // Refresh bid info
+      const bid = await getProviderBid(jobId, currentUser.userId)
+      setCurrentBid(bid)
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Failed to submit bid. Please try again.'
+      toast.error(errorMsg)
+    } finally {
+      setSubmittingBid(false)
+    }
+  }
+
+  const handleSendChatMessage = async () => {
+    if (!chatMessageText.trim() && !selectedChatFile) return
+
+    try {
+      setSendingChatMessage(true)
+      let attachmentUrl: string | undefined = undefined
+      let attachmentType: string | undefined = undefined
+
+      // Upload file if selected
+      if (selectedChatFile) {
+        setUploadingChatFile(true)
+        try {
+          const uploadResult = await uploadAttachment(jobId, selectedChatFile)
+          attachmentUrl = uploadResult.fileUrl
+          attachmentType = uploadResult.attachmentType as 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER'
+          setSelectedChatFile(null)
+          setChatAttachmentUrl(undefined)
+          setChatAttachmentType(undefined)
+        } catch (error: any) {
+          toast.error('Failed to upload attachment')
+          setUploadingChatFile(false)
+          setSendingChatMessage(false)
+          return
+        } finally {
+          setUploadingChatFile(false)
+        }
+      }
+
+      // Send message
+      const newMessage = await sendMessage(jobId, {
+        message: chatMessageText.trim() || '',
+        attachmentUrl: attachmentUrl || undefined,
+        attachmentType: attachmentType as 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER' | undefined,
+      })
+      setChatMessages([...chatMessages, newMessage])
+      setChatMessageText('')
+      toast.success('Message sent')
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Failed to send message'
+      toast.error(errorMsg)
+      if (errorMsg.includes('contact details') || errorMsg.includes('blocked')) {
+        setChatMessageText('')
+      }
+    } finally {
+      setSendingChatMessage(false)
     }
   }
 
@@ -449,7 +647,7 @@ export default function ProviderJobDetailsPage() {
               Job Attachments
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {job.attachments.map((attachment, idx) => (
+              {job.attachments.map((attachment: { fileUrl: string; fileName?: string }, idx: number) => (
                 <a
                   key={idx}
                   href={attachment.fileUrl}
@@ -845,17 +1043,170 @@ export default function ProviderJobDetailsPage() {
             <motion.button
               whileHover={{ scale: actionLoading ? 1 : 1.05 }}
               whileTap={{ scale: actionLoading ? 1 : 0.95 }}
-              onClick={handleCancelJob}
+              onClick={handleCancelClick}
               disabled={actionLoading}
               className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-red-500/60 text-red-400 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:bg-red-500/10 hover:border-red-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">{actionLoading ? 'Cancelling...' : 'Cancel Job'}</span>
-              <span className="sm:hidden">{actionLoading ? 'Cancelling' : 'Cancel'}</span>
+              <span className="hidden sm:inline">Cancel Job</span>
+              <span className="sm:hidden">Cancel</span>
             </motion.button>
           )}
+          <motion.button
+            whileHover={{ scale: actionLoading ? 1 : 1.05 }}
+            whileTap={{ scale: actionLoading ? 1 : 0.95 }}
+            onClick={handleTrackJob}
+            disabled={actionLoading}
+            className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-blue-500/60 text-blue-400 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-500/10 hover:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Track Job</span>
+            <span className="sm:hidden">Track</span>
+          </motion.button>
         </div>
       </motion.section>
+
+      {/* Cancel Modal */}
+      {showCancelModal && cancellationFeeInfo && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 rounded-2xl border border-white/20 p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">Cancel Job</h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false)
+                  setCancelReason('')
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {cancellationFeeInfo.cancellationFee > 0 ? (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-400/30">
+                  <p className="text-sm text-yellow-200 mb-1">Cancellation Fee: ₹{cancellationFeeInfo.cancellationFee.toLocaleString()}</p>
+                  <p className="text-sm text-yellow-100">Refund Amount: ₹{cancellationFeeInfo.refundAmount.toLocaleString()}</p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-400/30">
+                  <p className="text-sm text-green-200">No cancellation fee</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-white">Cancellation Reason</label>
+                <textarea
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50"
+                  placeholder="Please provide a reason for cancellation..."
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setShowCancelModal(false)
+                    setCancelReason('')
+                  }}
+                  className="flex-1 rounded-xl border border-slate-600 text-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleCancelJob}
+                  disabled={actionLoading || !cancelReason.trim()}
+                  className="flex-1 rounded-xl bg-red-500 text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60 hover:bg-red-600 transition-colors"
+                >
+                  {actionLoading ? 'Cancelling...' : 'Confirm Cancellation'}
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Track Job Modal */}
+      {showTrackModal && trackingInfo && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 rounded-2xl border border-white/20 p-6 max-w-md w-full"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">Job Tracking</h2>
+              <button
+                onClick={() => setShowTrackModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Job Code:</span>
+                <span className="text-white font-semibold">{trackingInfo.jobCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status:</span>
+                <span className="text-white font-semibold">{trackingInfo.status}</span>
+              </div>
+              {job && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Customer ID:</span>
+                  <span className="text-white font-semibold">{job.customerId}</span>
+                </div>
+              )}
+              {trackingInfo.acceptedAt && trackingInfo.acceptedAt !== 'Not accepted' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Accepted At:</span>
+                  <span className="text-white">{new Date(trackingInfo.acceptedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {trackingInfo.startedAt && trackingInfo.startedAt !== 'Not started' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Started At:</span>
+                  <span className="text-white">{new Date(trackingInfo.startedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {trackingInfo.completedAt && trackingInfo.completedAt !== 'Not completed' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Completed At:</span>
+                  <span className="text-white">{new Date(trackingInfo.completedAt).toLocaleString()}</span>
+                </div>
+              )}
+              {trackingInfo.finalPrice && trackingInfo.finalPrice !== 'Not set' && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Final Price:</span>
+                  <span className="text-white font-semibold">₹{Number(trackingInfo.finalPrice).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowTrackModal(false)}
+              className="w-full mt-4 rounded-xl bg-primary-main text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary-light transition-colors"
+            >
+              Close
+            </motion.button>
+          </motion.div>
+        </div>
+      )}
 
       {showCompleteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -959,6 +1310,270 @@ export default function ProviderJobDetailsPage() {
           </motion.div>
         </div>
       )}
+
+      {/* Bid Modal */}
+      {showBidModal && (
+        <Modal
+          isOpen={showBidModal}
+          onClose={() => {
+            setShowBidModal(false)
+            setBidAmount('')
+            setProposedPrice('')
+            setBidNotes('')
+          }}
+          title={currentBid ? 'Update Your Bid' : 'Submit Bid for This Job'}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-white">
+                Bid Amount (₹) <span className="text-red-400">*</span>
+              </label>
+              <p className="text-xs text-slate-400 mb-2">
+                Higher bid = Higher ranking. This is the amount you're willing to pay the platform for this job.
+              </p>
+              <input
+                type="number"
+                value={bidAmount}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9.]/g, '')
+                  setBidAmount(value)
+                }}
+                className="w-full px-4 py-3 rounded-xl glass border-2 border-white/20 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 text-base"
+                placeholder="Enter bid amount (e.g., 100)"
+                min="0"
+                step="0.01"
+                required
+              />
+              {job.estimatedBudget && (
+                <div className="text-xs text-slate-400 mt-1">
+                  Job budget: ₹{job.estimatedBudget.toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-white">
+                Proposed Price (₹) <span className="text-slate-400">(Optional)</span>
+              </label>
+              <p className="text-xs text-slate-400 mb-2">
+                Your proposed final price for this job (can differ from estimated budget)
+              </p>
+              <input
+                type="number"
+                value={proposedPrice}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9.]/g, '')
+                  setProposedPrice(value)
+                }}
+                className="w-full px-4 py-3 rounded-xl glass border-2 border-white/20 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 text-base"
+                placeholder="Enter proposed price (optional)"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-white">
+                Notes <span className="text-slate-400">(Optional)</span>
+              </label>
+              <textarea
+                rows={3}
+                value={bidNotes}
+                onChange={(e) => setBidNotes(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl glass border-2 border-white/20 text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 text-sm resize-none"
+                placeholder="Add any notes or special terms..."
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setShowBidModal(false)
+                  setBidAmount('')
+                  setProposedPrice('')
+                  setBidNotes('')
+                }}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-white/30 text-white text-sm font-semibold hover:bg-white/10 transition-all"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSubmitBid}
+                disabled={submittingBid || !bidAmount || isNaN(Number(bidAmount))}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-yellow-500/50 transition-all inline-flex items-center justify-center gap-2"
+              >
+                {submittingBid ? (
+                  <>
+                    <ButtonLoader size="sm" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-4 h-4" />
+                    {currentBid ? 'Update Bid' : 'Submit Bid'}
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Persistent Chat Panel */}
+      {(job?.status === 'PENDING' || job?.status === 'MATCHED' || job?.status === 'ACCEPTED' || job?.status === 'IN_PROGRESS' || job?.status === 'PAYMENT_PENDING' || job?.status === 'COMPLETED') && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="fixed bottom-4 right-4 w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl glass-dark border-2 border-primary-main/30 shadow-2xl z-50 flex flex-col"
+          style={{ height: showChatPanel ? '600px' : '60px', transition: 'height 0.3s ease' }}
+        >
+          {/* Chat Header - Always Visible */}
+          <div 
+            className="flex items-center justify-between p-4 border-b border-white/10 cursor-pointer"
+            onClick={() => setShowChatPanel(!showChatPanel)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary-main/20 flex items-center justify-center border-2 border-primary-main/50">
+                <MessageSquare className="w-5 h-5 text-primary-light" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-sm">Chat with Customer</h3>
+                {customer && (
+                  <p className="text-xs text-slate-400">{customer.firstName} {customer.lastName}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowChatPanel(!showChatPanel)
+              }}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              {showChatPanel ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <MessageSquare className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+
+          {/* Chat Content - Collapsible */}
+          {showChatPanel && (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto space-y-3 p-4">
+                {chatMessages.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-slate-300 text-sm font-semibold mb-2">💬 Start Conversation</div>
+                    <div className="text-slate-400 text-xs space-y-1">
+                      <p>• Discuss job requirements</p>
+                      <p>• Clarify any doubts</p>
+                      <p>• Negotiate pricing</p>
+                    </div>
+                  </div>
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.senderType === 'PROVIDER' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-xl p-3 ${
+                          msg.senderType === 'PROVIDER'
+                            ? 'bg-primary-main/20 text-white'
+                            : 'bg-white/10 text-slate-200'
+                        }`}
+                      >
+                        <div className="text-xs text-slate-400 mb-1">{msg.senderName}</div>
+                        <div className="text-sm">{msg.message}</div>
+                        {msg.attachmentUrl && (
+                          <a
+                            href={getAttachmentUrl(msg.attachmentUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-2 text-xs text-primary-light hover:underline"
+                          >
+                            <FileText className="w-3 h-3" />
+                            {msg.attachmentType === 'IMAGE' ? 'View Image' : 
+                             msg.attachmentType === 'PDF' ? 'View PDF' : 
+                             'Download Attachment'}
+                          </a>
+                        )}
+                        <div className="text-[10px] text-slate-400 mt-1">
+                          {new Date(msg.createdAt).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Message Input */}
+              <div className="space-y-2 border-t border-white/10 p-4 bg-slate-900/50">
+                <textarea
+                  value={chatMessageText}
+                  onChange={(e) => setChatMessageText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSendChatMessage()
+                    }
+                  }}
+                  placeholder="Type your message..."
+                  className="w-full rounded-xl glass border border-white/20 px-3 py-2 text-sm text-white bg-white/5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-main/50 resize-none"
+                  rows={2}
+                />
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSendChatMessage}
+                  disabled={!chatMessageText.trim() || sendingChatMessage}
+                  className="w-full rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary-main/50 transition-all inline-flex items-center justify-center gap-2"
+                >
+                  {sendingChatMessage ? (
+                    <>
+                      <ButtonLoader size="sm" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Send
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+// Modal Component Helper
+function Modal({ children, isOpen, onClose, title }: { children: ReactNode; isOpen: boolean; onClose: () => void; title: string }) {
+  if (!isOpen) return null
+  
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-md rounded-2xl glass-dark border border-white/20 p-6"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg text-white">{title}</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors"><X className="w-4 h-4 text-white" /></button>
+        </div>
+        {children}
+      </motion.div>
     </div>
   )
 }

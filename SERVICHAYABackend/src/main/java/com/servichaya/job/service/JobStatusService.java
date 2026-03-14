@@ -11,8 +11,8 @@ import com.servichaya.provider.entity.ServiceProviderProfile;
 import com.servichaya.provider.repository.ServiceProviderProfileRepository;
 import com.servichaya.common.service.ConfigService;
 import com.servichaya.config.service.BusinessRuleService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class JobStatusService {
 
@@ -38,6 +37,30 @@ public class JobStatusService {
     private final ConfigService configService;
     private final BusinessRuleService businessRuleService;
     private final JobStateMachine stateMachine;
+    private final JobWorkflowService jobWorkflowService;
+
+    public JobStatusService(
+            JobMasterRepository jobRepository,
+            @Lazy MatchingService matchingService,
+            PaymentService paymentService,
+            NotificationService notificationService,
+            ActivityLogService activityLogService,
+            ServiceProviderProfileRepository providerRepository,
+            ConfigService configService,
+            BusinessRuleService businessRuleService,
+            JobStateMachine stateMachine,
+            JobWorkflowService jobWorkflowService) {
+        this.jobRepository = jobRepository;
+        this.matchingService = matchingService;
+        this.paymentService = paymentService;
+        this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
+        this.providerRepository = providerRepository;
+        this.configService = configService;
+        this.businessRuleService = businessRuleService;
+        this.stateMachine = stateMachine;
+        this.jobWorkflowService = jobWorkflowService;
+    }
 
     @Transactional
     public void startJob(Long jobId, Long userId) {
@@ -91,9 +114,18 @@ public class JobStatusService {
             }
         }
 
+        String oldStatus = job.getStatus();
         job.setStatus("IN_PROGRESS");
         job.setStartedAt(LocalDateTime.now());
         jobRepository.save(job);
+
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, oldStatus, "IN_PROGRESS");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> IN_PROGRESS",
+                    jobId, oldStatus, e);
+        }
 
         // Business Logic: Log activity
         activityLogService.logProviderActivity(userId, "JOB_STARTED", 
@@ -155,8 +187,25 @@ public class JobStatusService {
             throw new RuntimeException("Unauthorized");
         }
 
+        // CRITICAL FIX: Validate final price
+        if (finalPrice == null || finalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Final price must be greater than zero");
+        }
+        
+        // Validate final price is reasonable (not more than 10x estimated budget)
+        if (job.getEstimatedBudget() != null && job.getEstimatedBudget().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal maxAllowedPrice = job.getEstimatedBudget().multiply(new BigDecimal("10"));
+            if (finalPrice.compareTo(maxAllowedPrice) > 0) {
+                log.warn("Final price {} exceeds 10x estimated budget {} for job {}", finalPrice, job.getEstimatedBudget(), jobId);
+                throw new RuntimeException(String.format(
+                    "Final price (₹%s) exceeds maximum allowed (10x estimated budget: ₹%s). Please contact support if this is correct.",
+                    finalPrice, maxAllowedPrice));
+            }
+        }
+
         // Validate state transition using state machine
-        stateMachine.validateTransition(job.getStatus(), "PAYMENT_PENDING");
+        String oldStatus = job.getStatus();
+        stateMachine.validateTransition(oldStatus, "PAYMENT_PENDING");
 
         // Set job to PAYMENT_PENDING instead of COMPLETED
         job.setStatus("PAYMENT_PENDING");
@@ -203,6 +252,14 @@ public class JobStatusService {
             log.warn("Could not create/update payment schedule: {}", e.getMessage());
         }
 
+        // Sync workflow with status change to PAYMENT_PENDING
+        try {
+            jobWorkflowService.onStatusChanged(jobId, oldStatus, "PAYMENT_PENDING");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> PAYMENT_PENDING",
+                    jobId, oldStatus, e);
+        }
+
         // Business Logic: Handle payment based on channel
         try {
             if ("CASH".equals(paymentChannel)) {
@@ -211,8 +268,17 @@ public class JobStatusService {
                 log.info("Cash payment processed for job {}", jobId);
                 
                 // Update job status to COMPLETED after cash payment
+                String paymentPendingStatus = job.getStatus();
                 job.setStatus("COMPLETED");
                 jobRepository.save(job);
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, paymentPendingStatus, "COMPLETED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> COMPLETED",
+                            jobId, paymentPendingStatus, e);
+                }
                 
                 // Calculate earnings for cash payment
                 try {
@@ -335,6 +401,14 @@ public class JobStatusService {
                 job.setCancellationRefundAmount(refundAmount);
                 job.setCancellationReason(cancelReason);
                 jobRepository.save(job);
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                            jobId, previousStatus, e);
+                }
             } else {
                 // Customer cancellation - fee based on job status
                 if ("PENDING".equals(previousStatus) || "MATCHED".equals(previousStatus)) {
@@ -346,6 +420,14 @@ public class JobStatusService {
                     job.setCancellationRefundAmount(refundAmount);
                     job.setCancellationReason(cancelReason);
                     jobRepository.save(job);
+                    
+                    // Sync workflow with status change
+                    try {
+                        jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                    } catch (Exception e) {
+                        log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                                jobId, previousStatus, e);
+                    }
                 } else if ("ACCEPTED".equals(previousStatus) || "IN_PROGRESS".equals(previousStatus)) {
                     // After provider accepts - use CANCELLATION_FEE_BEFORE_START
                     BigDecimal feePercent = businessRuleService.getRuleValueAsBigDecimal(
@@ -394,6 +476,14 @@ public class JobStatusService {
                         job.setCancellationReason(cancelReason);
                         jobRepository.save(job);
                         
+                        // Sync workflow with status change
+                        try {
+                            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLATION_PAYMENT_PENDING");
+                        } catch (Exception e) {
+                            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLATION_PAYMENT_PENDING",
+                                    jobId, previousStatus, e);
+                        }
+                        
                         log.info("Job {} set to CANCELLATION_PAYMENT_PENDING. Fee: ₹{}, Refund: ₹{}", 
                                 jobId, cancellationFee, refundAmount);
                         
@@ -411,6 +501,15 @@ public class JobStatusService {
                         job.setCancellationRefundAmount(refundAmount);
                         job.setCancellationReason(cancelReason);
                         jobRepository.save(job);
+                        
+                        // Sync workflow with status change
+                        try {
+                            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                        } catch (Exception e) {
+                            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                                    jobId, previousStatus, e);
+                        }
+                        
                         log.info("No cancellation fee (CANCELLATION_FEE_BEFORE_START is 0). Job cancelled immediately.");
                     }
                 }
@@ -427,6 +526,14 @@ public class JobStatusService {
             job.setCancellationRefundAmount(refundAmount);
             job.setCancellationReason(cancelReason);
             jobRepository.save(job);
+            
+            // Sync workflow with status change
+            try {
+                jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+            } catch (Exception workflowEx) {
+                log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                        jobId, previousStatus, workflowEx);
+            }
         }
 
         // Only process reassignment, logging, and notifications if job is actually cancelled
@@ -515,6 +622,14 @@ public class JobStatusService {
         // Actually cancel the job
         job.setStatus("CANCELLED");
         jobRepository.save(job);
+        
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                    jobId, previousStatus, e);
+        }
 
         // Process refund if applicable
         BigDecimal refundAmount = job.getCancellationRefundAmount() != null ? 
@@ -674,7 +789,38 @@ public class JobStatusService {
         job.setAcceptedAt(null);
         jobRepository.save(job);
 
-        matchingService.matchJobToProviders(jobId);
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, "CANCELLED", "PENDING");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change CANCELLED -> PENDING",
+                    jobId, e);
+        }
+
+        // Re-match job if AUTO_MATCHING_FEATURE is enabled
+        try {
+            if (configService.isAutoMatchingEnabled()) {
+                log.info("AUTO_MATCHING_FEATURE enabled. Triggering re-matching for reassigned jobId: {}", jobId);
+                matchingService.matchJobToProviders(jobId);
+            } else {
+                log.info("AUTO_MATCHING_FEATURE disabled. Skipping re-matching for jobId: {}. Admin can manually assign.", jobId);
+                // Notify customer that admin will assign manually
+                try {
+                    notificationService.createNotification(
+                            job.getCustomerId(), "CUSTOMER", "JOB_PENDING_MANUAL_ASSIGNMENT",
+                            "Job Reassigned - Manual Assignment",
+                            String.format("Your job '%s' has been reassigned. Our team will assign a provider shortly.", job.getTitle()),
+                            "JOB", jobId,
+                            String.format("/customer/jobs/%d", jobId),
+                            Map.of("jobCode", job.getJobCode())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to send manual assignment notification", e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error checking AUTO_MATCHING_FEATURE or triggering re-matching for jobId: {}", jobId, e);
+        }
 
         log.info("Job {} reassigned successfully", jobId);
     }

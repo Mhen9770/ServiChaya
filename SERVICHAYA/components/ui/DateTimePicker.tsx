@@ -90,6 +90,7 @@ export default function DateTimePicker({
     finalDate.setHours(hour24, selectedMinute, 0, 0)
     
     // Format: YYYY-MM-DDTHH:mm (ISO datetime-local format)
+    // Note: Backend accepts this format via @JsonFormat annotation
     const year = finalDate.getFullYear()
     const month = String(finalDate.getMonth() + 1).padStart(2, '0')
     const day = String(finalDate.getDate()).padStart(2, '0')

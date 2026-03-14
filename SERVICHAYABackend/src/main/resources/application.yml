@@ -1,4 +1,6 @@
 spring:
+  main:
+    allow-circular-references: true
   application:
     name: servichaya-backend
   datasource:
@@ -71,6 +73,11 @@ server:
   servlet:
     context-path: /api
 
+# Job Messages Configuration
+job:
+  messages:
+    attachments-path: ${JOB_MESSAGES_ATTACHMENTS_PATH:/app/data/job-messages/attachments}
+
 # Logging
 logging:
   level:
@@ -109,3 +116,5 @@ onesignal:
       key: ${ONESIGNAL_REST_API_KEY:os_v2_app_a747y4vwbnazvb6kcouhxol4ol73iqszmqnejaffquhqctpsa5g4ddij6c2kspiq5t4uzqukx2vskdxufg5ixihlotga6bpib2dvvoy}
   base:
     url: ${ONESIGNAL_BASE_URL:https://onesignal.com/api/v1}
+    
+    
