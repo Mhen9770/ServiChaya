@@ -13,6 +13,7 @@ import DataTable, { Column } from '@/components/ui/DataTable'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { Plus, Edit, Trash2, MapPin, CheckCircle2, XCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function AdminPodsPage() {
   const [pods, setPods] = useState<PodMasterDto[]>([])
@@ -464,6 +465,28 @@ export default function AdminPodsPage() {
                     min="0"
                   />
                 </div>
+              </div>
+              {/* Map picker for POD center & radius */}
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-neutral-textPrimary mb-1">
+                  POD center on map
+                </label>
+                <LocationPicker
+                  center={{
+                    lat: formData.latitude || 22.9734,
+                    lng: formData.longitude || 78.6569,
+                  }}
+                  value={{ lat: formData.latitude || 22.9734, lng: formData.longitude || 78.6569 }}
+                  radiusKm={formData.serviceRadiusKm || 0}
+                  onChange={({ lat, lng }) =>
+                    setFormData(prev => ({
+                      ...prev,
+                      latitude: lat,
+                      longitude: lng,
+                    }))
+                  }
+                  height={220}
+                />
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>

@@ -26,4 +26,6 @@ public interface ProviderPodMapRepository extends JpaRepository<ProviderPodMap, 
 
     @Query("SELECT p FROM ProviderPodMap p WHERE p.providerId = :providerId AND p.cityId = :cityId")
     java.util.Optional<ProviderPodMap> findByProviderIdAndCityId(@Param("providerId") Long providerId, @Param("cityId") Long cityId);
+
+    List<ProviderPodMap> findByPodId(Long podId);
 }

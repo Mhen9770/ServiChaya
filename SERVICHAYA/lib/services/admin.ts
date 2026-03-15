@@ -103,6 +103,63 @@ export const rejectProvider = async (providerId: number, rejectionReason: string
   await api.post(`/admin/providers/${providerId}/reject?${params.toString()}`)
 }
 
+// ========== Customer Management ==========
+export interface CustomerDto {
+  id: number
+  userId: number
+  customerCode: string
+  name: string
+  email?: string
+  mobileNumber?: string
+  totalJobsCreated?: number
+  totalJobsCompleted?: number
+  totalJobsCancelled?: number
+  activeJobs?: number
+  createdAt: string
+  isActive: boolean
+  lastLoginAt?: string
+  accountStatus?: string
+  emailVerified?: boolean
+  mobileVerified?: boolean
+  profileImageUrl?: string
+}
+
+export const getCustomers = async (
+  status?: string,
+  page: number = 0,
+  size: number = 20,
+  sortBy?: string,
+  sortDir?: string
+): Promise<{ content: CustomerDto[]; totalElements: number; totalPages: number }> => {
+  const params = new URLSearchParams()
+  if (status && status !== 'ALL') params.append('status', status)
+  params.append('page', page.toString())
+  params.append('size', size.toString())
+  if (sortBy) params.append('sortBy', sortBy)
+  if (sortDir) params.append('sortDir', sortDir)
+  
+  const response = await api.get(`/admin/customers?${params.toString()}`)
+  return response.data.data
+}
+
+export const getCustomerById = async (customerId: number): Promise<CustomerDto> => {
+  const response = await api.get(`/admin/customers/${customerId}`)
+  return response.data.data
+}
+
+export const updateCustomer = async (customerId: number, customer: Partial<CustomerDto>): Promise<CustomerDto> => {
+  const response = await api.put(`/admin/customers/${customerId}`, customer)
+  return response.data.data
+}
+
+export const deactivateCustomer = async (customerId: number): Promise<void> => {
+  await api.post(`/admin/customers/${customerId}/deactivate`)
+}
+
+export const activateCustomer = async (customerId: number): Promise<void> => {
+  await api.post(`/admin/customers/${customerId}/activate`)
+}
+
 export const getAllJobs = async (
   status?: string,
   cityId?: number,
@@ -198,6 +255,7 @@ export interface ServiceCategoryMasterDto {
   displayOrder?: number
   isFeatured?: boolean
   isActive?: boolean
+  parentId?: number
 }
 
 // NOTE: Legacy ServiceSubCategoryMaster has been deprecated.
@@ -882,6 +940,17 @@ export const getAvailableProvidersForJob = async (jobId: number): Promise<Provid
   return response.data.data
 }
 
+// ========== Admin Job Actions ==========
+export const getAdminJobDetails = async (jobId: number): Promise<any> => {
+  const response = await api.get(`/admin/jobs/${jobId}`)
+  return response.data.data
+}
+
+export const forceMatchJob = async (jobId: number): Promise<string> => {
+  const response = await api.post(`/admin/jobs/${jobId}/force-match`)
+  return response.data.data
+}
+
 export const assignJobToProvider = async (
   jobId: number,
   providerId: number,
@@ -902,4 +971,45 @@ export const getJobAssignments = async (jobId: number): Promise<ProviderMatchDto
 
 export const removeJobAssignment = async (jobId: number, matchId: number): Promise<void> => {
   await api.delete(`/admin/jobs/${jobId}/assignments/${matchId}`)
+}
+
+// Cancel job (admin action - can cancel on behalf of customer or provider)
+export const cancelAdminJob = async (
+  jobId: number,
+  cancelReason: string,
+  cancelledBy: 'CUSTOMER' | 'PROVIDER' = 'CUSTOMER',
+  userId?: number
+): Promise<string> => {
+  const body: any = { cancelReason, cancelledBy }
+  if (userId) body.userId = userId
+  const response = await api.post(`/admin/jobs/${jobId}/cancel`, body)
+  return response.data.data
+}
+
+// Update job status (admin override)
+export const updateJobStatus = async (jobId: number, status: string): Promise<string> => {
+  const response = await api.post(`/admin/jobs/${jobId}/status`, { status })
+  return response.data.data
+}
+
+// Get job analytics
+export const getJobAnalytics = async (
+  cityId?: number,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<{
+  totalJobs: number
+  pendingJobs: number
+  completedJobs: number
+  cancelledJobs: number
+  totalRevenue: number
+}> => {
+  const params = new URLSearchParams()
+  if (cityId) params.append('cityId', cityId.toString())
+  if (dateFrom) params.append('dateFrom', dateFrom)
+  if (dateTo) params.append('dateTo', dateTo)
+  const queryString = params.toString()
+  const url = queryString ? `/admin/jobs/analytics?${queryString}` : `/admin/jobs/analytics`
+  const response = await api.get(url)
+  return response.data.data
 }

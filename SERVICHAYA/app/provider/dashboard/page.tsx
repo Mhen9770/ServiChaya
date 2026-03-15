@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
-import { getOnboardingStatus } from '@/lib/services/provider'
+import { getOnboardingStatus, getProviderProfile, getProviderCustomers, updateProviderProfile, type ProviderProfileDto, type ProviderCustomerSummary } from '@/lib/services/provider'
 import { getProviderJobs, type JobDto } from '@/lib/services/job'
 import { getEarningsSummary } from '@/lib/services/payment'
 import { getUnreadCount } from '@/lib/services/notification'
@@ -15,9 +15,10 @@ import { SkeletonCard } from '@/components/ui/Skeleton'
 import OneSignalRegistration from '@/components/onesignal/OneSignalRegistration'
 import { 
   Clock, FileText, CheckCircle2, ArrowRight, ClipboardList, 
-  Briefcase, DollarSign, Bell, TrendingUp, AlertCircle, Sparkles, Plus
+  Briefcase, DollarSign, Bell, TrendingUp, AlertCircle, Sparkles, Plus, MapPin
 } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 interface OnboardingStatus {
   currentStep: number
@@ -30,6 +31,7 @@ interface OnboardingStatus {
 export default function ProviderDashboard() {
   const router = useRouter()
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
+  const [providerProfile, setProviderProfile] = useState<ProviderProfileDto | null>(null)
   const [stats, setStats] = useState({
     activeJobs: 0,
     completedJobs: 0,
@@ -39,6 +41,9 @@ export default function ProviderDashboard() {
   const [recentJobs, setRecentJobs] = useState<JobDto[]>([])
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [topCustomers, setTopCustomers] = useState<ProviderCustomerSummary[]>([])
+  const [updatingAvailability, setUpdatingAvailability] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -57,6 +62,27 @@ export default function ProviderDashboard() {
     }
     checkOnboardingStatus(currentUser.userId)
   }, [router])
+
+  // Capture provider's current browser location once for today's map
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCurrentLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        })
+      },
+      () => {
+        // ignore failure; map will just center on first job or a default
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    )
+  }, [])
 
   const checkOnboardingStatus = async (userId: number) => {
     try {
@@ -89,7 +115,7 @@ export default function ProviderDashboard() {
         return
       }
       
-      const [jobsResult, earnings, notifications, availableJobs] = await Promise.all([
+      const [jobsResult, earnings, notifications, availableJobs, profile, customers] = await Promise.all([
         getProviderJobs(providerId, 0, 5).catch((err) => {
           console.error('Failed to fetch provider jobs:', err)
           return { content: [], totalElements: 0, totalPages: 0 }
@@ -101,6 +127,14 @@ export default function ProviderDashboard() {
         getUnreadCount(userId, 'PROVIDER').catch(() => 0),
         getAvailableJobsForProvider(providerId).catch((err) => {
           console.error('Failed to fetch available jobs:', err)
+          return []
+        }),
+        getProviderProfile(providerId).catch((err) => {
+          console.error('Failed to fetch provider profile for referral info:', err)
+          return null
+        }),
+        getProviderCustomers(providerId).catch((err) => {
+          console.error('Failed to fetch provider customers:', err)
           return []
         })
       ])
@@ -118,6 +152,10 @@ export default function ProviderDashboard() {
       })
       setRecentJobs(jobs)
       setUnreadNotifications(notifications || 0)
+      if (profile) {
+        setProviderProfile(profile)
+      }
+      setTopCustomers((customers || []).slice(0, 5))
     } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error)
       const errorMsg = error.response?.data?.message || 'Failed to load dashboard'
@@ -221,6 +259,180 @@ export default function ProviderDashboard() {
         </div>
       </motion.section>
 
+      {/* Today / pipeline strip */}
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        {[
+          {
+            label: 'New offers',
+            value: stats.availableJobs,
+            caption: 'Jobs waiting for your response',
+            href: '/provider/jobs/available',
+            highlight: stats.availableJobs > 0,
+          },
+          {
+            label: 'Active now',
+            value: stats.activeJobs,
+            caption: 'Accepted or in-progress jobs',
+            href: '/provider/jobs?status=IN_PROGRESS',
+          },
+          {
+            label: 'Completed',
+            value: stats.completedJobs,
+            caption: 'Lifetime jobs completed',
+            href: '/provider/jobs?status=COMPLETED',
+          },
+          {
+            label: 'Total earned',
+            value: `₹${stats.totalEarnings.toLocaleString()}`,
+            caption: 'All time on SERVICHAYA',
+            href: '/provider/earnings',
+          },
+        ].map((item) => (
+          <motion.article
+            key={item.label}
+            whileHover={{ scale: 1.03, y: -2 }}
+            className={`rounded-xl sm:rounded-2xl glass-dark border px-3 sm:px-4 py-3 sm:py-4 cursor-pointer transition-all ${
+              item.highlight
+                ? 'border-accent-orange/70 bg-accent-orange/10 shadow-lg shadow-accent-orange/20'
+                : 'border-white/15 hover:border-primary-main/60 hover:shadow-lg hover:shadow-primary-main/15'
+            }`}
+          >
+            <Link href={item.href} className="block space-y-1">
+              <p className="text-[10px] sm:text-xs text-slate-300 font-medium">{item.label}</p>
+              <p className="text-lg sm:text-xl font-bold text-white">{item.value}</p>
+              <p className="text-[10px] sm:text-[11px] text-slate-400">{item.caption}</p>
+            </Link>
+          </motion.article>
+        ))}
+      </section>
+
+      {/* My customers & Referral Section */}
+      {providerProfile && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-4 sm:p-5 space-y-4"
+        >
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary-light" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide text-slate-300">
+                Grow with your own customers
+              </p>
+            </div>
+            <Link
+              href="/provider/profile"
+              className="text-[10px] sm:text-xs text-primary-light hover:text-primary-main underline-offset-2 hover:underline"
+            >
+              Manage profile
+            </Link>
+          </div>
+
+          <div className="grid md:grid-cols-[1.4fr,1.1fr] gap-4 sm:gap-5 items-start">
+            {/* Top customers list */}
+            <div>
+              <h2 className="text-sm sm:text-base font-semibold text-white mb-2">
+                Your customers on SERVICHAYA
+              </h2>
+              {topCustomers.length === 0 ? (
+                <p className="text-[11px] sm:text-xs text-slate-400">
+                  As your customers start booking through SERVICHAYA, they will appear here so you can track repeat work and earnings.
+                </p>
+              ) : (
+                <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
+                  {topCustomers.map((c) => (
+                    <div
+                      key={c.customerId}
+                      className="flex items-start justify-between gap-2 rounded-lg sm:rounded-xl border border-white/15 bg-slate-900/40 px-3 py-2.5"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold text-white truncate">
+                          {c.name || 'Customer'}{' '}
+                          {c.primaryForThisProvider && (
+                            <span className="ml-1 inline-flex items-center rounded-full bg-primary-main/20 px-1.5 py-0.5 text-[9px] text-primary-light border border-primary-main/40">
+                              Primary
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-slate-300 truncate">
+                          {c.mobileNumber}
+                          {c.email && ` · ${c.email}`}
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
+                          {c.completedJobsTogether} jobs · ₹{c.totalEarningsFromCustomer.toLocaleString()} earned ·{' '}
+                          <span className="uppercase">{c.source?.toLowerCase() === 'referral_code' ? 'Referral' : c.source}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window === 'undefined') return
+                          const baseUrl = window.location.origin || 'https://servichaya.com'
+                          const link = `${baseUrl}/?ref=${encodeURIComponent(providerProfile.providerCode)}`
+                          const msg = `Hi ${c.name || ''},\n\nNext time you need a service, please book me via SERVICHAYA using this link:\n${link}\n\nThis helps me stay as your preferred provider and keeps all jobs tracked in one place.`
+                          const encoded = encodeURIComponent(msg)
+                          window.open(`https://wa.me/?text=${encoded}`, '_blank')
+                        }}
+                        className="ml-2 inline-flex items-center justify-center rounded-full border border-primary-main/50 px-2.5 py-1 text-[10px] sm:text-xs text-primary-light hover:bg-primary-main/10 transition-colors"
+                      >
+                        Share link
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Referral tools */}
+            <div className="rounded-lg sm:rounded-xl border border-white/15 bg-slate-900/50 p-3 sm:p-4 space-y-2.5">
+              <p className="text-[11px] sm:text-xs text-slate-300">
+                Share your personal link with new customers. When they join from your link, they see you first for matching services in your area.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs text-slate-300 whitespace-nowrap">
+                  Your provider code
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-800/70 border border-white/20 text-xs font-semibold text-white">
+                  {providerProfile.providerCode}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window === 'undefined') return
+                    const baseUrl = window.location.origin || 'https://servichaya.com'
+                    const link = `${baseUrl}/?ref=${encodeURIComponent(providerProfile.providerCode)}`
+                    navigator.clipboard?.writeText(link)
+                      .then(() => toast.success('Referral link copied'))
+                      .catch(() => toast.error('Unable to copy link'))
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white text-[11px] sm:text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/40 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Copy link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window === 'undefined') return
+                    const baseUrl = window.location.origin || 'https://servichaya.com'
+                    const link = `${baseUrl}/?ref=${encodeURIComponent(providerProfile.providerCode)}`
+                    const msg = `Hi, I now manage my jobs via SERVICHAYA.\n\nUse this link to book me directly:\n${link}\n\nThis keeps all your service history and my work in one place.`
+                    const encoded = encodeURIComponent(msg)
+                    window.open(`https://wa.me/?text=${encoded}`, '_blank')
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-white/25 text-[11px] sm:text-sm text-white hover:bg-white/10 transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Share via WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.section>
+      )}
+
       <section className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Active Jobs', value: stats.activeJobs, icon: Briefcase, link: '/provider/jobs?status=IN_PROGRESS', color: 'from-orange-500 to-orange-600', borderColor: 'border-orange-400/30' },
@@ -245,6 +457,105 @@ export default function ProviderDashboard() {
             </Link>
           </motion.article>
         ))}
+      </section>
+
+      {/* Availability & service areas */}
+      {providerProfile && (
+        <section className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-5">
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-primary-light" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide text-slate-300">
+                Today&apos;s availability
+              </p>
+            </div>
+            <p className="text-sm sm:text-base font-semibold text-white">
+              Let SERVICHAYA know if you are open for new jobs today.
+            </p>
+            <p className="text-[10px] sm:text-xs text-slate-300">
+              When you are available, we prioritise you for nearby matches within your service areas.
+            </p>
+            <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs text-slate-300">
+              <span className="px-2 py-1 rounded-full bg-slate-800/80 border border-white/10">
+                Service areas configured: {providerProfile.serviceAreas?.length || 0}
+              </span>
+              <Link
+                href="/provider/profile"
+                className="inline-flex items-center gap-1 text-primary-light hover:text-primary-main underline-offset-2 hover:underline"
+              >
+                <MapPin className="w-3 h-3" />
+                Edit service areas
+              </Link>
+            </div>
+          </div>
+          <div className="flex flex-col items-start gap-2 md:items-end">
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-[11px] sm:text-xs text-slate-300">
+                I am available for new jobs today
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!providerProfile || updatingAvailability) return
+                  try {
+                    setUpdatingAvailability(true)
+                    const next = !providerProfile.isAvailable
+                    const updated = await updateProviderProfile(providerProfile.id, { isAvailable: next })
+                    setProviderProfile(updated)
+                    toast.success(next ? 'You are now available for new jobs' : 'You are marked as unavailable')
+                  } catch (err: any) {
+                    console.error('Failed to update availability', err)
+                    toast.error(err?.response?.data?.message || 'Could not update availability')
+                  } finally {
+                    setUpdatingAvailability(false)
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
+                  providerProfile.isAvailable
+                    ? 'bg-emerald-500 border-emerald-400'
+                    : 'bg-slate-700 border-slate-500'
+                } ${updatingAvailability ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    providerProfile.isAvailable ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </label>
+            <p className="text-[10px] sm:text-[11px] text-slate-400 max-w-xs text-left md:text-right">
+              Toggle this off when you are not taking new work. You will still see your existing jobs.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Money focus card */}
+      <section className="rounded-xl sm:rounded-2xl glass-dark border-2 border-emerald-400/30 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
+            <DollarSign className="w-4 h-4 text-emerald-300" />
+            <p className="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-200">
+              Your money on SERVICHAYA
+            </p>
+          </div>
+          <h2 className="text-sm sm:text-base font-semibold text-white mb-1">
+            Total earned so far:{' '}
+            <span className="text-emerald-300">
+              ₹{stats.totalEarnings.toLocaleString()}
+            </span>
+          </h2>
+          <p className="text-[10px] sm:text-xs text-slate-300">
+            Complete your active jobs on time to move more of this into your pocket and unlock better ranking.
+          </p>
+        </div>
+        <Link
+          href="/provider/earnings"
+          className="inline-flex items-center gap-2 rounded-lg sm:rounded-xl bg-emerald-500/90 text-white px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/40 transition-all"
+        >
+          <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          View earnings
+        </Link>
       </section>
 
       <section className="grid lg:grid-cols-3 gap-4 sm:gap-5">
@@ -326,38 +637,103 @@ export default function ProviderDashboard() {
         <motion.aside 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary-main to-primary-dark text-white p-4 sm:p-5 lg:p-6 border-2 border-primary-light/30 shadow-xl shadow-primary-main/20"
+          className="space-y-4 sm:space-y-5"
         >
-          <div className="flex items-center gap-2 mb-2 sm:mb-3">
-            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
-            <p className="text-[10px] sm:text-xs uppercase tracking-wide text-blue-100">Performance</p>
+          {/* Today's map card */}
+          <div className="rounded-xl sm:rounded-2xl glass-dark border-2 border-primary-main/40 p-4 sm:p-5 lg:p-6 backdrop-blur-md shadow-lg shadow-primary-main/20">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary-light" />
+                <div>
+                  <p className="text-[10px] sm:text-xs uppercase tracking-wide text-slate-300">Today&apos;s map</p>
+                  <h3 className="text-sm sm:text-base font-bold text-white">Where your jobs are today</h3>
+                </div>
+              </div>
+              <Link
+                href="/provider/jobs"
+                className="text-[10px] sm:text-xs text-primary-light hover:text-primary-main underline-offset-2 hover:underline"
+              >
+                View list
+              </Link>
+            </div>
+            {recentJobs.length === 0 ? (
+              <p className="text-[11px] sm:text-xs text-slate-400">
+                No active or recent jobs to show on map yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <LocationPicker
+                  center={
+                    currentLocation && !Number.isNaN(currentLocation.lat) && !Number.isNaN(currentLocation.lng)
+                      ? currentLocation
+                      : recentJobs[0].latitude != null && recentJobs[0].longitude != null
+                      ? { lat: recentJobs[0].latitude, lng: recentJobs[0].longitude }
+                      : { lat: 22.9734, lng: 78.6569 } // India center fallback
+                  }
+                  value={
+                    // For now, just highlight first job; future: cluster jobs
+                    recentJobs[0].latitude != null && recentJobs[0].longitude != null
+                      ? { lat: recentJobs[0].latitude, lng: recentJobs[0].longitude }
+                      : undefined
+                  }
+                  height={200}
+                  readOnly
+                />
+                <p className="text-[11px] sm:text-xs text-slate-400">
+                  This map uses your current device location (if allowed) plus today&apos;s jobs to give you a quick spatial view.
+                </p>
+              </div>
+            )}
           </div>
-          <h3 className="text-lg sm:text-xl font-bold mt-1 sm:mt-2">Completion Health: {stats.completedJobs > 0 ? Math.round((stats.completedJobs / (stats.activeJobs + stats.completedJobs)) * 100) : 0}%</h3>
-          <div className="mt-3 sm:mt-4 h-2 w-full rounded-full bg-white/30 overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${stats.completedJobs > 0 ? Math.min(100, (stats.completedJobs / (stats.activeJobs + stats.completedJobs)) * 100) : 0}%` }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="h-full bg-white"
-            />
+
+          {/* Performance tips card */}
+          <div className="rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary-main to-primary-dark text-white p-4 sm:p-5 lg:p-6 border-2 border-primary-light/30 shadow-xl shadow-primary-main/20">
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide text-blue-100">Performance</p>
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold mt-1 sm:mt-2">
+              Completion Health:{' '}
+              {stats.completedJobs > 0
+                ? Math.round((stats.completedJobs / (stats.activeJobs + stats.completedJobs)) * 100)
+                : 0}
+              %
+            </h3>
+            <div className="mt-3 sm:mt-4 h-2 w-full rounded-full bg-white/30 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${
+                    stats.completedJobs > 0
+                      ? Math.min(100, (stats.completedJobs / (stats.activeJobs + stats.completedJobs)) * 100)
+                      : 0
+                  }%`,
+                }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-white"
+              />
+            </div>
+            <ul className="mt-4 sm:mt-5 text-xs sm:text-sm text-blue-100 space-y-2">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+                <span>Complete jobs on time to maintain rating.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+                <span>Update availability status regularly.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+                <span>Check available jobs daily for new opportunities.</span>
+              </li>
+            </ul>
+            <Link
+              href="/provider/profile"
+              className="mt-3 sm:mt-4 inline-block text-[10px] sm:text-xs text-blue-100 hover:text-white underline transition-colors"
+            >
+              Update profile →
+            </Link>
           </div>
-          <ul className="mt-4 sm:mt-5 text-xs sm:text-sm text-blue-100 space-y-2">
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
-              <span>Complete jobs on time to maintain rating.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
-              <span>Update availability status regularly.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
-              <span>Check available jobs daily for new opportunities.</span>
-            </li>
-          </ul>
-          <Link href="/provider/profile" className="mt-3 sm:mt-4 inline-block text-[10px] sm:text-xs text-blue-100 hover:text-white underline transition-colors">
-            Update profile →
-          </Link>
         </motion.aside>
       </section>
     </div>

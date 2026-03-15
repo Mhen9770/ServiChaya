@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -8,7 +8,9 @@ import { BadgeCheck, Mail, MapPin, Phone, Save, ShieldCheck, UserCircle2, Edit, 
 import { getCurrentUser } from '@/lib/auth'
 import { getCustomerProfile, type CustomerProfileDto, updateCustomerProfile, createCustomerAddress, type CreateAddressRequest } from '@/lib/services/customer'
 import { getAllActiveCities, getZonesByCity, getPodsByZone, type CityMasterDto, type ZoneMasterDto, type PodMasterDto } from '@/lib/services/admin'
+import { resolveLocation } from '@/lib/services/location'
 import Loader, { ButtonLoader } from '@/components/ui/Loader'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function CustomerProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -35,8 +37,13 @@ export default function CustomerProfilePage() {
     zoneId: undefined,
     podId: undefined,
     pincode: '',
+    latitude: undefined,
+    longitude: undefined,
     isPrimary: false,
   })
+  const [resolvingLocation, setResolvingLocation] = useState(false)
+  const [resolvedLocationInfo, setResolvedLocationInfo] = useState<{ cityName?: string; zoneName?: string; podName?: string } | null>(null)
+  const resolveLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -58,7 +65,7 @@ export default function CustomerProfilePage() {
   }
 
   const handleCityChange = async (cityId: number) => {
-    setAddressForm(prev => ({ ...prev, cityId, zoneId: undefined, podId: undefined }))
+    setAddressForm(prev => ({ ...prev, cityId, zoneId: undefined, podId: undefined, latitude: undefined, longitude: undefined }))
     setZones([])
     setPods([])
     if (!cityId) return
@@ -74,7 +81,7 @@ export default function CustomerProfilePage() {
   }
 
   const handleZoneChange = async (zoneId: number) => {
-    setAddressForm(prev => ({ ...prev, zoneId, podId: undefined }))
+    setAddressForm(prev => ({ ...prev, zoneId, podId: undefined, latitude: undefined, longitude: undefined }))
     setPods([])
     if (!zoneId) return
     try {
@@ -86,6 +93,115 @@ export default function CustomerProfilePage() {
     } finally {
       setLoadingPods(false)
     }
+  }
+
+  // Helper function to resolve location and update form
+  const resolveAndUpdateLocation = async (latitude: number, longitude: number, showToast = true) => {
+    try {
+      setResolvingLocation(true)
+      const resolved = await resolveLocation(latitude, longitude)
+
+      setAddressForm(prev => ({
+        ...prev,
+        cityId: resolved.cityId,
+        zoneId: resolved.zoneId,
+        podId: resolved.podId,
+        latitude,
+        longitude,
+      }))
+
+      // Update resolved location info for display
+      setResolvedLocationInfo({
+        cityName: resolved.cityName,
+        zoneName: resolved.zoneName,
+        podName: resolved.podName,
+      })
+
+      // Load dropdown data based on resolved IDs
+      if (resolved.cityId) {
+        const zoneRes = await getZonesByCity(resolved.cityId)
+        setZones(zoneRes)
+        if (resolved.zoneId) {
+          const podRes = await getPodsByZone(resolved.zoneId)
+          setPods(podRes)
+        } else {
+          setPods([])
+        }
+      }
+
+      if (showToast) {
+        const locationParts = [
+          resolved.podName,
+          resolved.zoneName,
+          resolved.cityName,
+        ].filter(Boolean)
+        toast.success(`Location detected: ${locationParts.join(', ')}`)
+      }
+    } catch (err: any) {
+      console.error('Failed to resolve location', err)
+      setResolvedLocationInfo(null)
+      if (showToast) {
+        toast.error(err?.response?.data?.message || 'Could not detect area from location')
+      }
+    } finally {
+      setResolvingLocation(false)
+    }
+  }
+
+  const useCurrentLocationForAddress = async () => {
+    if (!navigator.geolocation) {
+      toast.error('Location is not supported in this browser')
+      return
+    }
+
+    // Show loader immediately
+    setResolvingLocation(true)
+
+    try {
+      await new Promise<void>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const { latitude, longitude } = pos.coords
+              await resolveAndUpdateLocation(latitude, longitude, true)
+            } catch (err) {
+              // Error already handled in resolveAndUpdateLocation
+            } finally {
+              resolve()
+            }
+          },
+          (err) => {
+            console.error('Geolocation error', err)
+            toast.error('Unable to access current location')
+            setResolvingLocation(false)
+            resolve()
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        )
+      })
+    } catch (err) {
+      console.error('Error getting current location', err)
+      setResolvingLocation(false)
+    }
+  }
+
+  // Debounced location resolution when map pin moves
+  const handleMapLocationChange = ({ lat, lng }: { lat: number; lng: number }) => {
+    // Update lat/lng immediately
+    setAddressForm(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+    }))
+
+    // Debounce the resolution call (wait 1 second after user stops moving pin)
+    if (resolveLocationTimeoutRef.current) {
+      clearTimeout(resolveLocationTimeoutRef.current)
+    }
+    
+    resolveLocationTimeoutRef.current = setTimeout(() => {
+      resolveAndUpdateLocation(lat, lng, false) // Don't show toast on every pin move
+    }, 1000)
   }
 
   const load = async (customerId: number) => {
@@ -148,6 +264,8 @@ export default function CustomerProfilePage() {
         zoneId: undefined,
         podId: undefined,
         pincode: '',
+        latitude: undefined,
+        longitude: undefined,
         isPrimary: false,
       })
       setZones([])
@@ -349,6 +467,39 @@ export default function CustomerProfilePage() {
                   ))}
                 </select>
               </div>
+
+              <div className="md:col-span-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-300">
+                  You can also let SERVICHAYA detect your area automatically.
+                </p>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: resolvingLocation ? 1 : 1.02 }}
+                  whileTap={{ scale: resolvingLocation ? 1 : 0.98 }}
+                  onClick={useCurrentLocationForAddress}
+                  disabled={resolvingLocation}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-main/50 px-3 py-1.5 text-[11px] text-primary-light hover:bg-primary-main/10 disabled:opacity-60"
+                >
+                  {resolvingLocation ? (
+                    <>
+                      <ButtonLoader size="sm" />
+                      <span>Detecting location...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-3 h-3" />
+                      <span>Use current location</span>
+                    </>
+                  )}
+                </motion.button>
+              </div>
+              
+              {resolvingLocation && (
+                <div className="md:col-span-2 flex items-center gap-2 text-xs text-slate-400 bg-primary-main/5 border border-primary-main/20 rounded-lg px-3 py-2 mt-2">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-main border-t-transparent" />
+                  <span>Getting your location and detecting area...</span>
+                </div>
+              )}
               
               {addressForm.cityId > 0 && zones.length > 0 && (
                 <div>
@@ -383,6 +534,59 @@ export default function CustomerProfilePage() {
                       <option key={pod.id} value={pod.id}>{pod.name}</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Map-based precise location picker */}
+              {(addressForm.cityId > 0 || addressForm.podId) && (
+                <div className="md:col-span-2 space-y-2">
+                  <label className="block text-xs font-semibold mb-1 text-white">
+                    Exact location on map <span className="text-[10px] font-normal text-slate-300">(optional but recommended)</span>
+                  </label>
+                  {resolvingLocation && (
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                      Detecting area...
+                    </div>
+                  )}
+                  {resolvedLocationInfo && !resolvingLocation && (
+                    <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                      <BadgeCheck className="h-3 w-3" />
+                      <span>
+                        {[resolvedLocationInfo.podName, resolvedLocationInfo.zoneName, resolvedLocationInfo.cityName]
+                          .filter(Boolean)
+                          .join(' → ')}
+                      </span>
+                    </div>
+                  )}
+                  <LocationPicker
+                    center={
+                      (() => {
+                        const selectedPod = pods.find(p => p.id === addressForm.podId)
+                        if (selectedPod) {
+                          return { lat: selectedPod.latitude, lng: selectedPod.longitude }
+                        }
+                        const selectedCity = cities.find(c => c.id === addressForm.cityId)
+                        if (selectedCity && selectedCity.latitude && selectedCity.longitude) {
+                          return { lat: selectedCity.latitude, lng: selectedCity.longitude }
+                        }
+                        // Fallback: some neutral coordinates (e.g. India center)
+                        return { lat: 22.9734, lng: 78.6569 }
+                      })()
+                    }
+                    radiusKm={
+                      (() => {
+                        const selectedPod = pods.find(p => p.id === addressForm.podId)
+                        return selectedPod?.serviceRadiusKm
+                      })()
+                    }
+                    value={
+                      addressForm.latitude !== undefined && addressForm.longitude !== undefined
+                        ? { lat: addressForm.latitude, lng: addressForm.longitude }
+                        : undefined
+                    }
+                    onChange={handleMapLocationChange}
+                  />
                 </div>
               )}
               

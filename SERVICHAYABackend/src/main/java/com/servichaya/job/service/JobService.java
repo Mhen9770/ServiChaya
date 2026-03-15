@@ -8,6 +8,8 @@ import com.servichaya.job.entity.JobAttachment;
 import com.servichaya.job.entity.JobMaster;
 import com.servichaya.job.repository.JobAttachmentRepository;
 import com.servichaya.job.repository.JobMasterRepository;
+import com.servichaya.location.dto.ResolvedLocationDto;
+import com.servichaya.location.service.LocationService;
 import com.servichaya.matching.service.MatchingService;
 import com.servichaya.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -33,10 +35,48 @@ public class JobService {
     private final NotificationService notificationService;
     private final JobStateMachine stateMachine;
     private final JobWorkflowService jobWorkflowService;
+    private final LocationService locationService;
 
     @Transactional
     public JobDto createJob(Long customerId, CreateJobDto createJobDto) {
         log.info("Creating job for customerId: {}, serviceCategoryId: {}", customerId, createJobDto.getServiceCategoryId());
+
+        // Auto-resolve POD/Zone/City from lat/lng if not provided (geofencing)
+        Long cityId = createJobDto.getCityId();
+        Long zoneId = createJobDto.getZoneId();
+        Long podId = createJobDto.getPodId();
+        
+        if ((cityId == null || zoneId == null || podId == null) 
+                && createJobDto.getLatitude() != null && createJobDto.getLongitude() != null) {
+            try {
+                log.info("Auto-resolving location from lat/lng: {}, {}", createJobDto.getLatitude(), createJobDto.getLongitude());
+                ResolvedLocationDto resolved = locationService.resolveLocation(
+                    createJobDto.getLatitude(), 
+                    createJobDto.getLongitude()
+                );
+                
+                if (cityId == null && resolved.getCityId() != null) {
+                    cityId = resolved.getCityId();
+                    log.info("Auto-resolved cityId: {}", cityId);
+                }
+                if (zoneId == null && resolved.getZoneId() != null) {
+                    zoneId = resolved.getZoneId();
+                    log.info("Auto-resolved zoneId: {}", zoneId);
+                }
+                if (podId == null && resolved.getPodId() != null) {
+                    podId = resolved.getPodId();
+                    log.info("Auto-resolved podId: {}", podId);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to auto-resolve location from lat/lng, using provided values: {}", e.getMessage());
+                // Continue with provided values or defaults
+            }
+        }
+        
+        // Ensure cityId is set (required field)
+        if (cityId == null) {
+            throw new RuntimeException("City ID is required. Please provide cityId or valid latitude/longitude.");
+        }
 
         String jobCode = "JOB-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
@@ -51,9 +91,9 @@ public class JobService {
                 .preferredTime(createJobDto.getPreferredTime())
                 .isEmergency(createJobDto.getIsEmergency() != null ? createJobDto.getIsEmergency() : false)
                 .estimatedBudget(createJobDto.getEstimatedBudget())
-                .cityId(createJobDto.getCityId())
-                .zoneId(createJobDto.getZoneId())
-                .podId(createJobDto.getPodId())
+                .cityId(cityId)
+                .zoneId(zoneId)
+                .podId(podId)
                 .addressLine1(createJobDto.getAddressLine1())
                 .addressLine2(createJobDto.getAddressLine2())
                 .pincode(createJobDto.getPincode())
@@ -131,7 +171,13 @@ public class JobService {
             }
         } catch (Exception e) {
             log.error("Error checking AUTO_MATCHING_FEATURE or triggering matching for jobId: {}", savedJob.getId(), e);
-            // Revert status to PENDING if matching fails
+            // CRITICAL FIX: Revert status to PENDING if matching fails
+            try {
+                updateJobStatus(savedJob.getId(), "MATCHING", "PENDING");
+                log.info("Reverted job {} status from MATCHING to PENDING due to matching failure", savedJob.getId());
+            } catch (Exception revertException) {
+                log.error("Failed to revert job status after matching failure", revertException);
+            }
             try {
                 updateJobStatus(savedJob.getId(), "MATCHING", "PENDING");
             } catch (Exception ex) {
@@ -322,6 +368,7 @@ public class JobService {
                 .estimatedBudget(job.getEstimatedBudget())
                 .finalPrice(job.getFinalPrice())
                 .status(job.getStatus())
+                .subStatus(job.getSubStatus()) // Include subStatus for frontend
                 .podId(job.getPodId())
                 .zoneId(job.getZoneId())
                 .cityId(job.getCityId())

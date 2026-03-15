@@ -3,8 +3,8 @@ package com.servichaya.job.service;
 import com.servichaya.job.dto.JobStatusUpdateDto;
 import com.servichaya.job.entity.*;
 import com.servichaya.job.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +19,6 @@ import java.util.Optional;
  *  - Creating workflow instances and step instances when a job is created
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class JobWorkflowService {
@@ -30,6 +29,21 @@ public class JobWorkflowService {
     private final JobWorkflowInstanceRepository instanceRepository;
     private final JobWorkflowStepInstanceRepository stepInstanceRepository;
     private final JobStatusService jobStatusService;
+
+    public JobWorkflowService(
+            JobWorkflowAssignmentRepository assignmentRepository,
+            JobWorkflowTemplateRepository templateRepository,
+            JobWorkflowStepTemplateRepository stepTemplateRepository,
+            JobWorkflowInstanceRepository instanceRepository,
+            JobWorkflowStepInstanceRepository stepInstanceRepository,
+            @Lazy JobStatusService jobStatusService) {
+        this.assignmentRepository = assignmentRepository;
+        this.templateRepository = templateRepository;
+        this.stepTemplateRepository = stepTemplateRepository;
+        this.instanceRepository = instanceRepository;
+        this.stepInstanceRepository = stepInstanceRepository;
+        this.jobStatusService = jobStatusService;
+    }
 
     // ---- Public API: Actions ----
 

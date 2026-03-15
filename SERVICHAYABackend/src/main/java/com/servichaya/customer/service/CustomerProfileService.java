@@ -12,6 +12,7 @@ import com.servichaya.location.entity.ZoneMaster;
 import com.servichaya.location.repository.CityMasterRepository;
 import com.servichaya.location.repository.PodMasterRepository;
 import com.servichaya.location.repository.ZoneMasterRepository;
+import com.servichaya.location.service.LocationService;
 import com.servichaya.user.entity.UserAccount;
 import com.servichaya.user.entity.UserAddress;
 import com.servichaya.user.repository.UserAccountRepository;
@@ -38,7 +39,9 @@ public class CustomerProfileService {
     private final CityMasterRepository cityMasterRepository;
     private final ZoneMasterRepository zoneMasterRepository;
     private final PodMasterRepository podMasterRepository;
+    private final LocationService locationService;
 
+    @Transactional(readOnly = true)
     public CustomerProfileDto getCustomerProfile(Long customerId) {
         log.info("Fetching customer profile for customerId: {}", customerId);
 
@@ -140,30 +143,71 @@ public class CustomerProfileService {
                     return new RuntimeException("Customer not found");
                 });
 
-        // Validate city
-        CityMaster city = cityMasterRepository.findById(request.getCityId())
-                .orElseThrow(() -> {
-                    log.error("City not found with id: {}", request.getCityId());
-                    return new RuntimeException("City not found");
-                });
+        // Auto-resolve POD/Zone/City from lat/lng if not provided (geofencing)
+        Long resolvedCityId = request.getCityId();
+        Long resolvedZoneId = request.getZoneId();
+        Long resolvedPodId = request.getPodId();
+        
+        BigDecimal latitude = request.getLatitude();
+        BigDecimal longitude = request.getLongitude();
+        
+        // If lat/lng provided but POD/Zone missing, auto-resolve
+        if ((resolvedZoneId == null || resolvedPodId == null) && latitude != null && longitude != null) {
+            try {
+                log.info("Auto-resolving location from lat/lng: {}, {}", latitude, longitude);
+                com.servichaya.location.dto.ResolvedLocationDto resolved = locationService.resolveLocation(latitude, longitude);
+                
+                // Use resolved city if cityId not provided
+                if (resolvedCityId == null && resolved.getCityId() != null) {
+                    resolvedCityId = resolved.getCityId();
+                    log.info("Auto-resolved cityId: {}", resolvedCityId);
+                }
+                // Use resolved zone if zoneId not provided
+                if (resolvedZoneId == null && resolved.getZoneId() != null) {
+                    resolvedZoneId = resolved.getZoneId();
+                    log.info("Auto-resolved zoneId: {}", resolvedZoneId);
+                }
+                // Use resolved POD if podId not provided
+                if (resolvedPodId == null && resolved.getPodId() != null) {
+                    resolvedPodId = resolved.getPodId();
+                    log.info("Auto-resolved podId: {}", resolvedPodId);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to auto-resolve location from lat/lng, using provided values: {}", e.getMessage());
+                // Continue with provided values
+            }
+        }
+        
+        // Validate city (required)
+        final Long finalCityId = resolvedCityId;
+        CityMaster city;
+        if (finalCityId != null) {
+            city = cityMasterRepository.findById(finalCityId)
+                    .orElseThrow(() -> {
+                        log.error("City not found with id: {}", finalCityId);
+                        return new RuntimeException("City not found");
+                    });
+        } else {
+            throw new RuntimeException("City ID is required. Please provide cityId or valid latitude/longitude.");
+        }
 
         // Validate zone if provided
         ZoneMaster zone = null;
-        if (request.getZoneId() != null) {
-            zone = zoneMasterRepository.findById(request.getZoneId())
+        if (resolvedZoneId != null) {
+            zone = zoneMasterRepository.findById(resolvedZoneId)
                     .orElse(null);
             if (zone == null) {
-                log.warn("Zone not found with id: {}", request.getZoneId());
+                log.warn("Zone not found with id: {}", resolvedZoneId);
             }
         }
 
         // Validate pod if provided
         PodMaster pod = null;
-        if (request.getPodId() != null) {
-            pod = podMasterRepository.findById(request.getPodId())
+        if (resolvedPodId != null) {
+            pod = podMasterRepository.findById(resolvedPodId)
                     .orElse(null);
             if (pod == null) {
-                log.warn("POD not found with id: {}", request.getPodId());
+                log.warn("POD not found with id: {}", resolvedPodId);
             }
         }
 
@@ -179,8 +223,6 @@ public class CustomerProfileService {
         }
 
         // Default latitude/longitude if not provided (use city center)
-        BigDecimal latitude = request.getLatitude();
-        BigDecimal longitude = request.getLongitude();
         if (latitude == null || longitude == null) {
             if (city.getLatitude() != null && city.getLongitude() != null) {
                 latitude = city.getLatitude();

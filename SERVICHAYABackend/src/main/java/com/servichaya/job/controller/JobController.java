@@ -4,6 +4,8 @@ import com.servichaya.common.response.ApiResponse;
 import com.servichaya.job.dto.CreateJobDto;
 import com.servichaya.job.dto.JobDto;
 import com.servichaya.job.service.JobService;
+import com.servichaya.auth.service.JwtService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,15 +24,44 @@ import java.time.format.DateTimeFormatter;
 public class JobController {
 
     private final JobService jobService;
+    private final JwtService jwtService;
 
     @PostMapping("/create")
     public ResponseEntity<ApiResponse<JobDto>> createJob(
             @RequestParam Long customerId,
-            @RequestBody CreateJobDto createJobDto) {
+            @RequestBody @jakarta.validation.Valid CreateJobDto createJobDto,
+            HttpServletRequest request) {
         log.info("Received job creation request for customerId: {}", customerId);
+        
+        // Security: Verify that the authenticated user matches the customerId
+        Long authenticatedUserId = extractUserIdFromToken(request);
+        if (!authenticatedUserId.equals(customerId)) {
+            log.error("Authorization failed: authenticated userId {} does not match requested customerId {}", authenticatedUserId, customerId);
+            return ResponseEntity.status(403)
+                    .body(ApiResponse.error("Unauthorized: You can only create jobs for yourself"));
+        }
+        
         JobDto job = jobService.createJob(customerId, createJobDto);
         log.info("Job created successfully with jobCode: {}", job.getJobCode());
         return ResponseEntity.ok(ApiResponse.success("Job created successfully", job));
+    }
+    
+    private Long extractUserIdFromToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            log.error("Authorization header missing or invalid");
+            throw new RuntimeException("Unauthorized: Missing or invalid token");
+        }
+        
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+        try {
+            Long userId = jwtService.extractUserId(token);
+            log.debug("Extracted userId: {} from token", userId);
+            return userId;
+        } catch (Exception e) {
+            log.error("Error extracting userId from token", e);
+            throw new RuntimeException("Unauthorized: Invalid token", e);
+        }
     }
 
     @GetMapping("/{jobId}")

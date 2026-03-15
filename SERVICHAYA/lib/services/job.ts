@@ -1,7 +1,7 @@
 import api from '../api'
 
 export interface CreateJobDto {
-  serviceCategoryId: number
+  serviceCategoryId?: number
   serviceSubCategoryId?: number
   serviceSkillId?: number
   title: string
@@ -9,7 +9,7 @@ export interface CreateJobDto {
   preferredTime: string
   isEmergency?: boolean
   estimatedBudget?: number
-  cityId: number
+  cityId?: number
   zoneId?: number
   podId?: number
   addressLine1: string
@@ -41,6 +41,7 @@ export interface JobDto {
   estimatedBudget?: number
   finalPrice?: number
   status: string
+  subStatus?: string
   podId?: number
   zoneId?: number
   cityId: number

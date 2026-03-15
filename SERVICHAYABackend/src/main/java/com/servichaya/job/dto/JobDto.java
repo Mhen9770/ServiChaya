@@ -27,6 +27,7 @@ public class JobDto {
     private BigDecimal estimatedBudget;
     private BigDecimal finalPrice;
     private String status;
+    private String subStatus; // Sub-status for detailed state tracking (e.g., PROVIDER_ACCEPTED, CUSTOMER_SELECTED)
     private Long podId;
     private Long zoneId;
     private Long cityId;

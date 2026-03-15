@@ -30,52 +30,53 @@ SELECT
 FROM country_master WHERE code = 'IND'
 AND NOT EXISTS (SELECT 1 FROM state_master WHERE code = 'MP');
 
-INSERT INTO state_master (code, name, description, country_id, is_active, created_at, updated_at)
-SELECT 
-    'MH', 
-    'Maharashtra', 
-    'Maharashtra State',
-    id,
-    true,
-    NOW(),
-    NOW()
-FROM country_master WHERE code = 'IND'
-AND NOT EXISTS (SELECT 1 FROM state_master WHERE code = 'MH');
+-- INSERT INTO state_master (code, name, description, country_id, is_active, created_at, updated_at)
+-- SELECT 
+--     'MH', 
+--     'Maharashtra', 
+--     'Maharashtra State',
+--     id,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM country_master WHERE code = 'IND'
+-- AND NOT EXISTS (SELECT 1 FROM state_master WHERE code = 'MH');
 
-INSERT INTO state_master (code, name, description, country_id, is_active, created_at, updated_at)
-SELECT 
-    'DL', 
-    'Delhi', 
-    'Delhi Union Territory',
-    id,
-    true,
-    NOW(),
-    NOW()
-FROM country_master WHERE code = 'IND'
-AND NOT EXISTS (SELECT 1 FROM state_master WHERE code = 'DL');
+-- INSERT INTO state_master (code, name, description, country_id, is_active, created_at, updated_at)
+-- SELECT 
+--     'DL', 
+--     'Delhi', 
+--     'Delhi Union Territory',
+--     id,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM country_master WHERE code = 'IND'
+-- AND NOT EXISTS (SELECT 1 FROM state_master WHERE code = 'DL');
 
 -- ============================================
 -- 3. CITIES (if not exists)
 -- ============================================
 -- Indore
-INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
-SELECT 
-    'INDORE',
-    'Indore',
-    'Indore City - Commercial Capital of MP',
-    id,
-    22.7196,
-    75.8577,
-    'Asia/Kolkata',
-    3270000,
-    true,
-    true,
-    NOW(),
-    NOW()
-FROM state_master WHERE code = 'MP'
-AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'INDORE');
+-- INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE',
+--     'Indore',
+--     'Indore City - Commercial Capital of MP',
+--     id,
+--     22.7196,
+--     75.8577,
+--     'Asia/Kolkata',
+--     3270000,
+--     true,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM state_master WHERE code = 'MP'
+-- AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'INDORE');
 
 -- Sanawad
+-- Coordinates: 22.1833°N, 76.0667°E (Sanawad, Khargone District, Madhya Pradesh)
 INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
 SELECT 
     'SANAWAD',
@@ -94,89 +95,89 @@ FROM state_master WHERE code = 'MP'
 AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'SANAWAD');
 
 -- Khandwa
-INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
-SELECT 
-    'KHANDWA',
-    'Khandwa',
-    'Khandwa City',
-    id,
-    21.8257,
-    76.3523,
-    'Asia/Kolkata',
-    200000,
-    true,
-    true,
-    NOW(),
-    NOW()
-FROM state_master WHERE code = 'MP'
-AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHANDWA');
+-- INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
+-- SELECT 
+--     'KHANDWA',
+--     'Khandwa',
+--     'Khandwa City',
+--     id,
+--     21.8257,
+--     76.3523,
+--     'Asia/Kolkata',
+--     200000,
+--     true,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM state_master WHERE code = 'MP'
+-- AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHANDWA');
 
--- Khargone
-INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
-SELECT 
-    'KHARGONE',
-    'Khargone',
-    'Khargone City',
-    id,
-    21.8236,
-    75.6103,
-    'Asia/Kolkata',
-    150000,
-    true,
-    true,
-    NOW(),
-    NOW()
-FROM state_master WHERE code = 'MP'
-AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHARGONE');
+-- -- Khargone
+-- INSERT INTO city_master (code, name, description, state_id, latitude, longitude, timezone, population, is_serviceable, is_active, created_at, updated_at)
+-- SELECT 
+--     'KHARGONE',
+--     'Khargone',
+--     'Khargone City',
+--     id,
+--     21.8236,
+--     75.6103,
+--     'Asia/Kolkata',
+--     150000,
+--     true,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM state_master WHERE code = 'MP'
+-- AND NOT EXISTS (SELECT 1 FROM city_master WHERE code = 'KHARGONE');
 
 -- ============================================
 -- 4. ZONES (if not exists)
 -- ============================================
 -- Indore Zones
-INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_CENTRAL',
-    'Central Indore',
-    'Central Zone of Indore',
-    id,
-    22.7196,
-    75.8577,
-    1,
-    true,
-    NOW(),
-    NOW()
-FROM city_master WHERE code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_CENTRAL');
+-- INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_CENTRAL',
+--     'Central Indore',
+--     'Central Zone of Indore',
+--     id,
+--     22.7196,
+--     75.8577,
+--     1,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master WHERE code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_CENTRAL');
 
-INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_EAST',
-    'East Indore',
-    'East Zone of Indore',
-    id,
-    22.7200,
-    75.8700,
-    2,
-    true,
-    NOW(),
-    NOW()
-FROM city_master WHERE code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_EAST');
+-- INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_EAST',
+--     'East Indore',
+--     'East Zone of Indore',
+--     id,
+--     22.7200,
+--     75.8700,
+--     2,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master WHERE code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_EAST');
 
-INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_WEST',
-    'West Indore',
-    'West Zone of Indore',
-    id,
-    22.7100,
-    75.8400,
-    2,
-    true,
-    NOW(),
-    NOW()
-FROM city_master WHERE code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_WEST');
+-- INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_WEST',
+--     'West Indore',
+--     'West Zone of Indore',
+--     id,
+--     22.7100,
+--     75.8400,
+--     2,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master WHERE code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'INDORE_WEST');
 
 -- Sanawad Zones
 INSERT INTO zone_master (code, name, description, city_id, latitude, longitude, service_priority, is_active, created_at, updated_at)
@@ -198,72 +199,72 @@ AND NOT EXISTS (SELECT 1 FROM zone_master WHERE code = 'SANAWAD_CENTRAL');
 -- 5. PODs (if not exists)
 -- ============================================
 -- Indore Central PODs
-INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_CENTRAL_POD1',
-    'Indore Central POD 1',
-    'Primary POD for Central Indore',
-    c.id,
-    z.id,
-    22.7196,
-    75.8577,
-    5.0,
-    50,
-    20,
-    true,
-    NOW(),
-    NOW()
-FROM city_master c
-JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_CENTRAL'
-WHERE c.code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_CENTRAL_POD1');
+-- INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_CENTRAL_POD1',
+--     'Indore Central POD 1',
+--     'Primary POD for Central Indore',
+--     c.id,
+--     z.id,
+--     22.7196,
+--     75.8577,
+--     5.0,
+--     50,
+--     20,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master c
+-- JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_CENTRAL'
+-- WHERE c.code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_CENTRAL_POD1');
 
-INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_CENTRAL_POD2',
-    'Indore Central POD 2',
-    'Secondary POD for Central Indore',
-    c.id,
-    z.id,
-    22.7250,
-    75.8600,
-    5.0,
-    50,
-    20,
-    true,
-    NOW(),
-    NOW()
-FROM city_master c
-JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_CENTRAL'
-WHERE c.code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_CENTRAL_POD2');
+-- INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_CENTRAL_POD2',
+--     'Indore Central POD 2',
+--     'Secondary POD for Central Indore',
+--     c.id,
+--     z.id,
+--     22.7250,
+--     75.8600,
+--     5.0,
+--     50,
+--     20,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master c
+-- JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_CENTRAL'
+-- WHERE c.code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_CENTRAL_POD2');
 
--- Indore East POD
-INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
-SELECT 
-    'INDORE_EAST_POD1',
-    'Indore East POD 1',
-    'Primary POD for East Indore',
-    c.id,
-    z.id,
-    22.7200,
-    75.8700,
-    5.0,
-    50,
-    20,
-    true,
-    NOW(),
-    NOW()
-FROM city_master c
-JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_EAST'
-WHERE c.code = 'INDORE'
-AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_EAST_POD1');
+-- -- Indore East POD
+-- INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
+-- SELECT 
+--     'INDORE_EAST_POD1',
+--     'Indore East POD 1',
+--     'Primary POD for East Indore',
+--     c.id,
+--     z.id,
+--     22.7200,
+--     75.8700,
+--     5.0,
+--     50,
+--     20,
+--     true,
+--     NOW(),
+--     NOW()
+-- FROM city_master c
+-- JOIN zone_master z ON z.city_id = c.id AND z.code = 'INDORE_EAST'
+-- WHERE c.code = 'INDORE'
+-- AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'INDORE_EAST_POD1');
 
 -- Sanawad Central POD
 INSERT INTO pod_master (code, name, description, city_id, zone_id, latitude, longitude, service_radius_km, max_providers, max_workforce, is_active, created_at, updated_at)
 SELECT 
     'SANAWAD_CENTRAL_POD1',
-    'Sanawad Central POD 1',
+    'Sanawad Main',
     'Primary POD for Central Sanawad',
     c.id,
     z.id,
@@ -283,27 +284,8 @@ AND NOT EXISTS (SELECT 1 FROM pod_master WHERE code = 'SANAWAD_CENTRAL_POD1');
 -- ============================================
 -- 6. SERVICE CATEGORIES (root, if not exists)
 -- ============================================
--- Keep SERVICE CATEGORY master consistent with hierarchical model:
--- root categories (parent_id NULL, level 0) for top-level "All Service Categories"
-INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
-SELECT 'ELECTRICAL', 'Electronics & Electrical', 'All electronics and electrical repair / installation services', 'HOME_SERVICE', '⚡', 1, TRUE, TRUE, NULL, 0, 'Electronics & Electrical', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'ELECTRICAL');
-
-INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
-SELECT 'PLUMBING', 'Plumbing', 'Plumbing installation, repair, and maintenance services', 'HOME_SERVICE', '🔧', 2, TRUE, TRUE, NULL, 0, 'Plumbing', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'PLUMBING');
-
-INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
-SELECT 'CARPENTRY', 'Carpentry', 'Furniture making, repair, and carpentry services', 'HOME_SERVICE', '🪚', 3, TRUE, TRUE, NULL, 0, 'Carpentry', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'CARPENTRY');
-
-INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
-SELECT 'HOUSING', 'Housing Services', 'Home maintenance, cleaning and related services', 'HOME_SERVICE', '🏠', 4, TRUE, TRUE, NULL, 0, 'Housing Services', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'HOUSING');
-
-INSERT INTO service_category_master (code, name, description, category_type, icon_url, display_order, is_active, is_featured, parent_id, level, path, created_at, updated_at) 
-SELECT 'WORKER', 'Worker & Staffing', 'Skilled and unskilled worker / staffing services', 'HOME_SERVICE', '🧑‍🔧', 5, TRUE, TRUE, NULL, 0, 'Worker & Staffing', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM service_category_master WHERE code = 'WORKER');
+-- NOTE: Root categories are already created in V4__004_Master_Data_Service_Categories.sql
+-- This section only contains sub-categories under the root categories
 
 -- ============================================
 -- 6.1 SERVICE SUB-CATEGORIES (if not exists)
