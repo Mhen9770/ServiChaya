@@ -39,18 +39,14 @@ export function useMessageNotifications(
                 ? latestMessage.message.substring(0, 47) + '...'
                 : latestMessage.message
               
-              toast.success(
-                <div>
-                  <div className="font-semibold">New message from {senderName}</div>
-                  <div className="text-sm">{preview}</div>
-                </div>,
-                {
-                  duration: 5000,
-                  onClick: () => {
-                    router.push(`/customer/jobs/${jobId}/select-provider`)
-                  }
-                }
+              const toastId = toast.success(
+                `New message from ${senderName}: ${preview}`,
+                { duration: 5000 }
               )
+              // Navigate on click - user can click the toast to navigate
+              setTimeout(() => {
+                router.push(`/customer/jobs/${jobId}/select-provider`)
+              }, 100)
             }
           }
         }

@@ -202,7 +202,9 @@ export default function AdminCustomerDetailPage() {
                 <Mail className="w-4 h-4 text-neutral-textSecondary" />
                 <p className="text-base text-neutral-textPrimary">{customer.email || 'N/A'}</p>
                 {customer.emailVerified && (
-                  <CheckCircle2 className="w-4 h-4 text-accent-green" title="Email Verified" />
+                  <span title="Email Verified">
+                    <CheckCircle2 className="w-4 h-4 text-accent-green" />
+                  </span>
                 )}
               </div>
             </div>
@@ -212,7 +214,9 @@ export default function AdminCustomerDetailPage() {
                 <Phone className="w-4 h-4 text-neutral-textSecondary" />
                 <p className="text-base text-neutral-textPrimary">{customer.mobileNumber || 'N/A'}</p>
                 {customer.mobileVerified && (
-                  <CheckCircle2 className="w-4 h-4 text-accent-green" title="Mobile Verified" />
+                  <span title="Mobile Verified">
+                    <CheckCircle2 className="w-4 h-4 text-accent-green" />
+                  </span>
                 )}
               </div>
             </div>

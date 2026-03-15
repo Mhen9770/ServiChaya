@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { 
   // NOTE: Legacy sub-category master is deprecated in backend. We keep this page for future use,
   // but for MVP we only need categories. So we only load categories here and disable editing.
-  getAllServiceCategories, type ServiceSubCategoryMasterDto, type ServiceCategoryMasterDto
+  getAllServiceCategories, type ServiceCategoryMasterDto
 } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
 import Pagination from '@/components/ui/Pagination'
@@ -15,7 +15,7 @@ import { Plus, Edit, Trash2, List, CheckCircle2, XCircle, Star } from 'lucide-re
 import { motion } from 'framer-motion'
 
 export default function AdminServiceSubCategoriesPage() {
-  const [subCategories, setSubCategories] = useState<ServiceSubCategoryMasterDto[]>([])
+  const [subCategories, setSubCategories] = useState<ServiceCategoryMasterDto[]>([])
   const [categories, setCategories] = useState<ServiceCategoryMasterDto[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(0)
@@ -25,12 +25,12 @@ export default function AdminServiceSubCategoriesPage() {
   const [sortKey, setSortKey] = useState<string>('name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [showModal, setShowModal] = useState(false)
-  const [editingSubCategory, setEditingSubCategory] = useState<ServiceSubCategoryMasterDto | null>(null)
-  const [formData, setFormData] = useState<ServiceSubCategoryMasterDto>({
+  const [editingSubCategory, setEditingSubCategory] = useState<ServiceCategoryMasterDto | null>(null)
+  const [formData, setFormData] = useState<ServiceCategoryMasterDto>({
     code: '',
     name: '',
     description: '',
-    categoryId: 0,
+    parentId: undefined,
     iconUrl: '',
     displayOrder: 0,
     isFeatured: false,
@@ -72,7 +72,7 @@ export default function AdminServiceSubCategoriesPage() {
       code: '',
       name: '',
       description: '',
-      categoryId: 0,
+      parentId: undefined,
       iconUrl: '',
       displayOrder: 0,
       isFeatured: false,
@@ -81,11 +81,11 @@ export default function AdminServiceSubCategoriesPage() {
     setShowModal(true)
   }
 
-  const handleEdit = (subCategory: ServiceSubCategoryMasterDto) => {
+  const handleEdit = (subCategory: ServiceCategoryMasterDto) => {
     setEditingSubCategory(subCategory)
     setFormData({
       ...subCategory,
-      categoryId: subCategory.categoryId || 0,
+      parentId: subCategory.parentId,
       displayOrder: subCategory.displayOrder || 0
     })
     setShowModal(true)
@@ -98,7 +98,7 @@ export default function AdminServiceSubCategoriesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.code || !formData.categoryId) {
+    if (!formData.name || !formData.code) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -113,7 +113,7 @@ export default function AdminServiceSubCategoriesPage() {
     }
   }
 
-  const columns: Column<ServiceSubCategoryMasterDto>[] = [
+  const columns: Column<ServiceCategoryMasterDto>[] = [
     {
       key: 'code',
       header: 'Code',
@@ -137,7 +137,9 @@ export default function AdminServiceSubCategoriesPage() {
       key: 'categoryName',
       header: 'Category',
       render: (subCat) => (
-        <span className="text-sm text-neutral-textSecondary">{subCat.categoryName || 'N/A'}</span>
+        <span className="text-sm text-neutral-textSecondary">
+          {subCat.parentId ? categories.find(c => c.id === subCat.parentId)?.name || 'N/A' : 'Root Category'}
+        </span>
       )
     },
     {
@@ -325,8 +327,8 @@ export default function AdminServiceSubCategoriesPage() {
                   Category <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.categoryId || 0}
-                  onChange={(e) => setFormData({ ...formData, categoryId: Number(e.target.value) })}
+                  value={formData.parentId || ''}
+                  onChange={(e) => setFormData({ ...formData, parentId: Number(e.target.value) })}
                   className="w-full px-4 py-2.5 border-2 border-neutral-border rounded-xl focus:border-primary-main focus:outline-none transition-colors"
                   required
                 >

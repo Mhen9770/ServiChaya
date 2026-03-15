@@ -139,7 +139,7 @@ export default function ProviderConversationPage() {
     try {
       setSending(true)
       let attachmentUrl: string | undefined = undefined
-      let attachmentType: string | undefined = undefined
+      let attachmentType: 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER' | undefined = undefined
 
       if (selectedFile) {
         setUploadingFile(true)
@@ -148,7 +148,7 @@ export default function ProviderConversationPage() {
           const jobId = messages.length > 0 ? messages[0].jobId : conversationId
           const uploadResult = await uploadAttachment(jobId, selectedFile)
           attachmentUrl = uploadResult.fileUrl
-          attachmentType = uploadResult.attachmentType as any
+          attachmentType = uploadResult.attachmentType as 'IMAGE' | 'PDF' | 'DOCUMENT' | 'OTHER' | undefined
           setSelectedFile(null)
         } catch (error) {
           toast.error('Failed to upload file')

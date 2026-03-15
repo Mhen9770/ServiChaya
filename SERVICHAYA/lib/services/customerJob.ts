@@ -2,6 +2,8 @@ import api from '../api'
 import { JobDto } from './job'
 import { getCancellationFee, completeCancellation, trackJob, JobTrackingInfo } from './jobStatus'
 
+export type { JobTrackingInfo }
+
 // Get customer job details
 export const getCustomerJobDetails = async (jobId: number): Promise<JobDto> => {
   const response = await api.get(`/customer/jobs/${jobId}`)

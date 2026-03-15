@@ -18,7 +18,7 @@ import { getCustomerProfile, type CustomerProfileDto } from '@/lib/services/cust
 import { getPaymentSchedule, type PaymentScheduleDto } from '@/lib/services/payment'
 import { submitBid, getProviderBid, type SubmitBidRequest } from '@/lib/services/providerSelection'
 import { getOnboardingStatus } from '@/lib/services/provider'
-import { sendMessage, getConversationMessages, getConversationId, uploadAttachment, getAttachmentUrl, markMessagesAsRead, type JobMessageDto } from '@/lib/services/jobMessaging'
+import { sendMessage, getConversationMessages, getConversationId, uploadAttachment, getAttachmentUrl, markMessagesAsRead, getMessagesWithProvider, type JobMessageDto } from '@/lib/services/jobMessaging'
 import { useMessageNotifications } from '@/lib/hooks/useMessageNotifications'
 import { toast } from 'react-hot-toast'
 import Loader, { ButtonLoader } from '@/components/ui/Loader'

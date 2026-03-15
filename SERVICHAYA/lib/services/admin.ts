@@ -255,6 +255,7 @@ export interface ServiceCategoryMasterDto {
   displayOrder?: number
   isFeatured?: boolean
   isActive?: boolean
+  parentId?: number
 }
 
 // NOTE: Legacy ServiceSubCategoryMaster has been deprecated.

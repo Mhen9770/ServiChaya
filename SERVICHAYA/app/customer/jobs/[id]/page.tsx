@@ -211,7 +211,7 @@ export default function CustomerJobDetailsPage() {
         toast.success(`Request cancelled. Cancellation fee: ₹${fee.toLocaleString()}. Refund: ₹${refund.toLocaleString()}`)
         // If cancellation fee required, show payment option
         if (job.status === 'CANCELLATION_PAYMENT_PENDING') {
-          toast.info('Please complete cancellation fee payment to finalize cancellation')
+          toast('Please complete cancellation fee payment to finalize cancellation', { icon: 'ℹ️' })
         }
       } else {
         toast.success('Request cancelled successfully. Full refund will be processed.')

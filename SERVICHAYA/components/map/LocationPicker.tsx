@@ -22,7 +22,7 @@ interface LocationPickerProps {
 
 declare global {
   interface Window {
-    google?: typeof google
+    google?: any
     __servichayaGoogleMapsLoading?: boolean
     __servichayaGoogleMapsLoaded?: boolean
     __servichayaGoogleMapsResolvers?: Array<() => void>
@@ -86,9 +86,9 @@ export function LocationPicker({
   readOnly,
 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const mapRef = useRef<google.maps.Map | null>(null)
-  const markerRef = useRef<google.maps.Marker | null>(null)
-  const circleRef = useRef<google.maps.Circle | null>(null)
+  const mapRef = useRef<any>(null)
+  const markerRef = useRef<any>(null)
+  const circleRef = useRef<any>(null)
   const [initError, setInitError] = useState<string | null>(null)
   const [hasUsedGeolocation, setHasUsedGeolocation] = useState(false)
 
@@ -133,14 +133,14 @@ export function LocationPicker({
         }
 
         if (!readOnly && onChange) {
-          map.addListener('click', (e: google.maps.MapMouseEvent) => {
+          map.addListener('click', (e: any) => {
             if (!e.latLng) return
             const next = { lat: e.latLng.lat(), lng: e.latLng.lng() }
             marker.setPosition(next)
             onChange(next)
           })
 
-          marker.addListener('dragend', (e: google.maps.MapMouseEvent) => {
+          marker.addListener('dragend', (e: any) => {
             if (!e.latLng) return
             const next = { lat: e.latLng.lat(), lng: e.latLng.lng() }
             onChange(next)

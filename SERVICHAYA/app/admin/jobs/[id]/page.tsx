@@ -14,7 +14,7 @@ import Loader from '@/components/ui/Loader'
 import { 
   ArrowLeft, Calendar, MapPin, DollarSign, AlertCircle, 
   CheckCircle2, Clock, User, Building2, Phone, Mail, 
-  FileText, Image as ImageIcon, UserPlus, X, Loader2
+  FileText, Image as ImageIcon, UserPlus, X, Loader2, Zap, RefreshCw
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -31,6 +31,15 @@ export default function AdminJobDetailPage() {
   const [assigning, setAssigning] = useState(false)
   const [loadingAssignments, setLoadingAssignments] = useState(false)
   const [loadingProviders, setLoadingProviders] = useState(false)
+  const [showForceMatchModal, setShowForceMatchModal] = useState(false)
+  const [forceMatching, setForceMatching] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelledBy, setCancelledBy] = useState<'CUSTOMER' | 'PROVIDER'>('CUSTOMER')
+  const [cancelling, setCancelling] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [newStatus, setNewStatus] = useState('')
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   useEffect(() => {
     if (jobId) {
