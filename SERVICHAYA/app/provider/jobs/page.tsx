@@ -13,6 +13,7 @@ import FilterBar from '@/components/ui/FilterBar'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Briefcase, Calendar, MapPin, DollarSign, ArrowRight } from 'lucide-react'
 import { motion } from 'framer-motion'
+import LocationPicker from '@/components/map/LocationPicker'
 
 export default function ProviderJobsPage() {
   const router = useRouter()
@@ -27,6 +28,43 @@ export default function ProviderJobsPage() {
   })
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
+
+  // Capture provider's current browser location once, for distance chips
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCurrentLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        })
+      },
+      () => {
+        // silently ignore failure; distance chips will just not show
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    )
+  }, [])
+
+  const computeDistanceKm = (job: JobDto): number | null => {
+    if (!currentLocation || job.latitude == null || job.longitude == null) return null
+    const R = 6371 // km
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const dLat = toRad(job.latitude - currentLocation.lat)
+    const dLon = toRad(job.longitude - currentLocation.lng)
+    const lat1 = toRad(currentLocation.lat)
+    const lat2 = toRad(job.latitude)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return Math.round(R * c * 10) / 10
+  }
 
   const fetchJobs = useCallback(async (providerId: number) => {
     try {
@@ -129,16 +167,16 @@ export default function ProviderJobsPage() {
   }
 
   return (
-    <div className="px-6 py-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <motion.section 
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
+        className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark text-white p-5 sm:p-6 lg:p-7 border-2 border-slate-700/50 shadow-xl shadow-slate-950/50"
       >
-        <h1 className="text-2xl font-bold text-neutral-textPrimary font-display">My Jobs</h1>
-        <p className="text-sm text-neutral-textSecondary mt-1">Manage your accepted jobs</p>
-      </motion.div>
+        <p className="text-xs uppercase tracking-wide text-slate-300">Job Management</p>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2">My Jobs</h1>
+        <p className="text-sm text-slate-300 mt-2">Manage your accepted jobs and track their progress</p>
+      </motion.section>
 
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -189,66 +227,115 @@ export default function ProviderJobsPage() {
       </motion.div>
 
       {loading ? (
-        <div className="grid gap-4">
+        <div className="grid gap-3 sm:gap-4">
           {[1, 2, 3].map((i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="bg-white rounded-2xl p-8 shadow-sm border border-neutral-border text-center">
-          <div className="w-16 h-16 bg-neutral-background rounded-full flex items-center justify-center mx-auto mb-3">
-            <Briefcase className="w-8 h-8 text-neutral-textSecondary" />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-6 sm:p-8 text-center backdrop-blur-md shadow-lg shadow-black/20"
+        >
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-slate-400" />
           </div>
-          <p className="text-sm font-semibold text-neutral-textPrimary mb-1">No jobs yet</p>
-          <p className="text-xs text-neutral-textSecondary mb-4">You'll see jobs here once you accept them from available jobs</p>
+          <p className="text-xs sm:text-sm font-semibold text-white mb-1 sm:mb-2">No jobs yet</p>
+          <p className="text-[10px] sm:text-xs text-slate-300 mb-4 sm:mb-5 px-4">You'll see jobs here once you accept them from available jobs</p>
           <Link
             href="/provider/jobs/available"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"
+            className="inline-flex items-center gap-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all"
           >
             View Available Jobs
           </Link>
-        </div>
+        </motion.div>
       ) : (
-        <div className="grid gap-4">
-          {jobs.map((job) => (
-            <Link
+        <div className="grid gap-3 sm:gap-4">
+          {jobs.map((job, index) => {
+            const statusColors = {
+              'COMPLETED': { border: 'border-emerald-400/40', bg: 'bg-emerald-500/5', bar: 'bg-emerald-400' },
+              'IN_PROGRESS': { border: 'border-primary-main/40', bg: 'bg-primary-main/5', bar: 'bg-primary-main' },
+              'ACCEPTED': { border: 'border-primary-main/40', bg: 'bg-primary-main/5', bar: 'bg-primary-main' },
+              'MATCHED': { border: 'border-indigo-400/40', bg: 'bg-indigo-500/5', bar: 'bg-indigo-400' },
+              'PENDING': { border: 'border-amber-400/40', bg: 'bg-amber-500/5', bar: 'bg-amber-400' },
+            }
+            const colors = statusColors[job.status as keyof typeof statusColors] || { border: 'border-slate-400/40', bg: 'bg-slate-500/5', bar: 'bg-slate-400' }
+            const distanceKm = computeDistanceKm(job)
+            return (
+            <motion.div
               key={job.id}
-              href={`/provider/jobs/${job.id}`}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-border hover:shadow-md hover:border-primary-main/30 transition-all"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              whileHover={{ scale: 1.01, x: 3 }}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <h3 className="text-lg font-bold text-neutral-textPrimary">{job.title}</h3>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(job.status)}`}>
-                      {job.status.replace('_', ' ')}
-                    </span>
+              <Link
+                href={`/provider/jobs/${job.id}`}
+                className={`block rounded-lg sm:rounded-xl border-2 ${colors.border} glass p-4 sm:p-5 hover:border-primary-main/70 hover:${colors.bg} hover:shadow-lg hover:shadow-primary-main/10 transition-all group relative overflow-hidden backdrop-blur-md`}
+              >
+                {/* Status indicator bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${colors.bar}`} />
+                
+                  <div className="flex flex-col md:flex-row items-stretch justify-between gap-3 sm:gap-4 pl-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-primary-light transition-colors line-clamp-1">{job.title}</h3>
+                        <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-semibold border ${
+                          job.status === 'COMPLETED' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/60' :
+                          job.status === 'IN_PROGRESS' || job.status === 'ACCEPTED' ? 'bg-primary-main/15 text-primary-light border-primary-main/60' :
+                          job.status === 'MATCHED' ? 'bg-indigo-500/10 text-indigo-300 border-indigo-400/60' :
+                          job.status === 'PENDING' ? 'bg-amber-500/10 text-amber-300 border-amber-400/60' :
+                          'bg-slate-600/10 text-slate-200 border-slate-500/60'
+                        }`}>
+                          {job.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3 line-clamp-2 leading-relaxed">{job.description}</p>
+                      <div className="flex items-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-slate-300 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          {new Date(job.preferredTime).toLocaleDateString()}
+                        </span>
+                        {job.estimatedBudget && (
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                            ₹{job.estimatedBudget.toLocaleString()}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 min-w-0">
+                          <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="truncate max-w-[100px] sm:max-w-[120px]">{job.addressLine1}</span>
+                        </span>
+                        {distanceKm != null && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/70 border border-white/10 text-[10px] sm:text-xs text-slate-100">
+                            <MapPin className="w-3 h-3 text-primary-light" />
+                            {distanceKm} km away
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] sm:text-xs text-slate-400 mt-2">
+                        {job.jobCode}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 min-w-[110px] sm:min-w-[140px]">
+                      {job.latitude != null && job.longitude != null && (
+                        <div className="w-full">
+                          <LocationPicker
+                            center={{ lat: job.latitude, lng: job.longitude }}
+                            value={{ lat: job.latitude, lng: job.longitude }}
+                            height={110}
+                            readOnly
+                          />
+                        </div>
+                      )}
+                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0 group-hover:text-primary-light group-hover:translate-x-1 transition-all" />
+                    </div>
                   </div>
-                  <p className="text-xs text-neutral-textSecondary mb-3 line-clamp-2">{job.description}</p>
-                  <div className="flex items-center gap-4 text-xs text-neutral-textSecondary flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {new Date(job.preferredTime).toLocaleDateString()}
-                    </span>
-                    {job.estimatedBudget && (
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-3.5 h-3.5" />
-                        ₹{job.estimatedBudget}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {job.addressLine1.substring(0, 30)}...
-                    </span>
-                  </div>
-                  <div className="text-xs text-neutral-textSecondary mt-2">
-                    {job.jobCode}
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-neutral-textSecondary flex-shrink-0 ml-3" />
-              </div>
-            </Link>
-          ))}
+              </Link>
+            </motion.div>
+            )
+          })}
         </div>
       )}
 
@@ -257,7 +344,7 @@ export default function ProviderJobsPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="mt-4"
+          className="mt-3 sm:mt-4"
         >
           <Pagination
             currentPage={currentPage}

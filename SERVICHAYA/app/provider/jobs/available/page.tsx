@@ -107,58 +107,60 @@ export default function AvailableJobsPage() {
   const currentUser = getCurrentUser()
 
   return (
-    <div className="px-6 py-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <motion.section 
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex items-center justify-between mb-6"
+        className="rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-primary-dark text-white p-5 sm:p-6 lg:p-7 border-2 border-slate-700/50 shadow-xl shadow-slate-950/50"
       >
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-textPrimary font-display">Available Jobs</h1>
-          <p className="text-sm text-neutral-textSecondary mt-1">Accept jobs that match your skills and location</p>
-        </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={async () => {
-            if (currentUser) {
-              try {
-                setLoading(true)
-                const status = await getOnboardingStatus(currentUser.userId)
-                if (status.providerId) {
-                  await fetchAvailableJobs(status.providerId)
+        <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs uppercase tracking-wide text-slate-300">Job Opportunities</p>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-2 sm:mt-3 leading-tight">Available Jobs</h1>
+            <p className="text-xs sm:text-sm text-slate-300 mt-2 sm:mt-3 leading-relaxed">Accept jobs that match your skills and location</p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={async () => {
+              if (currentUser) {
+                try {
+                  setLoading(true)
+                  const status = await getOnboardingStatus(currentUser.userId)
+                  if (status.providerId) {
+                    await fetchAvailableJobs(status.providerId)
+                  }
+                } catch (error) {
+                  console.error('Failed to refresh:', error)
+                } finally {
+                  setLoading(false)
                 }
-              } catch (error) {
-                console.error('Failed to refresh:', error)
-              } finally {
-                setLoading(false)
               }
-            }
-          }}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-neutral-background text-neutral-textSecondary rounded-xl text-sm font-semibold hover:bg-neutral-border transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </motion.button>
-      </motion.div>
+            }}
+            disabled={loading}
+            className="rounded-lg sm:rounded-xl border-2 border-white/30 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold hover:bg-white/10 hover:border-white/50 transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </motion.button>
+        </div>
+      </motion.section>
 
       {jobs.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="bg-white rounded-2xl p-8 shadow-sm border border-neutral-border text-center"
+          className="rounded-xl sm:rounded-2xl glass-dark border-2 border-white/20 p-6 sm:p-8 text-center backdrop-blur-md shadow-lg shadow-black/20"
         >
-          <div className="w-16 h-16 bg-neutral-background rounded-full flex items-center justify-center mx-auto mb-3">
-            <ClipboardList className="w-8 h-8 text-neutral-textSecondary" />
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <ClipboardList className="w-6 h-6 sm:w-8 sm:h-8 text-slate-400" />
           </div>
-          <p className="text-sm font-semibold text-neutral-textPrimary mb-1">No available jobs</p>
-          <p className="text-xs text-neutral-textSecondary mb-4">New jobs matching your profile will appear here</p>
+          <p className="text-xs sm:text-sm font-semibold text-white mb-1 sm:mb-2">No available jobs</p>
+          <p className="text-[10px] sm:text-xs text-slate-300 mb-4 sm:mb-5 px-4">New jobs matching your profile will appear here</p>
           <Link
             href="/provider/dashboard"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"
+            className="inline-flex items-center gap-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-primary-main to-primary-light text-white px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-primary-main/50 transition-all"
           >
             Go to Dashboard
           </Link>
@@ -168,71 +170,81 @@ export default function AvailableJobsPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="grid gap-4"
+          className="grid gap-3 sm:gap-4"
         >
-          {jobs.map((match, index) => (
+          {jobs.map((match, index) => {
+            const matchScoreColor = match.matchScore >= 80 ? 'border-accent-green/50 bg-accent-green/5' :
+                                   match.matchScore >= 60 ? 'border-primary-main/50 bg-primary-main/5' :
+                                   'border-accent-orange/50 bg-accent-orange/5'
+            const barColor = match.matchScore >= 80 ? 'bg-accent-green' :
+                           match.matchScore >= 60 ? 'bg-primary-main' :
+                           'bg-accent-orange'
+            return (
             <motion.div
               key={match.matchId}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.05 }}
-              whileHover={{ scale: 1.01, y: -2 }}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-border hover:shadow-md hover:border-primary-main/30 transition-all"
+              whileHover={{ scale: 1.02, y: -5 }}
+              className={`rounded-xl sm:rounded-2xl glass-dark border-2 ${matchScoreColor} p-4 sm:p-5 hover:border-primary-main/70 hover:shadow-xl hover:shadow-primary-main/20 transition-all relative overflow-hidden group backdrop-blur-md`}
             >
-              <div className="mb-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
+              {/* Match score indicator bar */}
+              <div className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`} />
+              
+              <div className="mb-3 sm:mb-4 pl-2">
+                <div className="flex items-start justify-between mb-2 sm:mb-3">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="text-lg font-bold text-neutral-textPrimary">{match.job.title}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-primary-light transition-colors line-clamp-1">{match.job.title}</h3>
+                      <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-semibold border ${
                         match.matchScore >= 80 
-                          ? 'bg-accent-green/20 text-accent-green border border-accent-green/30' 
+                          ? 'bg-accent-green/20 text-accent-green border-accent-green/50' 
                           : match.matchScore >= 60
-                          ? 'bg-primary-main/20 text-primary-main border border-primary-main/30'
-                          : 'bg-accent-orange/20 text-accent-orange border border-accent-orange/30'
+                          ? 'bg-primary-main/20 text-primary-light border-primary-main/50'
+                          : 'bg-accent-orange/20 text-accent-orange border-accent-orange/50'
                       }`}>
                         {match.matchScore.toFixed(0)}% Match
                       </span>
                       {match.job.isEmergency && (
-                        <span className="flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold animate-pulse">
+                        <span className="flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-red-500/20 text-red-300 border border-red-400/50 rounded-full text-[9px] sm:text-xs font-semibold animate-pulse">
                           <AlertCircle className="w-3 h-3" />
                           Emergency
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-neutral-textSecondary mb-3 line-clamp-2">{match.job.description}</p>
+                    <p className="text-xs sm:text-sm text-slate-300 mb-2 sm:mb-3 line-clamp-2 leading-relaxed">{match.job.description}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3 p-3 bg-neutral-background rounded-xl">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-2 sm:mb-3 p-2 sm:p-3 bg-slate-800/50 rounded-lg sm:rounded-xl border border-white/5">
                   <div className="flex items-center gap-2 text-xs">
-                    <Calendar className="w-4 h-4 text-primary-main" />
+                    <Calendar className="w-4 h-4 text-primary-light" />
                     <div>
-                      <div className="text-neutral-textSecondary">Preferred Time</div>
-                      <div className="font-semibold text-neutral-textPrimary">{new Date(match.job.preferredTime).toLocaleDateString()}</div>
+                      <div className="text-slate-400">Preferred Time</div>
+                      <div className="font-semibold text-white">{new Date(match.job.preferredTime).toLocaleDateString()}</div>
                     </div>
                   </div>
                   {match.job.estimatedBudget && (
                     <div className="flex items-center gap-2 text-xs">
                       <DollarSign className="w-4 h-4 text-accent-green" />
                       <div>
-                        <div className="text-neutral-textSecondary">Budget</div>
+                        <div className="text-slate-400">Budget</div>
                         <div className="font-semibold text-accent-green">₹{match.job.estimatedBudget.toLocaleString()}</div>
                       </div>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-xs">
-                    <MapPin className="w-4 h-4 text-primary-main" />
+                    <MapPin className="w-4 h-4 text-primary-light" />
                     <div>
-                      <div className="text-neutral-textSecondary">Location</div>
-                      <div className="font-semibold text-neutral-textPrimary truncate max-w-[120px]">{match.job.addressLine1}</div>
+                      <div className="text-slate-400">Location</div>
+                      <div className="font-semibold text-white truncate max-w-[120px]">{match.job.addressLine1}</div>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-xs pt-3 border-t border-neutral-border">
-                  <div className="flex items-center gap-3">
-                    <span className="text-neutral-textSecondary">Job Code: <span className="font-semibold text-neutral-textPrimary">{match.job.jobCode}</span></span>
+                <div className="flex items-center justify-between text-[10px] sm:text-xs pt-2 sm:pt-3 border-t border-white/10 flex-wrap gap-2">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <span className="text-slate-400">Job Code: <span className="font-semibold text-white">{match.job.jobCode}</span></span>
                     {match.rankOrder && (
-                      <span className="flex items-center gap-1 px-2 py-1 bg-primary-main/10 text-primary-main rounded-full font-semibold">
+                      <span className="flex items-center gap-1 px-2 py-0.5 sm:py-1 bg-primary-main/20 text-primary-light border border-primary-main/50 rounded-full text-[9px] sm:text-xs font-semibold">
                         <TrendingUp className="w-3 h-3" />
                         Rank #{match.rankOrder}
                       </span>
@@ -248,7 +260,7 @@ export default function AvailableJobsPage() {
                     const isExpired = remainingSeconds === 0
                     
                     return (
-                      <div className={`flex items-center gap-1 ${isExpired ? 'text-red-500' : isExpiringSoon ? 'text-accent-orange' : 'text-neutral-textSecondary'}`}>
+                      <div className={`flex items-center gap-1 ${isExpired ? 'text-red-400' : isExpiringSoon ? 'text-accent-orange' : 'text-slate-400'}`}>
                         <Clock className="w-3 h-3" />
                         {isExpired ? (
                           <span className="font-semibold">Expired</span>
@@ -262,43 +274,47 @@ export default function AvailableJobsPage() {
                   })()}
                 </div>
               </div>
-              <div className="flex gap-2 pt-4 border-t border-neutral-border">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 pt-3 sm:pt-4 border-t border-white/10">
                 <motion.button
                   whileHover={{ scale: accepting !== match.matchId && match.status !== 'ACCEPTED' ? 1.02 : 1 }}
                   whileTap={{ scale: accepting !== match.matchId && match.status !== 'ACCEPTED' ? 0.98 : 1 }}
                   onClick={() => handleAcceptJob(match.matchId)}
                   disabled={accepting === match.matchId || match.status === 'ACCEPTED'}
-                  className="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-accent-green to-green-600 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:shadow-lg hover:shadow-accent-green/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {accepting === match.matchId ? (
                     <>
                       <ButtonLoader />
-                      Accepting...
+                      <span className="hidden sm:inline">Accepting...</span>
+                      <span className="sm:hidden">Accepting</span>
                     </>
                   ) : match.status === 'ACCEPTED' ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Accepted
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Accept Job
+                      <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Accept Job</span>
+                      <span className="sm:hidden">Accept</span>
                     </>
                   )}
                 </motion.button>
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                   <Link
                     href={`/provider/jobs/${match.jobId}`}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-neutral-background text-neutral-textSecondary rounded-xl text-sm font-semibold hover:bg-neutral-border transition-all"
+                    className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-lg sm:rounded-xl border-2 border-white/30 text-white text-xs sm:text-sm font-semibold hover:bg-white/10 hover:border-white/50 transition-all"
                   >
-                    <Eye className="w-4 h-4" />
-                    Details
+                    <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Details</span>
+                    <span className="sm:hidden">View</span>
                   </Link>
                 </motion.div>
               </div>
             </motion.div>
-          ))}
+            )
+          })}
         </motion.div>
       )}
     </div>

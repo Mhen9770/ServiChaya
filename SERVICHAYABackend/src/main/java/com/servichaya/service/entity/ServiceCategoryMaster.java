@@ -3,6 +3,8 @@ package com.servichaya.service.entity;
 import com.servichaya.common.entity.MasterEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.util.List;
 
@@ -20,6 +22,7 @@ public class ServiceCategoryMaster extends MasterEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id", insertable = false, updatable = false)
+    @Fetch(FetchMode.JOIN)
     private ServiceCategoryMaster parent;
 
     @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)

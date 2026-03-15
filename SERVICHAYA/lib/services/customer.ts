@@ -33,11 +33,26 @@ export interface AddressDto {
   latitude?: number
   longitude?: number
   isDefault: boolean
+  addressLabel?: string
 }
 
 export interface UpdateCustomerProfileDto {
   name?: string
   profileImageUrl?: string
+}
+
+export interface CreateAddressRequest {
+  addressLabel?: string
+  addressLine1: string
+  addressLine2?: string
+  landmark?: string
+  pincode?: string
+  cityId: number
+  zoneId?: number
+  podId?: number
+  latitude?: number
+  longitude?: number
+  isPrimary?: boolean
 }
 
 export const getCustomerProfile = async (customerId: number): Promise<CustomerProfileDto> => {
@@ -47,5 +62,10 @@ export const getCustomerProfile = async (customerId: number): Promise<CustomerPr
 
 export const updateCustomerProfile = async (customerId: number, data: UpdateCustomerProfileDto): Promise<CustomerProfileDto> => {
   const response = await api.put(`/customer/profile?customerId=${customerId}`, data)
+  return response.data.data
+}
+
+export const createCustomerAddress = async (customerId: number, data: CreateAddressRequest): Promise<AddressDto> => {
+  const response = await api.post(`/customer/profile/address?customerId=${customerId}`, data)
   return response.data.data
 }

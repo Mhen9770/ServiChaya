@@ -47,4 +47,16 @@ public class ReviewController {
         }
         return ResponseEntity.ok(ApiResponse.success("Review fetched", review));
     }
+
+    /**
+     * Public endpoint to fetch a small set of high-quality reviews
+     * for use on the homepage and marketing pages.
+     */
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<java.util.List<ReviewDto>>> getFeaturedReviews(
+            @RequestParam(name = "limit", defaultValue = "3") int limit) {
+        log.info("Request to fetch up to {} featured reviews for public display", limit);
+        java.util.List<ReviewDto> reviews = reviewService.getFeaturedReviews(limit);
+        return ResponseEntity.ok(ApiResponse.success("Featured reviews fetched", reviews));
+    }
 }

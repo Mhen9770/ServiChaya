@@ -139,7 +139,16 @@ public class ConfigService {
         if (ruleValue != null) {
             return ruleValue;
         }
-        return getConfigValueAsInteger("MATCHING", "PROVIDER_RESPONSE_TIMEOUT_SECONDS", 120);
+        return getConfigValueAsInteger("MATCHING", "PROVIDER_RESPONSE_TIMEOUT_SECONDS", 300); // Default 5 minutes
+    }
+
+    public Integer getMatchingTimeoutMinutes() {
+        Integer ruleValue = businessRuleService.getRuleValueAsInteger(
+            "MATCHING_TIMEOUT_MINUTES", null);
+        if (ruleValue != null) {
+            return ruleValue;
+        }
+        return getConfigValueAsInteger("MATCHING", "MATCHING_TIMEOUT_MINUTES", 30); // Default 30 minutes
     }
 
     public Integer getMaxProvidersToNotify() {

@@ -52,7 +52,17 @@ public class JobMaster extends BaseEntity {
 
     @Column(name = "status", length = 50, nullable = false)
     @Builder.Default
-    private String status = "PENDING"; // PENDING, MATCHED, ACCEPTED, IN_PROGRESS, COMPLETED, CANCELLED
+    private String status = "PENDING"; // PENDING, MATCHING, MATCHED, ACCEPTED, IN_PROGRESS, PAYMENT_PENDING, COMPLETED, CANCELLED
+
+    /**
+     * Sub-status for detailed state tracking
+     * Examples:
+     * - MATCHED + PROVIDER_ACCEPTED: Provider accepted, waiting for customer confirmation
+     * - MATCHED + WAITING_FOR_PROVIDER: Waiting for any provider to accept
+     * - MATCHED + CUSTOMER_SELECTED: Customer manually selected a provider
+     */
+    @Column(name = "sub_status", length = 50)
+    private String subStatus;
 
     @Column(name = "pod_id")
     private Long podId;
@@ -92,4 +102,13 @@ public class JobMaster extends BaseEntity {
 
     @Column(name = "special_instructions", columnDefinition = "TEXT")
     private String specialInstructions;
+
+    @Column(name = "cancellation_fee", precision = 10, scale = 2)
+    private BigDecimal cancellationFee;
+
+    @Column(name = "cancellation_refund_amount", precision = 10, scale = 2)
+    private BigDecimal cancellationRefundAmount;
+
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
 }

@@ -4,13 +4,14 @@ import com.servichaya.common.service.ConfigService;
 import com.servichaya.job.entity.JobMaster;
 import com.servichaya.job.repository.JobMasterRepository;
 import com.servichaya.job.service.JobStateMachine;
+import com.servichaya.job.service.JobStatusService;
 import com.servichaya.payment.entity.*;
 import com.servichaya.payment.repository.*;
 import com.servichaya.payment.service.EarningCalculationService.EarningResult;
 import com.servichaya.notification.service.NotificationService;
 import com.servichaya.provider.repository.ServiceProviderProfileRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +24,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
 
@@ -40,6 +40,38 @@ public class PaymentService {
     private final PaymentGatewayService paymentGatewayService;
     private final ConfigService configService;
     private final JobStateMachine stateMachine;
+    private final JobStatusService jobStatusService;
+
+    public PaymentService(
+            JobPaymentScheduleRepository paymentScheduleRepository,
+            PaymentTransactionRepository paymentTransactionRepository,
+            ProviderEarningsRepository earningsRepository,
+            ProviderCommissionOverrideRepository commissionOverrideRepository,
+            ProviderPaymentPreferenceRepository paymentPreferenceRepository,
+            JobMasterRepository jobRepository,
+            ServiceProviderProfileRepository providerRepository,
+            CommissionService commissionService,
+            EarningCalculationService earningCalculationService,
+            NotificationService notificationService,
+            PaymentGatewayService paymentGatewayService,
+            ConfigService configService,
+            JobStateMachine stateMachine,
+            @Lazy JobStatusService jobStatusService) {
+        this.paymentScheduleRepository = paymentScheduleRepository;
+        this.paymentTransactionRepository = paymentTransactionRepository;
+        this.earningsRepository = earningsRepository;
+        this.commissionOverrideRepository = commissionOverrideRepository;
+        this.paymentPreferenceRepository = paymentPreferenceRepository;
+        this.jobRepository = jobRepository;
+        this.providerRepository = providerRepository;
+        this.commissionService = commissionService;
+        this.earningCalculationService = earningCalculationService;
+        this.notificationService = notificationService;
+        this.paymentGatewayService = paymentGatewayService;
+        this.configService = configService;
+        this.stateMachine = stateMachine;
+        this.jobStatusService = jobStatusService;
+    }
 
     @Transactional
     public JobPaymentSchedule createPaymentSchedule(Long jobId, String paymentType, 
@@ -77,6 +109,44 @@ public class PaymentService {
         }
 
         schedule.setPaymentStatus("PENDING");
+        return paymentScheduleRepository.save(schedule);
+    }
+
+    @Transactional
+    public JobPaymentSchedule createCancellationFeePaymentSchedule(Long jobId, BigDecimal cancellationFee) {
+        log.info("Creating cancellation fee payment schedule for jobId: {}, fee: {}", jobId, cancellationFee);
+
+        JobMaster job = jobRepository.findById(jobId)
+                .orElseThrow(() -> {
+                    log.error("Job not found with id: {}", jobId);
+                    return new RuntimeException("Job not found");
+                });
+
+        // Check if cancellation fee schedule already exists
+        Optional<JobPaymentSchedule> existingSchedule = paymentScheduleRepository.findByJobId(jobId);
+        if (existingSchedule.isPresent()) {
+            JobPaymentSchedule schedule = existingSchedule.get();
+            // Update existing schedule for cancellation fee
+            schedule.setPaymentType("CANCELLATION_FEE");
+            schedule.setTotalAmount(cancellationFee);
+            schedule.setUpfrontAmount(cancellationFee);
+            schedule.setFinalAmount(BigDecimal.ZERO);
+            schedule.setUpfrontPaid(false);
+            schedule.setFinalPaid(false);
+            schedule.setPaymentStatus("PENDING");
+            return paymentScheduleRepository.save(schedule);
+        }
+
+        // Create new schedule for cancellation fee
+        JobPaymentSchedule schedule = JobPaymentSchedule.builder()
+                .jobId(jobId)
+                .paymentType("CANCELLATION_FEE")
+                .totalAmount(cancellationFee)
+                .upfrontAmount(cancellationFee)
+                .finalAmount(BigDecimal.ZERO)
+                .paymentStatus("PENDING")
+                .build();
+
         return paymentScheduleRepository.save(schedule);
     }
 
@@ -126,6 +196,19 @@ public class PaymentService {
 
         paymentScheduleRepository.save(schedule);
         log.info("Payment processed successfully. TransactionCode: {}", transactionCode);
+
+        // Business Logic: Check if this is a cancellation fee payment
+        try {
+            JobMaster job = jobRepository.findById(jobId).orElse(null);
+            if (job != null && "CANCELLATION_PAYMENT_PENDING".equals(job.getStatus()) && 
+                "CANCELLATION_FEE".equals(schedule.getPaymentType())) {
+                // This is cancellation fee payment - complete the cancellation
+                log.info("Cancellation fee payment received for job {}. Completing cancellation.", jobId);
+                jobStatusService.completeCancellation(jobId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to complete cancellation after fee payment: {}", e.getMessage());
+        }
 
         // Business Logic: If final payment completed, trigger earnings calculation
         if (schedule.getPaymentStatus().equals("COMPLETED") && schedule.getFinalPaid()) {
@@ -312,6 +395,43 @@ public class PaymentService {
         paymentTransactionRepository.save(transaction);
 
         log.info("Test payment marked as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+    }
+
+    /**
+     * Mark payment as failed (for webhook handling)
+     */
+    @Transactional
+    public void markPaymentFailed(Long jobId, String transactionCode) {
+        log.info("Marking payment as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
+
+        PaymentTransaction transaction = paymentTransactionRepository.findByTransactionCode(transactionCode)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionCode));
+
+        if (!transaction.getJobId().equals(jobId)) {
+            throw new RuntimeException("Transaction does not belong to this job");
+        }
+
+        transaction.setStatus("FAILED");
+        transaction.setCompletedAt(LocalDateTime.now());
+        paymentTransactionRepository.save(transaction);
+
+        // Notify customer about payment failure
+        try {
+            JobMaster job = jobRepository.findById(jobId).orElse(null);
+            if (job != null) {
+                notificationService.createNotification(
+                        job.getCustomerId(), "CUSTOMER", "PAYMENT_FAILED",
+                        "Payment Failed",
+                        String.format("Payment failed for job: %s. Please try again.", job.getTitle()),
+                        "PAYMENT", jobId,
+                        String.format("/customer/jobs/%d/payment", jobId),
+                        Map.of("jobCode", job.getJobCode(), "transactionCode", transactionCode));
+            }
+        } catch (Exception e) {
+            log.error("Failed to send payment failure notification", e);
+        }
+
+        log.info("Payment marked as FAILED for jobId: {}, transactionCode: {}", jobId, transactionCode);
     }
 
     @Transactional

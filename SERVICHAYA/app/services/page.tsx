@@ -333,6 +333,7 @@ function ServicesPageContent() {
   }
 
   const IconComponent = getCategoryIcon(category)
+  const subCategories = (category.children || []) as ServiceCategory[]
 
   return (
     <div className="min-h-screen bg-[#010B2A] text-white">
@@ -460,6 +461,71 @@ function ServicesPageContent() {
             </motion.div>
           </div>
         </section>
+
+        {/* Sub‑categories under this category */}
+        {subCategories.length > 0 && (
+          <section className="w-full py-12 sm:py-16 lg:py-20 bg-[#010B2A]">
+            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8 sm:mb-10"
+              >
+                <div>
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
+                    Explore <span className="text-primary-light">Sub Services</span>
+                  </h2>
+                  <p className="text-slate-300 text-sm sm:text-base max-w-xl">
+                    Choose a specific service under {category.name} to see more details and available providers.
+                  </p>
+                </div>
+                <div className="text-xs sm:text-sm text-slate-400">
+                  Showing <span className="font-semibold text-slate-200">{subCategories.length}</span> sub services
+                </div>
+              </motion.div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {subCategories.map((sub) => {
+                  const SubIcon = getCategoryIcon(sub)
+                  return (
+                    <Link
+                      key={sub.id}
+                      href={`/services?category=${sub.id}`}
+                      className="group rounded-2xl glass-dark border border-white/10 p-5 hover:border-primary-main/50 hover:bg-primary-main/5 transition-all flex flex-col gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-main to-primary-dark flex items-center justify-center">
+                          <SubIcon className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base sm:text-lg font-semibold text-white line-clamp-1">
+                            {sub.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-300 line-clamp-2">
+                            {(sub.description || '').length > 0
+                              ? sub.description
+                              : `View all providers offering ${sub.name.toLowerCase()} services.`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-300 mt-1">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5 text-primary-light" />
+                          {(sub.providerCount || 0)} providers
+                        </span>
+                        <span className="inline-flex items-center gap-1 group-hover:text-primary-light transition-colors">
+                          View details
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* How It Works - Public Workflow */}
         <section className="w-full py-12 sm:py-16 lg:py-20 bg-[#010B2A]">

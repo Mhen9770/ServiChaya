@@ -33,6 +33,6 @@ public abstract class BaseEntity {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "BIT DEFAULT 0")
     private Boolean isDeleted = false;
 }

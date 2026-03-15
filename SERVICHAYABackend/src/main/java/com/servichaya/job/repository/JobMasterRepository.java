@@ -1,5 +1,7 @@
 package com.servichaya.job.repository;
 
+import com.servichaya.admin.dto.AdminDashboardStatsProjection;
+import com.servichaya.admin.dto.CustomerJobStatsProjection;
 import com.servichaya.job.entity.JobMaster;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +39,34 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
 
     @Query("SELECT COUNT(j) FROM JobMaster j WHERE j.status = :status AND (j.isDeleted IS NULL OR j.isDeleted = false)")
     long countByStatus(@Param("status") String status);
+
+    // Native query to fetch admin dashboard statistics in a single round-trip
+    @Query(value = """
+            SELECT 
+              (SELECT COUNT(*) 
+                 FROM job_master jm 
+                WHERE jm.is_deleted IS NULL OR jm.is_deleted = FALSE) AS totalJobs,
+              (SELECT COUNT(*) 
+                 FROM job_master jm 
+                WHERE jm.status = 'PENDING' 
+                  AND (jm.is_deleted IS NULL OR jm.is_deleted = FALSE)) AS pendingJobs,
+              (SELECT COUNT(*) 
+                 FROM service_provider_profile spp 
+                WHERE spp.profile_status = 'ACTIVE' 
+                  AND (spp.is_deleted IS NULL OR spp.is_deleted = FALSE)) AS activeProviders,
+              (SELECT COUNT(*) 
+                 FROM service_provider_profile spp 
+                WHERE spp.profile_status = 'PENDING_VERIFICATION' 
+                  AND (spp.is_deleted IS NULL OR spp.is_deleted = FALSE)) AS pendingVerifications,
+              (SELECT COUNT(*) 
+                 FROM user_account ua 
+                WHERE ua.is_deleted IS NULL OR ua.is_deleted = FALSE) AS totalCustomers,
+              (SELECT COALESCE(SUM(pt.amount), 0) 
+                 FROM payment_transaction pt 
+                WHERE pt.status = 'SUCCESS') AS totalEarnings
+            """,
+            nativeQuery = true)
+    AdminDashboardStatsProjection getAdminDashboardStatsNative();
 
     @Query("SELECT j FROM JobMaster j WHERE j.isDeleted is null OR j.isDeleted = false")
     Page<JobMaster> findAllByIsDeletedNotTrue(Pageable pageable);
@@ -110,4 +140,40 @@ public interface JobMasterRepository extends JpaRepository<JobMaster, Long> {
            "AND j.status IN ('ACCEPTED', 'IN_PROGRESS', 'COMPLETED') " +
            "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
     List<Long> findDistinctProviderIdsByCategoryId(@Param("categoryId") Long categoryId);
+
+    // Find jobs stuck in MATCHING status (for timeout handling)
+    @Query("SELECT j FROM JobMaster j WHERE j.status = :status " +
+           "AND j.updatedAt < :threshold " +
+           "AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    List<JobMaster> findByStatusAndUpdatedAtBefore(
+            @Param("status") String status,
+            @Param("threshold") java.time.LocalDateTime threshold);
+
+    // Count jobs by customer ID
+    @Query("SELECT COUNT(j) FROM JobMaster j WHERE j.customerId = :customerId AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Long countByCustomerId(@Param("customerId") Long customerId);
+
+    // Count jobs by customer ID and status
+    @Query("SELECT COUNT(j) FROM JobMaster j WHERE j.customerId = :customerId AND j.status = :status AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Long countByCustomerIdAndStatus(@Param("customerId") Long customerId, @Param("status") String status);
+
+    // Count active jobs by customer ID (multiple statuses)
+    @Query("SELECT COUNT(j) FROM JobMaster j WHERE j.customerId = :customerId AND j.status IN :statuses AND (j.isDeleted IS NULL OR j.isDeleted = false)")
+    Long countByCustomerIdAndStatusIn(@Param("customerId") Long customerId, @Param("statuses") List<String> statuses);
+
+    // Batch fetch job statistics for multiple customers in one query (optimized)
+    @Query(value = """
+        SELECT 
+            jm.customer_id as customerId,
+            COUNT(*) as totalJobs,
+            COUNT(CASE WHEN jm.status = 'COMPLETED' THEN 1 END) as completedJobs,
+            COUNT(CASE WHEN jm.status = 'CANCELLED' THEN 1 END) as cancelledJobs,
+            COUNT(CASE WHEN jm.status IN ('PENDING', 'MATCHING', 'MATCHED', 'ACCEPTED', 'IN_PROGRESS', 'PAYMENT_PENDING') THEN 1 END) as activeJobs
+        FROM job_master jm
+        WHERE jm.customer_id IN :customerIds
+          AND (jm.is_deleted IS NULL OR jm.is_deleted = FALSE)
+        GROUP BY jm.customer_id
+        """,
+        nativeQuery = true)
+    List<CustomerJobStatsProjection> getCustomerJobStatsBatch(@Param("customerIds") List<Long> customerIds);
 }

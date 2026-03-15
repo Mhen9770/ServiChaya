@@ -133,10 +133,10 @@ export default function Sidebar({ items }: SidebarProps) {
 
       {/* Sidebar panel */}
       <aside
-        className={`w-72 md:w-64 glass-dark border-r border-white/10 h-[calc(100vh-73px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40
+        className={`w-72 md:w-64 glass-dark border-r border-white/10 h-[calc(100vh-73px)] md:h-full overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary-main/20 scrollbar-track-transparent z-40
         fixed top-[73px] left-0 transform transition-transform duration-200 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:static md:self-start md:translate-x-0`}
+        md:static md:translate-x-0`}
       >
         <div className="px-4 sm:px-5 md:px-6 py-5 md:py-6">
           {user && (

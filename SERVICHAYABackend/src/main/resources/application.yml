@@ -1,8 +1,10 @@
 spring:
+  main:
+    allow-circular-references: true
   application:
     name: servichaya-backend
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/servichaya?createDatabaseIfNotExist=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/servichaya_v2?createDatabaseIfNotExist=true
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -23,7 +25,7 @@ spring:
     open-in-view: false
   
   flyway:
-    enabled: false
+    enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true
@@ -40,6 +42,8 @@ spring:
       - businessRules
       - featureFlag
       - businessRule
+      - skills
+      - categories
 
 # JWT Configuration
 jwt:
@@ -69,6 +73,11 @@ server:
   servlet:
     context-path: /api
 
+# Job Messages Configuration
+job:
+  messages:
+    attachments-path: ${JOB_MESSAGES_ATTACHMENTS_PATH:/app/data/job-messages/attachments}
+
 # Logging
 logging:
   level:
@@ -97,3 +106,15 @@ provider:
   # Base directory for storing provider KYC and verification documents
   # Can be overridden via PROVIDER_DOCUMENTS_PATH environment variable
   documents-path: ${PROVIDER_DOCUMENTS_PATH:/app/data/documents/Providers/docs}
+
+# OneSignal Configuration
+onesignal:
+  app:
+    id: ${ONESIGNAL_APP_ID:07f9fc72-b60b-419a-87ca-13a87bb97c72}
+  rest:
+    api:
+      key: ${ONESIGNAL_REST_API_KEY:os_v2_app_a747y4vwbnazvb6kcouhxol4ol73iqszmqnejaffquhqctpsa5g4ddij6c2kspiq5t4uzqukx2vskdxufg5ixihlotga6bpib2dvvoy}
+  base:
+    url: ${ONESIGNAL_BASE_URL:https://onesignal.com/api/v1}
+    
+    

@@ -81,24 +81,61 @@ export const getCategoryByCode = async (code: string): Promise<ServiceCategory> 
   return response.data.data
 }
 
-// Get all active subcategories
+// Helper to flatten category tree into a flat list
+const flattenCategories = (categories: ServiceCategory[]): ServiceCategory[] => {
+  const result: ServiceCategory[] = []
+  const stack: ServiceCategory[] = [...categories]
+  while (stack.length) {
+    const current = stack.pop()!
+    result.push(current)
+    if (current.children && current.children.length) {
+      stack.push(...current.children)
+    }
+  }
+  return result
+}
+
+// Map a ServiceCategory (child node) into a ServiceSubCategory shape
+const mapCategoryToSubCategory = (category: ServiceCategory): ServiceSubCategory => ({
+  id: category.id,
+  code: category.code,
+  name: category.name,
+  description: category.description,
+  categoryId: category.parentId ?? 0,
+  categoryName: category.parentName,
+  iconUrl: category.iconUrl,
+  displayOrder: category.displayOrder,
+  isFeatured: category.isFeatured,
+  providerCount: category.providerCount,
+})
+
+// Get all active subcategories (derived from /service-categories)
 export const getAllSubCategories = async (categoryId?: number, featured?: boolean): Promise<ServiceSubCategory[]> => {
-  const params = new URLSearchParams()
-  if (categoryId) params.append('categoryId', categoryId.toString())
-  if (featured) params.append('featured', 'true')
-  const url = params.toString() ? `/service-subcategories?${params.toString()}` : '/service-subcategories'
-  const response = await api.get(url)
-  return response.data.data
+  // Load full active category tree
+  const allCategories = await getAllCategories(undefined, undefined, false)
+  const flat = flattenCategories(allCategories)
+
+  // Subcategories = any category with a parentId
+  let subs = flat.filter((c) => c.parentId != null)
+
+  if (categoryId) {
+    subs = subs.filter((c) => c.parentId === categoryId)
+  }
+  if (featured) {
+    subs = subs.filter((c) => c.isFeatured)
+  }
+
+  return subs.map(mapCategoryToSubCategory)
 }
 
-// Get subcategory by ID
+// Get subcategory by ID (via /service-categories/{id})
 export const getSubCategoryById = async (id: number): Promise<ServiceSubCategory> => {
-  const response = await api.get(`/service-subcategories/${id}`)
-  return response.data.data
+  const category = await getCategoryById(id)
+  return mapCategoryToSubCategory(category)
 }
 
-// Get subcategory by code
+// Get subcategory by code (via /service-categories/code/{code})
 export const getSubCategoryByCode = async (code: string): Promise<ServiceSubCategory> => {
-  const response = await api.get(`/service-subcategories/code/${code}`)
-  return response.data.data
+  const category = await getCategoryByCode(code)
+  return mapCategoryToSubCategory(category)
 }

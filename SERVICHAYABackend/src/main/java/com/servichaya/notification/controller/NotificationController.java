@@ -3,6 +3,8 @@ package com.servichaya.notification.controller;
 import com.servichaya.common.response.ApiResponse;
 import com.servichaya.notification.dto.NotificationDto;
 import com.servichaya.notification.service.NotificationService;
+import com.servichaya.notification.service.OneSignalService;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final OneSignalService oneSignalService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<NotificationDto>>> getNotifications(
@@ -54,5 +57,34 @@ public class NotificationController {
         log.info("Request to mark all notifications as read for userId: {}, userType: {}", userId, userType);
         notificationService.markAllAsRead(userId, userType);
         return ResponseEntity.ok(ApiResponse.success("All notifications marked as read", "Read all"));
+    }
+
+    @PostMapping("/onesignal/register")
+    public ResponseEntity<ApiResponse<String>> registerOneSignalPlayer(
+            @RequestBody OneSignalRegisterRequest request) {
+        log.info("Registering OneSignal player for userId: {}, playerId: {}", request.getUserId(), request.getPlayerId());
+        oneSignalService.registerPlayer(
+                request.getUserId(),
+                request.getPlayerId(),
+                request.getDeviceType(),
+                request.getBrowser()
+        );
+        return ResponseEntity.ok(ApiResponse.success("OneSignal player registered", "Registered"));
+    }
+
+    @PostMapping("/onesignal/unregister")
+    public ResponseEntity<ApiResponse<String>> unregisterOneSignalPlayer(
+            @RequestParam String playerId) {
+        log.info("Unregistering OneSignal player: {}", playerId);
+        oneSignalService.unregisterPlayer(playerId);
+        return ResponseEntity.ok(ApiResponse.success("OneSignal player unregistered", "Unregistered"));
+    }
+
+    @Data
+    static class OneSignalRegisterRequest {
+        private Long userId;
+        private String playerId;
+        private String deviceType;
+        private String browser;
     }
 }

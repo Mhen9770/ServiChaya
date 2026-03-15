@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
@@ -11,6 +11,7 @@ import { getCurrentUser, sendOtp, verifyOtp } from '@/lib/auth'
 import { createJob, type CreateJobDto } from '@/lib/services/job'
 import { getAllCategories, getRootCategories, getCategoryTree, type ServiceCategory, type ServiceSubCategory } from '@/lib/services/service'
 import { getServiceSkillsByCategory, type ServiceSkillDto } from '@/lib/services/provider'
+import { getCustomerProfile, type AddressDto } from '@/lib/services/customer'
 import {
   getAllActiveCities,
   getPodsByZone,
@@ -19,6 +20,9 @@ import {
   type PodMasterDto,
   type ZoneMasterDto,
 } from '@/lib/services/admin'
+import { resolveLocation } from '@/lib/services/location'
+import LocationPicker from '@/components/map/LocationPicker'
+import DateTimePicker from '@/components/ui/DateTimePicker'
 
 const emptyForm: CreateJobDto = {
   serviceCategoryId: 0,
@@ -35,6 +39,9 @@ const emptyForm: CreateJobDto = {
   addressLine1: '',
   addressLine2: '',
   pincode: '',
+   // precise geo-coordinates are optional but recommended
+  latitude: undefined,
+  longitude: undefined,
   specialInstructions: '',
 }
 
@@ -55,6 +62,11 @@ export default function CreateJobPage() {
   const [pods, setPods] = useState<PodMasterDto[]>([])
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
   const [currentUser, setCurrentUser] = useState(getCurrentUser())
+  const [savedAddresses, setSavedAddresses] = useState<AddressDto[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null)
+  const [resolvingLocation, setResolvingLocation] = useState(false)
+  const [resolvedLocationInfo, setResolvedLocationInfo] = useState<{ cityName?: string; zoneName?: string; podName?: string } | null>(null)
+  const resolveLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Guest mobile + OTP state
   const [guestMobile, setGuestMobile] = useState('')
@@ -78,6 +90,18 @@ export default function CreateJobPage() {
       ])
       setCategories(categoryRes)
       setCities(cityRes)
+
+      // Load saved addresses if user is logged in
+      const user = getCurrentUser()
+      if (user) {
+        try {
+          const profile = await getCustomerProfile(user.userId)
+          setSavedAddresses(profile.addresses || [])
+        } catch (e) {
+          // Silently fail - addresses are optional
+          console.warn('Could not load saved addresses:', e)
+        }
+      }
     } catch {
       toast.error('Failed to load create job form data')
     } finally {
@@ -202,10 +226,130 @@ export default function CreateJobPage() {
     }
   }
 
+  // Helper function to resolve location and update form
+  const resolveAndUpdateLocation = async (latitude: number, longitude: number, showToast = true) => {
+    try {
+      setResolvingLocation(true)
+      const resolved = await resolveLocation(latitude, longitude)
+
+      // Ensure cityId is set (required field)
+      if (!resolved.cityId) {
+        throw new Error('Could not resolve city from location. Please select city manually.')
+      }
+
+      setForm(prev => ({
+        ...prev,
+        cityId: resolved.cityId, // Required - always set
+        zoneId: resolved.zoneId || undefined,
+        podId: resolved.podId || undefined,
+        latitude,
+        longitude,
+      }))
+
+      // Update resolved location info for display
+      setResolvedLocationInfo({
+        cityName: resolved.cityName,
+        zoneName: resolved.zoneName,
+        podName: resolved.podName,
+      })
+
+      // Load dropdown data based on resolved IDs
+      try {
+        const zoneRes = await getZonesByCity(resolved.cityId)
+        setZones(zoneRes)
+        if (resolved.zoneId) {
+          const podRes = await getPodsByZone(resolved.zoneId)
+          setPods(podRes)
+        } else {
+          setPods([])
+        }
+      } catch (loadErr) {
+        console.error('Failed to load zones/pods', loadErr)
+        // Don't fail the whole operation if dropdowns fail to load
+      }
+
+      if (showToast) {
+        const locationParts = [
+          resolved.podName,
+          resolved.zoneName,
+          resolved.cityName,
+        ].filter(Boolean)
+        toast.success(`Location detected: ${locationParts.join(' → ')}`)
+      }
+    } catch (err: any) {
+      console.error('Failed to resolve location', err)
+      setResolvedLocationInfo(null)
+      if (showToast) {
+        toast.error(err?.response?.data?.message || err?.message || 'Could not detect area from location')
+      }
+    } finally {
+      setResolvingLocation(false)
+    }
+  }
+
+  const useCurrentLocationForJob = async () => {
+    if (!navigator.geolocation) {
+      toast.error('Location is not supported in this browser')
+      return
+    }
+
+    // Show loader immediately
+    setResolvingLocation(true)
+
+    try {
+      await new Promise<void>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const { latitude, longitude } = pos.coords
+              await resolveAndUpdateLocation(latitude, longitude, true)
+            } catch (err) {
+              // Error already handled in resolveAndUpdateLocation
+            } finally {
+              resolve()
+            }
+          },
+          (err) => {
+            console.error('Geolocation error', err)
+            toast.error('Unable to access current location')
+            setResolvingLocation(false)
+            resolve()
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        )
+      })
+    } catch (err) {
+      console.error('Error getting current location', err)
+      setResolvingLocation(false)
+    }
+  }
+
+  // Debounced location resolution when map pin moves
+  const handleMapLocationChange = ({ lat, lng }: { lat: number; lng: number }) => {
+    // Update lat/lng immediately
+    setForm(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+    }))
+
+    // Debounce the resolution call (wait 1 second after user stops moving pin)
+    if (resolveLocationTimeoutRef.current) {
+      clearTimeout(resolveLocationTimeoutRef.current)
+    }
+    
+    resolveLocationTimeoutRef.current = setTimeout(() => {
+      resolveAndUpdateLocation(lat, lng, false) // Don't show toast on every pin move
+    }, 1000)
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
 
-    if (!form.serviceCategoryId || !form.title || !form.description || !form.preferredTime || !form.cityId || !form.addressLine1) {
+    // Fix: Check for 0 values explicitly (since !0 is true in JavaScript)
+    if (!form.serviceCategoryId || form.serviceCategoryId === 0 || 
+        !form.title || !form.description || !form.preferredTime || 
+        !form.cityId || form.cityId === 0 || !form.addressLine1) {
       toast.error('Please fill all required fields before submitting')
       return
     }
@@ -227,12 +371,21 @@ export default function CreateJobPage() {
 
     try {
       setSaving(true)
-      await createJob(user.userId, {
+      // Fix: Don't send fields with value 0, send undefined instead
+      const payload: CreateJobDto = {
         ...form,
+        serviceCategoryId: form.serviceCategoryId === 0 ? undefined : form.serviceCategoryId,
+        cityId: form.cityId === 0 ? undefined : form.cityId,
+        serviceSubCategoryId: form.serviceSubCategoryId === 0 ? undefined : form.serviceSubCategoryId,
+        serviceSkillId: form.serviceSkillId === 0 ? undefined : form.serviceSkillId,
+        zoneId: form.zoneId === 0 ? undefined : form.zoneId,
+        podId: form.podId === 0 ? undefined : form.podId,
         estimatedBudget: form.estimatedBudget || undefined,
-      })
-      toast.success('Request submitted successfully')
-      router.push('/customer/jobs')
+      }
+      const createdJob = await createJob(user.userId, payload)
+      toast.success('Request submitted successfully! Now select a provider.')
+      // Redirect to provider selection page
+      router.push(`/customer/jobs/${createdJob.id}/select-provider`)
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Could not create request')
     } finally {
@@ -266,10 +419,26 @@ export default function CreateJobPage() {
   }
 
   const handleNextFromStep2 = () => {
-    if (!form.preferredTime || !form.cityId || !form.addressLine1) {
-      toast.error('Please fill schedule & location before continuing')
+    // Fix: Check for 0 values explicitly and ensure preferredTime is not empty string
+    const missingFields: string[] = []
+    
+    if (!form.preferredTime || form.preferredTime === '' || form.preferredTime.trim() === '') {
+      missingFields.push('Preferred Date & Time')
+    }
+    
+    if (!form.cityId || form.cityId === 0) {
+      missingFields.push('City')
+    }
+    
+    if (!form.addressLine1 || form.addressLine1.trim() === '') {
+      missingFields.push('Address Line 1')
+    }
+    
+    if (missingFields.length > 0) {
+      toast.error(`Please fill: ${missingFields.join(', ')}`)
       return
     }
+    
     setCurrentStep(3)
   }
 
@@ -351,7 +520,7 @@ export default function CreateJobPage() {
             <h2 className="font-bold text-lg text-white">Service scope</h2>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               <div className="relative">
-                <SelectField required label="Category" value={form.serviceCategoryId} onChange={(value) => handleCategory(Number(value))} disabled={loadingCategory || loadingInitialData}>
+                <SelectField required label="Category" value={form.serviceCategoryId || 0} onChange={(value) => handleCategory(Number(value))} disabled={loadingCategory || loadingInitialData}>
                   <option value={0}>Select category</option>
                   {allCategoriesFlat.map((category) => (
                     <option key={category.id} value={category.id}>
@@ -366,7 +535,7 @@ export default function CreateJobPage() {
                 )}
               </div>
 
-              {form.serviceCategoryId > 0 && subCategories.length > 0 && (
+              {form.serviceCategoryId && form.serviceCategoryId > 0 && subCategories.length > 0 && (
                 <div className="relative">
                   <SelectField label="Sub Category (optional)" value={form.serviceSubCategoryId || ''} onChange={(value) => handleSubCategory(value ? Number(value) : 0)} disabled={loadingSubCategory}>
                     <option value="">Select subcategory</option>
@@ -432,10 +601,117 @@ export default function CreateJobPage() {
           {currentStep === 2 && (
           <section>
             <h2 className="font-bold text-lg text-white">Schedule & location</h2>
+            <p className="text-xs text-slate-300 mt-1">
+              Pick from your saved addresses or add a new one, then fine-tune on the map if needed.
+            </p>
+            
+            {savedAddresses.length > 0 && (
+              <div className="mb-4 rounded-xl bg-white/5 border border-primary-main/50 p-4 shadow-sm shadow-primary-main/20">
+                <div className="flex items-center justify-between mb-3 gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Saved addresses</p>
+                    <p className="text-[11px] text-slate-300">
+                      Select one to auto-fill city / zone / POD and address. You can still edit details below.
+                    </p>
+                  </div>
+                  <Link
+                    href="/customer/profile"
+                    className="text-xs text-primary-light hover:text-primary-main"
+                    target="_blank"
+                  >
+                    Manage addresses
+                  </Link>
+                </div>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {savedAddresses.map((addr) => (
+                    <label
+                      key={addr.id}
+                      className={`flex items-start gap-2 text-xs text-slate-200 cursor-pointer p-2 rounded-lg border transition-colors ${
+                        selectedAddressId === addr.id
+                          ? 'bg-primary-main/15 border-primary-main/60'
+                          : 'bg-slate-900/40 border-white/10 hover:bg-white/5'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="savedAddress"
+                        className="mt-1"
+                        checked={selectedAddressId === addr.id}
+                        onChange={async () => {
+                          setSelectedAddressId(addr.id)
+                          setForm(prev => ({
+                            ...prev,
+                            cityId: addr.cityId || 0,
+                            zoneId: addr.zoneId,
+                            podId: addr.podId,
+                            addressLine1: addr.addressLine1,
+                            addressLine2: addr.addressLine2 || '',
+                            pincode: addr.pincode || '',
+                            latitude: addr.latitude,
+                            longitude: addr.longitude,
+                          }))
+                          
+                          // Update resolved location info
+                          if (addr.cityName || addr.zoneName || addr.podName) {
+                            setResolvedLocationInfo({
+                              cityName: addr.cityName,
+                              zoneName: addr.zoneName,
+                              podName: addr.podName,
+                            })
+                          }
+                          
+                          // Load zones if city is selected
+                          if (addr.cityId) {
+                            await handleCity(addr.cityId)
+                            // Load pods if zone is selected
+                            if (addr.zoneId) {
+                              await handleZone(addr.zoneId)
+                            }
+                          }
+                          
+                          // If lat/lng exist but POD/Zone missing, try to resolve
+                          if (addr.latitude && addr.longitude && (!addr.podId || !addr.zoneId)) {
+                            try {
+                              await resolveAndUpdateLocation(addr.latitude, addr.longitude, false)
+                            } catch (err) {
+                              // Silently fail - user can manually select
+                              console.warn('Could not auto-resolve location for saved address', err)
+                            }
+                          }
+                        }}
+                      />
+                      <span className="flex-1">
+                        <span className="font-semibold text-white">
+                          {addr.addressLabel || 'Address'}
+                          {addr.isDefault && (
+                            <span className="ml-1 inline-flex items-center rounded-full bg-primary-main/20 px-1.5 py-0.5 text-[9px] text-primary-light border border-primary-main/40">
+                              Default
+                            </span>
+                          )}
+                        </span>
+                        <br />
+                        {addr.addressLine1}
+                        {addr.addressLine2 && `, ${addr.addressLine2}`}
+                        <br />
+                        {addr.cityName} {addr.pincode && `- ${addr.pincode}`}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="grid md:grid-cols-2 gap-4 mt-4">
-              <InputField required label="Preferred Date & Time" type="datetime-local" icon={CalendarDays} value={form.preferredTime} onChange={(value) => setForm((prev) => ({ ...prev, preferredTime: value }))} />
+              <DateTimePicker 
+                required 
+                label="Preferred Date & Time" 
+                icon={CalendarDays} 
+                value={form.preferredTime} 
+                onChange={(value) => setForm((prev) => ({ ...prev, preferredTime: value }))}
+                minDate={new Date()} // Can't select past dates
+              />
               <div className="relative">
-                <SelectField required label="City" value={form.cityId} onChange={(value) => handleCity(Number(value))} disabled={loadingCity || loadingInitialData}>
+                <SelectField required label="City" value={form.cityId || 0} onChange={(value) => handleCity(Number(value))} disabled={loadingCity || loadingInitialData}>
                   <option value={0}>Select city</option>
                   {cities.map((city) => (
                     <option key={city.id} value={city.id}>{city.name}</option>
@@ -448,7 +724,40 @@ export default function CreateJobPage() {
                 )}
               </div>
 
-              {form.cityId > 0 && zones.length > 0 && (
+              <div className="md:col-span-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-300">
+                  Use your current position to auto-detect the right city / zone / POD.
+                </p>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: resolvingLocation ? 1 : 1.02 }}
+                  whileTap={{ scale: resolvingLocation ? 1 : 0.98 }}
+                  onClick={useCurrentLocationForJob}
+                  disabled={resolvingLocation}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-main/50 px-3 py-1.5 text-[11px] text-primary-light hover:bg-primary-main/10 disabled:opacity-60"
+                >
+                  {resolvingLocation ? (
+                    <>
+                      <ButtonLoader size="sm" />
+                      <span>Detecting location...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-3 h-3" />
+                      <span>Use current location</span>
+                    </>
+                  )}
+                </motion.button>
+              </div>
+              
+              {resolvingLocation && (
+                <div className="md:col-span-2 flex items-center gap-2 text-xs text-slate-400 bg-primary-main/5 border border-primary-main/20 rounded-lg px-3 py-2">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-main border-t-transparent" />
+                  <span>Getting your location and detecting area...</span>
+                </div>
+              )}
+
+              {form.cityId && form.cityId > 0 && zones.length > 0 && (
                 <div className="relative">
                   <SelectField label="Zone" value={form.zoneId || ''} onChange={(value) => handleZone(value ? Number(value) : 0)} disabled={loadingZone}>
                     <option value="">Select zone</option>
@@ -484,6 +793,59 @@ export default function CreateJobPage() {
               className="w-full rounded-xl glass border border-white/20 px-3 py-2.5 text-sm text-white bg-white/5 placeholder:text-slate-400"
               placeholder="Landmark, entry notes, contact preference"
             />
+
+            {/* Map-based precise location picker */}
+            {((form.cityId && form.cityId > 0) || form.podId) && (
+              <div className="mt-4 space-y-2">
+                <label className="block text-sm font-semibold text-white">
+                  Exact job location on map{' '}
+                  <span className="text-xs font-normal text-slate-400">(optional but improves matching)</span>
+                </label>
+                {resolvingLocation && (
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                    Detecting area...
+                  </div>
+                )}
+                {resolvedLocationInfo && !resolvingLocation && (
+                  <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>
+                      {[resolvedLocationInfo.podName, resolvedLocationInfo.zoneName, resolvedLocationInfo.cityName]
+                        .filter(Boolean)
+                        .join(' → ')}
+                    </span>
+                  </div>
+                )}
+                <LocationPicker
+                  center={
+                    (() => {
+                      const selectedPod = pods.find(p => p.id === form.podId)
+                      if (selectedPod) {
+                        return { lat: selectedPod.latitude, lng: selectedPod.longitude }
+                      }
+                      const selectedCity = cities.find(c => c.id === form.cityId)
+                      if (selectedCity && selectedCity.latitude && selectedCity.longitude) {
+                        return { lat: selectedCity.latitude, lng: selectedCity.longitude }
+                      }
+                      return { lat: 22.9734, lng: 78.6569 }
+                    })()
+                  }
+                  radiusKm={
+                    (() => {
+                      const selectedPod = pods.find(p => p.id === form.podId)
+                      return selectedPod?.serviceRadiusKm
+                    })()
+                  }
+                  value={
+                    form.latitude !== undefined && form.longitude !== undefined
+                      ? { lat: form.latitude, lng: form.longitude }
+                      : undefined
+                  }
+                  onChange={handleMapLocationChange}
+                />
+              </div>
+            )}
           </section>
           )}
 

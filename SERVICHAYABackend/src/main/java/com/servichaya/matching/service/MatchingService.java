@@ -51,6 +51,7 @@ public class MatchingService {
     private final NotificationService notificationService;
     private final ConfigService configService;
     private final JobStateMachine stateMachine;
+    private final com.servichaya.job.service.JobWorkflowService jobWorkflowService;
 
     @Transactional
     public MatchingResultDto matchJobToProviders(Long jobId) {
@@ -392,6 +393,7 @@ public class MatchingService {
                 });
         Long providerProfileId = providerProfile.getId();
         
+        // CRITICAL FIX: Use pessimistic lock to prevent race condition
         JobProviderMatch match = matchRepository.findById(matchId)
                 .orElseThrow(() -> {
                     log.error("Match not found with id: {}", matchId);
@@ -405,9 +407,25 @@ public class MatchingService {
             throw new RuntimeException("Unauthorized");
         }
 
+        // CRITICAL FIX: Check if match is still in acceptable state (race condition protection)
         if (!"NOTIFIED".equals(match.getStatus()) && !"PENDING".equals(match.getStatus())) {
             log.error("Match {} is not in acceptable state. Current status: {}", matchId, match.getStatus());
             throw new RuntimeException("Match is not available for acceptance");
+        }
+        
+        // CRITICAL FIX: Check if job is already accepted by another provider (race condition protection)
+        JobMaster job = jobRepository.findById(match.getJobId())
+                .orElseThrow(() -> new RuntimeException("Job not found"));
+        
+        if (job.getProviderId() != null && !job.getProviderId().equals(providerProfileId)) {
+            log.error("Job {} already accepted by provider {}. Cannot accept again.", match.getJobId(), job.getProviderId());
+            throw new RuntimeException("Job has already been accepted by another provider");
+        }
+        
+        // FIX BUG #3: Only allow acceptance from MATCHED status (not PENDING_FOR_PAYMENT)
+        if (!"MATCHED".equals(job.getStatus())) {
+            log.error("Job {} is not in acceptable state for acceptance. Current status: {}", match.getJobId(), job.getStatus());
+            throw new RuntimeException("Job must be in MATCHED status for provider acceptance. Current status: " + job.getStatus());
         }
 
         // Check if match has expired (timeout check using business rule)
@@ -432,108 +450,79 @@ public class MatchingService {
         }
         matchRepository.save(match);
 
-        // Update job status - store provider profile ID (not user_id)
-        JobMaster job = jobRepository.findById(match.getJobId())
-                .orElseThrow(() -> new RuntimeException("Job not found"));
-        job.setProviderId(providerProfileId); // Store provider profile ID, not user_id
-        job.setAcceptedAt(LocalDateTime.now());
-
-        // Business Logic: Create payment schedule based on provider preference
-        ProviderPaymentPreference preference = null;
-        String nextStatus = "ACCEPTED"; // Default to ACCEPTED (for POST_WORK payment)
+        // FIX BUG #1: Assign provider to job but keep status as MATCHED with subStatus PROVIDER_ACCEPTED
+        // Customer must confirm before job moves to ACCEPTED or PENDING_FOR_PAYMENT
+        job.setProviderId(providerProfileId);
+        // DO NOT set acceptedAt yet - wait for customer confirmation
+        // DO NOT change status - keep it as MATCHED
+        job.setSubStatus("PROVIDER_ACCEPTED"); // Customer must confirm
         
-        try {
-            preference = paymentService.getProviderPaymentPreference(providerProfileId, job.getServiceCategoryId());
-            
-            if (preference != null && job.getEstimatedBudget() != null) {
-                BigDecimal totalAmount = job.getEstimatedBudget();
-                paymentService.createPaymentSchedule(
-                        job.getId(), 
-                        preference.getPaymentType(),
-                        totalAmount,
-                        preference.getHourlyRate(),
-                        null,
-                        preference.getPartialPaymentPercentage()
-                );
-                log.info("Payment schedule created for job {}", job.getId());
+        // Ensure job is in MATCHED status (should already be, but validate)
+        if (!"MATCHED".equals(job.getStatus())) {
+            log.warn("Job {} is not in MATCHED status (current: {}). Attempting to transition to MATCHED.", 
+                    job.getId(), job.getStatus());
+            try {
+                String oldStatus = job.getStatus();
+                stateMachine.validateTransition(oldStatus, "MATCHED");
+                job.setStatus("MATCHED");
+                jobRepository.save(job);
                 
-                // If payment type is PARTIAL or FULL, move job to PENDING_FOR_PAYMENT
-                if ("PARTIAL".equals(preference.getPaymentType()) || "FULL".equals(preference.getPaymentType())) {
-                    nextStatus = "PENDING_FOR_PAYMENT";
-                    log.info("Job {} requires upfront payment. Moving to PENDING_FOR_PAYMENT status", job.getId());
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(job.getId(), oldStatus, "MATCHED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> MATCHED",
+                            job.getId(), oldStatus, e);
                 }
+            } catch (Exception e) {
+                log.error("Cannot transition job {} from {} to MATCHED: {}", job.getId(), job.getStatus(), e.getMessage());
+                throw new RuntimeException("Job must be in MATCHED status for provider acceptance. Current: " + job.getStatus());
             }
-        } catch (Exception e) {
-            log.warn("Could not create payment schedule: {}", e.getMessage());
+        } else {
+            jobRepository.save(job);
         }
         
-        // Update job status using state machine validation
-        try {
-            stateMachine.validateTransition(job.getStatus(), nextStatus);
-            job.setStatus(nextStatus);
-            jobRepository.save(job);
-            log.info("Job {} status updated to {}", job.getId(), nextStatus);
-        } catch (Exception e) {
-            log.error("Failed to update job status: {}", e.getMessage());
-            throw new RuntimeException("Failed to update job status: " + e.getMessage());
-        }
+        log.info("Provider {} accepted job {}. Job status: MATCHED, subStatus: PROVIDER_ACCEPTED. Waiting for customer confirmation.", 
+                providerProfileId, job.getId());
+
+        // FIX BUG #4: Do NOT create payment schedule here - it will be created when customer confirms
+        // Payment schedule creation moved to ProviderSelectionService.confirmProviderAcceptance()
+        // This prevents duplicate payment schedule creation
 
         // Business Logic: Send notifications
         try {
-            // Build notification message based on payment preference
-            String notificationMessage;
-            String notificationTitle = "Provider Assigned";
-            
-            if (preference != null && preference.getPaymentType().equals("PARTIAL") && 
-                preference.getPartialPaymentPercentage() != null) {
-                notificationMessage = String.format(
-                    "A provider has accepted your job: %s. Please pay ₹%.2f (%.0f%% upfront) to proceed.",
-                    job.getTitle(),
-                    job.getEstimatedBudget() != null ? 
-                        job.getEstimatedBudget().multiply(preference.getPartialPaymentPercentage())
-                            .divide(new BigDecimal(100), 2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO,
-                    preference.getPartialPaymentPercentage()
-                );
-                notificationTitle = "Payment Required - Upfront Payment";
-            } else if (preference != null && preference.getPaymentType().equals("FULL")) {
-                notificationMessage = String.format(
-                    "A provider has accepted your job: %s. Please pay ₹%.2f (full amount) to proceed.",
-                    job.getTitle(),
-                    job.getEstimatedBudget() != null ? job.getEstimatedBudget() : BigDecimal.ZERO
-                );
-                notificationTitle = "Payment Required - Full Payment";
-            } else {
-                notificationMessage = String.format("A provider has accepted your job: %s", job.getTitle());
+            // Get payment preference for notification message (but don't create schedule yet)
+            ProviderPaymentPreference preference = null;
+            try {
+                preference = paymentService.getProviderPaymentPreference(providerProfileId, job.getServiceCategoryId());
+            } catch (Exception e) {
+                log.debug("Could not get payment preference for notification: {}", e.getMessage());
             }
             
-            // Notify customer
-            notificationService.createNotification(
-                    job.getCustomerId(), "CUSTOMER", "JOB_ACCEPTED",
-                    notificationTitle,
-                    notificationMessage,
-                    "JOB", job.getId(),
-                    String.format("/customer/jobs/%d", job.getId()),
-                    Map.of("jobCode", job.getJobCode()));
+            // Notify customer - IMPORTANT: Provider accepted, but customer must confirm
+            String customerNotificationTitle = "Provider Accepted - Please Confirm";
+            String customerNotificationMessage = String.format(
+                "Provider has accepted your job: %s. Please review and confirm to proceed, or choose another provider.",
+                job.getTitle()
+            );
             
-            log.info("Notifications sent for job acceptance");
+            notificationService.createNotification(
+                    job.getCustomerId(), "CUSTOMER", "PROVIDER_ACCEPTED",
+                    customerNotificationTitle,
+                    customerNotificationMessage,
+                    "JOB", job.getId(),
+                    String.format("/customer/jobs/%d/select-provider", job.getId()),
+                    Map.of("jobCode", job.getJobCode(), "providerId", providerProfileId, "requiresConfirmation", true));
+            
+            log.info("Notifications sent - customer must confirm provider acceptance");
         } catch (Exception e) {
             log.warn("Could not send notifications: {}", e.getMessage());
         }
 
-        // Reject other matches for this job
-        List<JobProviderMatch> otherMatches = matchRepository.findByJobIdOrderByMatchScoreDesc(match.getJobId())
-                .stream()
-                .filter(m -> !m.getId().equals(matchId))
-                .filter(m -> "PENDING".equals(m.getStatus()) || "NOTIFIED".equals(m.getStatus()))
-                .collect(Collectors.toList());
-
-        for (JobProviderMatch otherMatch : otherMatches) {
-            otherMatch.setStatus("REJECTED");
-            matchRepository.save(otherMatch);
-        }
-
-        log.info("Job {} accepted by provider {}. Rejected {} other matches", 
-                match.getJobId(), userId, otherMatches.size());
+        // DON'T reject other matches yet - customer might choose a different provider
+        // Only reject when customer confirms this provider
+        log.info("Job {} accepted by provider {}. Waiting for customer confirmation. Other matches remain available.", 
+                match.getJobId(), userId);
     }
 
     /**
@@ -563,6 +552,44 @@ public class MatchingService {
         
         // Use provided rankOrder or set to 1 (highest priority for manual assignment)
         Integer finalRankOrder = rankOrder != null ? rankOrder : 1;
+
+        // Ensure job status is moved from PENDING -> MATCHING -> MATCHED before provider can accept
+        String currentStatus = job.getStatus();
+        String originalStatus = currentStatus;
+        try {
+            if ("PENDING".equals(currentStatus)) {
+                // PENDING -> MATCHING
+                stateMachine.validateTransition(currentStatus, "MATCHING");
+                job.setStatus("MATCHING");
+                currentStatus = "MATCHING";
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, originalStatus, "MATCHING");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> MATCHING",
+                            jobId, originalStatus, e);
+                }
+            }
+            if ("MATCHING".equals(currentStatus)) {
+                // MATCHING -> MATCHED
+                stateMachine.validateTransition(currentStatus, "MATCHED");
+                job.setStatus("MATCHED");
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, currentStatus, "MATCHED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> MATCHED",
+                            jobId, currentStatus, e);
+                }
+            }
+            jobRepository.save(job);
+            log.info("Job {} status after manual assignment is {}", jobId, job.getStatus());
+        } catch (Exception e) {
+            log.error("Failed to update job {} status during manual assignment: {}", jobId, e.getMessage());
+            throw new RuntimeException("Failed to update job status for manual assignment: " + e.getMessage());
+        }
 
         JobProviderMatch match = JobProviderMatch.builder()
                 .jobId(jobId)

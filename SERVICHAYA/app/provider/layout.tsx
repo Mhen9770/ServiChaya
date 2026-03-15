@@ -45,9 +45,11 @@ export default function ProviderLayout({
   const showSidebar = !isOnboarding
 
   return (
-    <div className="h-screen bg-gradient-to-b from-neutral-background to-white overflow-hidden flex flex-col">
-      <Header showUserMenu={true} />
-      <div className="flex-1 flex min-h-0">
+    <div className="h-screen bg-[#010B2A] text-white overflow-hidden flex flex-col">
+      <div className="flex-shrink-0">
+        <Header showUserMenu={true} />
+      </div>
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {showSidebar && <ProviderSidebar />}
         <main className="flex-1 overflow-y-auto min-h-0">
           {children}

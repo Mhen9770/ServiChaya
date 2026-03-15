@@ -11,6 +11,7 @@ import { getCustomerJobs, type JobDto } from '@/lib/services/job'
 import { getCustomerProfile } from '@/lib/services/customer'
 import { getUnreadCount } from '@/lib/services/notification'
 import { PageLoader, ContentLoader, ButtonLoader } from '@/components/ui/Loader'
+import OneSignalRegistration from '@/components/onesignal/OneSignalRegistration'
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -77,6 +78,7 @@ export default function CustomerDashboard() {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <OneSignalRegistration />
       <motion.section 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -92,6 +94,10 @@ export default function CustomerDashboard() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
+            {/* OneSignal custom subscription link - shows only if not subscribed */}
+            <div className="mb-2">
+              <div className="onesignal-customlink-container" />
+            </div>
             <Link href="/customer/notifications" className="relative rounded-xl border border-slate-700 p-2.5 hover:bg-white/10 transition-all">
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (

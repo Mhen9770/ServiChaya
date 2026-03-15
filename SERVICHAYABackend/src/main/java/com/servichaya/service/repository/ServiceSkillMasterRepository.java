@@ -15,4 +15,6 @@ public interface ServiceSkillMasterRepository extends JpaRepository<ServiceSkill
 
     @Query("SELECT s FROM ServiceSkillMaster s WHERE s.isActive = true ORDER BY s.name ASC")
     List<ServiceSkillMaster> findAllActive();
+
+    List<ServiceSkillMaster> findByIdInAndIsActiveTrue(List<Long> ids);
 }

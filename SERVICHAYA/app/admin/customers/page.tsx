@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getCustomers, type CustomerDto } from '@/lib/services/admin'
 import { toast } from 'react-hot-toast'
 import { PageLoader } from '@/components/ui/Loader'
 import Loader from '@/components/ui/Loader'
@@ -12,19 +13,6 @@ import DataTable, { Column } from '@/components/ui/DataTable'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { Eye, Phone, Mail, MapPin, Calendar, UserCheck, UserX } from 'lucide-react'
 import { motion } from 'framer-motion'
-
-interface CustomerDto {
-  id: number
-  userId: number
-  customerCode: string
-  name: string
-  email?: string
-  mobileNumber?: string
-  totalJobsCreated?: number
-  totalJobsCompleted?: number
-  createdAt: string
-  isActive: boolean
-}
 
 function AdminCustomersPageContent() {
   const searchParams = useSearchParams()
@@ -48,12 +36,10 @@ function AdminCustomersPageContent() {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true)
-      // TODO: Replace with actual API call when backend is ready
-      // const result = await getCustomers(filters.status, currentPage, pageSize, sortKey, sortDirection)
-      // For now, show empty state
-      setCustomers([])
-      setTotalPages(0)
-      setTotalElements(0)
+      const result = await getCustomers(filters.status, currentPage, pageSize, sortKey, sortDirection)
+      setCustomers(result.content || [])
+      setTotalPages(result.totalPages || 0)
+      setTotalElements(result.totalElements || 0)
     } catch (error: any) {
       console.error('Failed to fetch customers:', error)
       const errorMsg = error.response?.data?.message || 'Failed to load customers'

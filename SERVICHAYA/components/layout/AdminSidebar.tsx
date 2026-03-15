@@ -4,7 +4,7 @@ import Sidebar from './Sidebar'
 import { 
   LayoutDashboard, ClipboardList, Users, User, Settings, 
   MapPin, Building2, Layers, List, Sliders, Globe, Wrench, Shield, Package,
-  DollarSign, UserPlus, MessageCircle
+  DollarSign, UserPlus, MessageCircle, Workflow
 } from 'lucide-react'
 
 export default function AdminSidebar() {
@@ -25,11 +25,20 @@ export default function AdminSidebar() {
         { label: 'Zones', href: '/admin/master-data/zones', icon: Building2 },
         { label: 'PODs', href: '/admin/master-data/pods', icon: Layers },
         { label: 'Service Categories', href: '/admin/master-data/service-categories', icon: List },
-        { label: 'Service SubCategories', href: '/admin/master-data/service-subcategories', icon: List },
         { label: 'Service Skills', href: '/admin/master-data/service-skills', icon: Wrench },
+        { label: 'Category-Skill Mappings', href: '/admin/master-data/category-skill-mappings', icon: UserPlus },
         { label: 'Matching Rules', href: '/admin/master-data/matching-rules', icon: Sliders },
         { label: 'User Roles', href: '/admin/master-data/user-roles', icon: Shield },
       ]
+    },
+    {
+      label: 'Workflows',
+      href: '#',
+      icon: Workflow,
+      children: [
+        { label: 'Templates', href: '/admin/workflows', icon: List },
+        { label: 'Assignments', href: '/admin/workflows/assignments', icon: Sliders },
+      ],
     },
     {
       label: 'Earning Config',

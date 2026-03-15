@@ -19,7 +19,7 @@ public class SimpleCorsFilter implements Filter {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
         
         // Add CORS headers to allow requests from frontend
-        httpResponse.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+        httpResponse.setHeader("Access-Control-Allow-Origin", ((HttpServletRequest) request).getHeader("Origin"));
         httpResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
         httpResponse.setHeader("Access-Control-Allow-Headers", "*");
         httpResponse.setHeader("Access-Control-Allow-Credentials", "true");

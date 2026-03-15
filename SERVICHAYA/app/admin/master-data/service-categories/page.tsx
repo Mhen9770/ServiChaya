@@ -25,6 +25,7 @@ export default function AdminServiceCategoriesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<ServiceCategoryMasterDto | null>(null)
   const [parentCategories, setParentCategories] = useState<ServiceCategoryMasterDto[]>([])
+  const [viewParentId, setViewParentId] = useState<number | null>(null)
   const [formData, setFormData] = useState<ServiceCategoryMasterDto>({
     code: '',
     name: '',
@@ -38,7 +39,7 @@ export default function AdminServiceCategoriesPage() {
   useEffect(() => {
     fetchCategories()
     fetchParentCategories()
-  }, [currentPage, pageSize, sortKey, sortDirection])
+  }, [currentPage, pageSize, sortKey, sortDirection, viewParentId])
 
   const fetchParentCategories = async () => {
     try {
@@ -53,7 +54,13 @@ export default function AdminServiceCategoriesPage() {
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true)
-      const result = await getAllServiceCategories(currentPage, pageSize, sortKey, sortDirection)
+      const result = await getAllServiceCategories(
+        currentPage,
+        pageSize,
+        sortKey,
+        sortDirection,
+        viewParentId === null ? undefined : viewParentId
+      )
       setCategories(result.content || [])
       setTotalPages(result.totalPages || 0)
       setTotalElements(result.totalElements || 0)
@@ -65,7 +72,18 @@ export default function AdminServiceCategoriesPage() {
     } finally {
       setLoading(false)
     }
-  }, [currentPage, pageSize, sortKey, sortDirection])
+  }, [currentPage, pageSize, sortKey, sortDirection, viewParentId])
+
+  const handleViewSubCategories = (category: ServiceCategoryMasterDto) => {
+    if (!category.id) return
+    setViewParentId(category.id)
+    setCurrentPage(0)
+  }
+
+  const handleResetView = () => {
+    setViewParentId(null)
+    setCurrentPage(0)
+  }
 
   const handleSort = (key: string, direction: 'asc' | 'desc') => {
     setSortKey(key)
@@ -217,6 +235,13 @@ export default function AdminServiceCategoriesPage() {
       render: (category) => (
         <div className="flex items-center gap-2">
           <button
+            onClick={() => handleViewSubCategories(category)}
+            className="px-2 py-1 text-xs border border-neutral-border rounded-lg hover:bg-neutral-backgroundSubtle transition-all"
+            title="View sub-categories"
+          >
+            View Sub-Categories
+          </button>
+          <button
             onClick={() => handleEdit(category)}
             className="p-1.5 text-primary-main hover:bg-primary-main/10 rounded-lg transition-all"
             title="Edit"
@@ -246,17 +271,31 @@ export default function AdminServiceCategoriesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-neutral-textPrimary font-display">Manage Service Categories</h1>
-            <p className="text-sm text-neutral-textSecondary mt-1">Create and manage service category master data</p>
+            <p className="text-sm text-neutral-textSecondary mt-1">
+              {viewParentId
+                ? 'Viewing sub-categories. Click Back to return to parent level.'
+                : 'Create and manage hierarchical service categories (root & sub-categories).'}
+            </p>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Category
-          </motion.button>
+          <div className="flex items-center gap-2">
+            {viewParentId && (
+              <button
+                onClick={handleResetView}
+                className="px-4 py-2 text-sm font-semibold rounded-xl border border-neutral-border bg-neutral-background hover:bg-neutral-backgroundSubtle transition-colors"
+              >
+                Back to parent
+              </button>
+            )}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCreate}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-main to-primary-dark text-white rounded-xl text-sm font-semibold hover:shadow-md transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Category
+            </motion.button>
+          </div>
         </div>
       </motion.div>
 

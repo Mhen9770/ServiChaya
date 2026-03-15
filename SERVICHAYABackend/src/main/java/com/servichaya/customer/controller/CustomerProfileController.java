@@ -1,6 +1,8 @@
 package com.servichaya.customer.controller;
 
 import com.servichaya.common.response.ApiResponse;
+import com.servichaya.customer.dto.AddressDto;
+import com.servichaya.customer.dto.CreateAddressRequestDto;
 import com.servichaya.customer.dto.CustomerProfileDto;
 import com.servichaya.customer.dto.UpdateCustomerProfileRequestDto;
 import com.servichaya.customer.service.CustomerProfileService;
@@ -44,5 +46,14 @@ public class CustomerProfileController {
         log.info("Request to fetch job history for customerId: {}", customerId);
         Page<JobDto> jobs = profileService.getCustomerJobHistory(customerId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Job history fetched", jobs));
+    }
+
+    @PostMapping("/address")
+    public ResponseEntity<ApiResponse<AddressDto>> createAddress(
+            @RequestParam Long customerId,
+            @RequestBody CreateAddressRequestDto request) {
+        log.info("Request to create address for customerId: {}", customerId);
+        AddressDto address = profileService.createAddress(customerId, request);
+        return ResponseEntity.ok(ApiResponse.success("Address created successfully", address));
     }
 }

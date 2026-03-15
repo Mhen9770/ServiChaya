@@ -15,21 +15,22 @@ import com.servichaya.matching.entity.MatchingRuleMaster;
 import com.servichaya.matching.repository.MatchingRuleMasterRepository;
 import com.servichaya.service.entity.ServiceCategoryMaster;
 import com.servichaya.service.entity.ServiceSkillMaster;
-import com.servichaya.service.entity.ServiceSubCategoryMaster;
+import com.servichaya.service.entity.ServiceCategorySkillMap;
 import com.servichaya.service.repository.ServiceCategoryMasterRepository;
 import com.servichaya.service.repository.ServiceSkillMasterRepository;
-import com.servichaya.service.repository.ServiceSubCategoryMasterRepository;
+import com.servichaya.service.repository.ServiceCategorySkillMapRepository;
 import com.servichaya.user.entity.UserRoleMaster;
 import com.servichaya.user.repository.UserRoleMasterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,8 +44,8 @@ public class MasterDataService {
     private final StateMasterRepository stateRepository;
     private final CountryMasterRepository countryRepository;
     private final ServiceCategoryMasterRepository categoryRepository;
-    private final ServiceSubCategoryMasterRepository subCategoryRepository;
     private final ServiceSkillMasterRepository skillRepository;
+    private final ServiceCategorySkillMapRepository categorySkillMapRepository;
     private final MatchingRuleMasterRepository ruleRepository;
     private final UserRoleMasterRepository roleMasterRepository;
 
@@ -380,7 +381,16 @@ public class MasterDataService {
 
     // ========== Service Category Master ==========
     public Page<ServiceCategoryMasterDto> getAllServiceCategories(Pageable pageable) {
-        log.info("Fetching all service categories, page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
+        // Backwards-compatible wrapper for callers that don't filter by parent
+        return getAllServiceCategories(pageable, null);
+    }
+
+    public Page<ServiceCategoryMasterDto> getAllServiceCategories(Pageable pageable, Long parentId) {
+        log.info("Fetching service categories, page: {}, size: {}, parentId: {}",
+                pageable.getPageNumber(), pageable.getPageSize(), parentId);
+        if (parentId != null) {
+            return categoryRepository.findByParentId(parentId, pageable).map(this::mapCategoryToDto);
+        }
         return categoryRepository.findAll(pageable).map(this::mapCategoryToDto);
     }
 
@@ -392,6 +402,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = {"categories", "subcategories"}, allEntries = true)
     public ServiceCategoryMasterDto createServiceCategory(ServiceCategoryMasterDto dto) {
         log.info("Creating service category: {}", dto.getName());
         
@@ -429,6 +440,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = {"categories", "subcategories"}, allEntries = true)
     public ServiceCategoryMasterDto updateServiceCategory(Long id, ServiceCategoryMasterDto dto) {
         log.info("Updating service category id: {}", id);
         ServiceCategoryMaster category = categoryRepository.findById(id)
@@ -507,6 +519,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = {"categories", "subcategories"}, allEntries = true)
     public void deleteServiceCategory(Long id) {
         log.info("Deleting service category id: {}", id);
         ServiceCategoryMaster category = categoryRepository.findById(id)
@@ -533,104 +546,6 @@ public class MasterDataService {
                 .path(category.getPath())
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
-                .build();
-    }
-
-    // ========== Service SubCategory Master ==========
-    public Page<ServiceSubCategoryMasterDto> getAllServiceSubCategories(Pageable pageable) {
-        log.info("Fetching all service subcategories, page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
-        return subCategoryRepository.findAll(pageable).map(this::mapSubCategoryToDto);
-    }
-
-    public ServiceSubCategoryMasterDto getServiceSubCategoryById(Long id) {
-        log.info("Fetching service subcategory by id: {}", id);
-        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
-        return mapSubCategoryToDto(subCategory);
-    }
-
-    @Transactional
-    public ServiceSubCategoryMasterDto createServiceSubCategory(ServiceSubCategoryMasterDto dto) {
-        log.info("Creating service subcategory: {}", dto.getName());
-        
-        // Validate category exists
-        ServiceCategoryMaster category = categoryRepository.findById(dto.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Service category not found"));
-        
-        ServiceSubCategoryMaster subCategory = ServiceSubCategoryMaster.builder()
-                .categoryId(dto.getCategoryId())
-                .iconUrl(dto.getIconUrl())
-                .displayOrder(dto.getDisplayOrder())
-                .isFeatured(dto.getIsFeatured() != null ? dto.getIsFeatured() : false)
-                .build();
-        
-        // Set inherited fields from MasterEntity
-        subCategory.setCode(dto.getCode());
-        subCategory.setName(dto.getName());
-        subCategory.setDescription(dto.getDescription());
-        subCategory.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
-
-        subCategory = subCategoryRepository.save(subCategory);
-        log.info("Service subcategory created successfully with id: {}", subCategory.getId());
-        return mapSubCategoryToDto(subCategory);
-    }
-
-    @Transactional
-    public ServiceSubCategoryMasterDto updateServiceSubCategory(Long id, ServiceSubCategoryMasterDto dto) {
-        log.info("Updating service subcategory id: {}", id);
-        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
-
-        if (dto.getCategoryId() != null && !dto.getCategoryId().equals(subCategory.getCategoryId())) {
-            // Validate new category exists
-            categoryRepository.findById(dto.getCategoryId())
-                    .orElseThrow(() -> new RuntimeException("Service category not found"));
-            subCategory.setCategoryId(dto.getCategoryId());
-        }
-        if (dto.getName() != null) subCategory.setName(dto.getName());
-        if (dto.getDescription() != null) subCategory.setDescription(dto.getDescription());
-        if (dto.getIconUrl() != null) subCategory.setIconUrl(dto.getIconUrl());
-        if (dto.getDisplayOrder() != null) subCategory.setDisplayOrder(dto.getDisplayOrder());
-        if (dto.getIsFeatured() != null) subCategory.setIsFeatured(dto.getIsFeatured());
-        if (dto.getIsActive() != null) subCategory.setIsActive(dto.getIsActive());
-
-        subCategory = subCategoryRepository.save(subCategory);
-        log.info("Service subcategory updated successfully");
-        return mapSubCategoryToDto(subCategory);
-    }
-
-    @Transactional
-    public void deleteServiceSubCategory(Long id) {
-        log.info("Deleting service subcategory id: {}", id);
-        ServiceSubCategoryMaster subCategory = subCategoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Service subcategory not found"));
-        subCategory.setIsActive(false);
-        subCategoryRepository.save(subCategory);
-        log.info("Service subcategory deactivated successfully");
-    }
-
-    private ServiceSubCategoryMasterDto mapSubCategoryToDto(ServiceSubCategoryMaster subCategory) {
-        AtomicReference<String> categoryName = new AtomicReference<>();
-        if (subCategory.getCategory() != null) {
-            categoryName.set(subCategory.getCategory().getName());
-        } else if (subCategory.getCategoryId() != null) {
-            categoryRepository.findById(subCategory.getCategoryId())
-                    .ifPresent(cat -> categoryName.set(cat.getName()));
-        }
-        
-        return ServiceSubCategoryMasterDto.builder()
-                .id(subCategory.getId())
-                .code(subCategory.getCode())
-                .name(subCategory.getName())
-                .description(subCategory.getDescription())
-                .categoryId(subCategory.getCategoryId())
-                .categoryName(categoryName.get())
-                .iconUrl(subCategory.getIconUrl())
-                .displayOrder(subCategory.getDisplayOrder())
-                .isFeatured(subCategory.getIsFeatured())
-                .isActive(subCategory.getIsActive())
-                .createdAt(subCategory.getCreatedAt())
-                .updatedAt(subCategory.getUpdatedAt())
                 .build();
     }
 
@@ -709,9 +624,34 @@ public class MasterDataService {
     }
 
     // ========== Service Skill Master ==========
-    public Page<ServiceSkillMasterDto> getAllServiceSkills(Pageable pageable) {
-        log.info("Fetching all service skills, page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
-        return skillRepository.findAll(pageable).map(this::mapSkillToDto);
+    @Cacheable(value = "skills", key = "'all:' + (#serviceCategoryId != null ? #serviceCategoryId : 'all') + ':' + #pageable.pageNumber + ':' + #pageable.pageSize")
+    public Page<ServiceSkillMasterDto> getAllServiceSkills(Pageable pageable, Long serviceCategoryId) {
+        log.info("Fetching all service skills, page: {}, size: {}, serviceCategoryId: {}",
+                pageable.getPageNumber(), pageable.getPageSize(), serviceCategoryId);
+
+        if (serviceCategoryId == null) {
+            return skillRepository.findAll(pageable).map(this::mapSkillToDto);
+        }
+
+        // Resolve mapped skills for the given category (or sub-category)
+        List<ServiceCategorySkillMap> mappings =
+                categorySkillMapRepository.findByServiceCategoryIdAndIsActiveTrue(serviceCategoryId);
+
+        if (mappings.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<Long> skillIds = mappings.stream()
+                .map(ServiceCategorySkillMap::getServiceSkillId)
+                .distinct()
+                .toList();
+
+        List<ServiceSkillMaster> skills = skillRepository.findByIdInAndIsActiveTrue(skillIds);
+        List<ServiceSkillMasterDto> dtos = skills.stream()
+                .map(this::mapSkillToDto)
+                .toList();
+
+        return new org.springframework.data.domain.PageImpl<>(dtos, pageable, dtos.size());
     }
 
     public ServiceSkillMasterDto getServiceSkillById(Long id) {
@@ -722,6 +662,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
     public ServiceSkillMasterDto createServiceSkill(ServiceSkillMasterDto dto) {
         log.info("Creating service skill: {}", dto.getName());
         ServiceSkillMaster skill = new ServiceSkillMaster();
@@ -736,6 +677,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
     public ServiceSkillMasterDto updateServiceSkill(Long id, ServiceSkillMasterDto dto) {
         log.info("Updating service skill id: {}", id);
         ServiceSkillMaster skill = skillRepository.findById(id)
@@ -751,6 +693,7 @@ public class MasterDataService {
     }
 
     @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
     public void deleteServiceSkill(Long id) {
         log.info("Deleting service skill id: {}", id);
         ServiceSkillMaster skill = skillRepository.findById(id)
@@ -769,6 +712,101 @@ public class MasterDataService {
                 .isActive(skill.getIsActive())
                 .createdAt(skill.getCreatedAt())
                 .updatedAt(skill.getUpdatedAt())
+                .build();
+    }
+
+    // ========== Service Category - Skill Mapping ==========
+    @Transactional(readOnly = true)
+    public List<ServiceCategorySkillMapDto> getCategorySkillMappings(Long categoryId) {
+        log.info("Fetching category-skill mappings for categoryId: {}", categoryId);
+        // Use fetch-join query to eagerly load category and skill to avoid LazyInitializationException
+        List<ServiceCategorySkillMap> mappings =
+                categorySkillMapRepository.findActiveByCategoryIdWithDetails(categoryId);
+        return mappings.stream()
+                .map(this::mapCategorySkillMapToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
+    public ServiceCategorySkillMapDto createCategorySkillMapping(Long categoryId, Long skillId) {
+        log.info("Creating category-skill mapping: categoryId={}, skillId={}", categoryId, skillId);
+        
+        // Check if mapping already exists
+        boolean exists = categorySkillMapRepository.findByServiceCategoryIdAndIsActiveTrue(categoryId).stream()
+                .anyMatch(m -> m.getServiceSkillId().equals(skillId));
+        
+        if (exists) {
+            throw new RuntimeException("Mapping already exists for this category and skill");
+        }
+
+        ServiceCategorySkillMap mapping = ServiceCategorySkillMap.builder()
+                .serviceCategoryId(categoryId)
+                .serviceSkillId(skillId)
+                .isActive(true)
+                .build();
+        
+        mapping = categorySkillMapRepository.save(mapping);
+        log.info("Category-skill mapping created successfully with id: {}", mapping.getId());
+        return mapCategorySkillMapToDto(mapping);
+    }
+
+    @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
+    public void deleteCategorySkillMapping(Long mappingId) {
+        log.info("Deleting category-skill mapping id: {}", mappingId);
+        ServiceCategorySkillMap mapping = categorySkillMapRepository.findById(mappingId)
+                .orElseThrow(() -> new RuntimeException("Category-skill mapping not found"));
+        mapping.setIsActive(false);
+        categorySkillMapRepository.save(mapping);
+        log.info("Category-skill mapping deactivated successfully");
+    }
+
+    @Transactional
+    @CacheEvict(value = "skills", allEntries = true)
+    public void bulkUpdateCategorySkillMappings(Long categoryId, List<Long> skillIds) {
+        log.info("Bulk updating category-skill mappings for categoryId: {}, skillIds: {}", categoryId, skillIds);
+        
+        // Get existing mappings
+        List<ServiceCategorySkillMap> existingMappings = categorySkillMapRepository.findByServiceCategoryIdAndIsActiveTrue(categoryId);
+        List<Long> existingSkillIds = existingMappings.stream()
+                .map(ServiceCategorySkillMap::getServiceSkillId)
+                .collect(Collectors.toList());
+
+        // Deactivate mappings that are not in the new list
+        for (ServiceCategorySkillMap mapping : existingMappings) {
+            if (!skillIds.contains(mapping.getServiceSkillId())) {
+                mapping.setIsActive(false);
+                categorySkillMapRepository.save(mapping);
+            }
+        }
+
+        // Create new mappings for skills not already mapped
+        for (Long skillId : skillIds) {
+            if (!existingSkillIds.contains(skillId)) {
+                ServiceCategorySkillMap mapping = ServiceCategorySkillMap.builder()
+                        .serviceCategoryId(categoryId)
+                        .serviceSkillId(skillId)
+                        .isActive(true)
+                        .build();
+                categorySkillMapRepository.save(mapping);
+            }
+        }
+
+        log.info("Bulk update completed for categoryId: {}", categoryId);
+    }
+
+    private ServiceCategorySkillMapDto mapCategorySkillMapToDto(ServiceCategorySkillMap mapping) {
+        ServiceCategoryMaster category = mapping.getCategory();
+        ServiceSkillMaster skill = mapping.getSkill();
+        
+        return ServiceCategorySkillMapDto.builder()
+                .id(mapping.getId())
+                .serviceCategoryId(mapping.getServiceCategoryId())
+                .serviceCategoryName(category != null ? category.getName() : null)
+                .serviceSkillId(mapping.getServiceSkillId())
+                .serviceSkillName(skill != null ? skill.getName() : null)
+                .isActive(mapping.getIsActive())
                 .build();
     }
 

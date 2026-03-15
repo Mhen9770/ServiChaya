@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final OneSignalService oneSignalService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
@@ -56,6 +57,14 @@ public class NotificationService {
 
         notification = notificationRepository.save(notification);
         log.info("Notification created with id: {}", notification.getId());
+
+        // Send browser push notification via OneSignal
+        try {
+            oneSignalService.sendNotificationToUser(userId, title, message, actionUrl);
+        } catch (Exception e) {
+            log.error("Failed to send OneSignal notification for userId: {}", userId, e);
+            // Don't fail the notification creation if push fails
+        }
 
         return mapToDto(notification);
     }

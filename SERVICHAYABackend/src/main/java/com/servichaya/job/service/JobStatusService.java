@@ -11,8 +11,8 @@ import com.servichaya.provider.entity.ServiceProviderProfile;
 import com.servichaya.provider.repository.ServiceProviderProfileRepository;
 import com.servichaya.common.service.ConfigService;
 import com.servichaya.config.service.BusinessRuleService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +20,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class JobStatusService {
 
@@ -37,6 +37,30 @@ public class JobStatusService {
     private final ConfigService configService;
     private final BusinessRuleService businessRuleService;
     private final JobStateMachine stateMachine;
+    private final JobWorkflowService jobWorkflowService;
+
+    public JobStatusService(
+            JobMasterRepository jobRepository,
+            @Lazy MatchingService matchingService,
+            PaymentService paymentService,
+            NotificationService notificationService,
+            ActivityLogService activityLogService,
+            ServiceProviderProfileRepository providerRepository,
+            ConfigService configService,
+            BusinessRuleService businessRuleService,
+            JobStateMachine stateMachine,
+            JobWorkflowService jobWorkflowService) {
+        this.jobRepository = jobRepository;
+        this.matchingService = matchingService;
+        this.paymentService = paymentService;
+        this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
+        this.providerRepository = providerRepository;
+        this.configService = configService;
+        this.businessRuleService = businessRuleService;
+        this.stateMachine = stateMachine;
+        this.jobWorkflowService = jobWorkflowService;
+    }
 
     @Transactional
     public void startJob(Long jobId, Long userId) {
@@ -66,9 +90,42 @@ public class JobStatusService {
         // Validate state transition using state machine
         stateMachine.validateTransition(job.getStatus(), "IN_PROGRESS");
 
+        // Business Logic: Job should stay in ACCEPTED until payment is done (if required)
+        if ("ACCEPTED".equals(job.getStatus())) {
+            try {
+                var paymentSchedule = paymentService.getPaymentScheduleOptional(jobId);
+                if (paymentSchedule.isPresent()) {
+                    var schedule = paymentSchedule.get();
+                    // If payment type is PARTIAL or FULL, upfront payment must be done
+                    if ("PARTIAL".equals(schedule.getPaymentType()) || "FULL".equals(schedule.getPaymentType())) {
+                        if (schedule.getUpfrontPaid() == null || !schedule.getUpfrontPaid()) {
+                            log.error("Job {} cannot be started. Upfront payment is required but not completed.", jobId);
+                            throw new RuntimeException("Cannot start job. Upfront payment is required but not completed. Please complete payment first.");
+                        }
+                    }
+                    // POST_WORK payment type doesn't require upfront payment, so allow transition
+                }
+            } catch (RuntimeException e) {
+                // Re-throw if it's our payment check exception
+                throw e;
+            } catch (Exception e) {
+                log.warn("Could not check payment status for job {}: {}", jobId, e.getMessage());
+                // If payment schedule doesn't exist or check fails, allow transition (for backward compatibility)
+            }
+        }
+
+        String oldStatus = job.getStatus();
         job.setStatus("IN_PROGRESS");
         job.setStartedAt(LocalDateTime.now());
         jobRepository.save(job);
+
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, oldStatus, "IN_PROGRESS");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> IN_PROGRESS",
+                    jobId, oldStatus, e);
+        }
 
         // Business Logic: Log activity
         activityLogService.logProviderActivity(userId, "JOB_STARTED", 
@@ -130,8 +187,25 @@ public class JobStatusService {
             throw new RuntimeException("Unauthorized");
         }
 
+        // CRITICAL FIX: Validate final price
+        if (finalPrice == null || finalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Final price must be greater than zero");
+        }
+        
+        // Validate final price is reasonable (not more than 10x estimated budget)
+        if (job.getEstimatedBudget() != null && job.getEstimatedBudget().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal maxAllowedPrice = job.getEstimatedBudget().multiply(new BigDecimal("10"));
+            if (finalPrice.compareTo(maxAllowedPrice) > 0) {
+                log.warn("Final price {} exceeds 10x estimated budget {} for job {}", finalPrice, job.getEstimatedBudget(), jobId);
+                throw new RuntimeException(String.format(
+                    "Final price (₹%s) exceeds maximum allowed (10x estimated budget: ₹%s). Please contact support if this is correct.",
+                    finalPrice, maxAllowedPrice));
+            }
+        }
+
         // Validate state transition using state machine
-        stateMachine.validateTransition(job.getStatus(), "PAYMENT_PENDING");
+        String oldStatus = job.getStatus();
+        stateMachine.validateTransition(oldStatus, "PAYMENT_PENDING");
 
         // Set job to PAYMENT_PENDING instead of COMPLETED
         job.setStatus("PAYMENT_PENDING");
@@ -178,6 +252,14 @@ public class JobStatusService {
             log.warn("Could not create/update payment schedule: {}", e.getMessage());
         }
 
+        // Sync workflow with status change to PAYMENT_PENDING
+        try {
+            jobWorkflowService.onStatusChanged(jobId, oldStatus, "PAYMENT_PENDING");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> PAYMENT_PENDING",
+                    jobId, oldStatus, e);
+        }
+
         // Business Logic: Handle payment based on channel
         try {
             if ("CASH".equals(paymentChannel)) {
@@ -186,8 +268,17 @@ public class JobStatusService {
                 log.info("Cash payment processed for job {}", jobId);
                 
                 // Update job status to COMPLETED after cash payment
+                String paymentPendingStatus = job.getStatus();
                 job.setStatus("COMPLETED");
                 jobRepository.save(job);
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, paymentPendingStatus, "COMPLETED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> COMPLETED",
+                            jobId, paymentPendingStatus, e);
+                }
                 
                 // Calculate earnings for cash payment
                 try {
@@ -284,9 +375,7 @@ public class JobStatusService {
         }
 
         String previousStatus = job.getStatus();
-        job.setStatus("CANCELLED");
-        jobRepository.save(job);
-
+        
         // Business Logic: Calculate cancellation fee and refund based on business rules
         BigDecimal cancellationFee = BigDecimal.ZERO;
         BigDecimal refundAmount = BigDecimal.ZERO;
@@ -295,7 +384,7 @@ public class JobStatusService {
         
         try {
             if (isProvider) {
-                // Provider cancellation - penalty on provider
+                // Provider cancellation - penalty on provider (always cancel immediately, no fee from customer)
                 if ("ACCEPTED".equals(previousStatus) || "IN_PROGRESS".equals(previousStatus)) {
                     BigDecimal penaltyPercent = businessRuleService.getRuleValueAsBigDecimal(
                         "PROVIDER_CANCELLATION_PENALTY", new BigDecimal("5.00"));
@@ -303,89 +392,390 @@ public class JobStatusService {
                     // Customer gets 100% refund
                     refundAmount = jobAmount;
                     log.info("Provider cancellation penalty: {}% (applied to provider earnings)", penaltyPercent);
+                } else {
+                    refundAmount = jobAmount;
+                }
+                // Provider cancellation - cancel immediately (no payment pending)
+                job.setStatus("CANCELLED");
+                job.setCancellationFee(BigDecimal.ZERO);
+                job.setCancellationRefundAmount(refundAmount);
+                job.setCancellationReason(cancelReason);
+                jobRepository.save(job);
+                
+                // Sync workflow with status change
+                try {
+                    jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                } catch (Exception e) {
+                    log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                            jobId, previousStatus, e);
                 }
             } else {
                 // Customer cancellation - fee based on job status
                 if ("PENDING".equals(previousStatus) || "MATCHED".equals(previousStatus)) {
-                    // Before provider accepts - no fee, 100% refund
+                    // Before provider accepts - no fee, 100% refund, cancel immediately
                     refundAmount = jobAmount;
                     cancellationFee = BigDecimal.ZERO;
-                } else if ("ACCEPTED".equals(previousStatus)) {
-                    // After provider accepts but before start - 10% fee (min ₹50)
-                    BigDecimal feePercent = businessRuleService.getRuleValueAsBigDecimal(
-                        "CANCELLATION_FEE_BEFORE_START", new BigDecimal("10.00"));
-                    cancellationFee = jobAmount.multiply(feePercent)
-                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-                    BigDecimal minFee = new BigDecimal("50.00");
-                    if (cancellationFee.compareTo(minFee) < 0) {
-                        cancellationFee = minFee;
+                    job.setStatus("CANCELLED");
+                    job.setCancellationFee(BigDecimal.ZERO);
+                    job.setCancellationRefundAmount(refundAmount);
+                    job.setCancellationReason(cancelReason);
+                    jobRepository.save(job);
+                    
+                    // Sync workflow with status change
+                    try {
+                        jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                    } catch (Exception e) {
+                        log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                                jobId, previousStatus, e);
                     }
-                    refundAmount = jobAmount.subtract(cancellationFee);
-                    log.info("Customer cancellation fee (before start): {}% = ₹{}", feePercent, cancellationFee);
-                } else if ("IN_PROGRESS".equals(previousStatus)) {
-                    // After provider started - 20% fee (min ₹100)
+                } else if ("ACCEPTED".equals(previousStatus) || "IN_PROGRESS".equals(previousStatus)) {
+                    // After provider accepts - use CANCELLATION_FEE_BEFORE_START
                     BigDecimal feePercent = businessRuleService.getRuleValueAsBigDecimal(
-                        "CANCELLATION_FEE_AFTER_START", new BigDecimal("20.00"));
-                    cancellationFee = jobAmount.multiply(feePercent)
-                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-                    BigDecimal minFee = new BigDecimal("100.00");
-                    if (cancellationFee.compareTo(minFee) < 0) {
-                        cancellationFee = minFee;
+                        "CANCELLATION_FEE_BEFORE_START", BigDecimal.ZERO);
+                    
+                    if (feePercent.compareTo(BigDecimal.ZERO) > 0) {
+                        // Calculate fee as percentage of job amount
+                        cancellationFee = jobAmount.multiply(feePercent)
+                            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                        
+                        // Check if partial payment was made
+                        BigDecimal paidAmount = BigDecimal.ZERO;
+                        try {
+                            var paymentSchedule = paymentService.getPaymentScheduleOptional(jobId);
+                            if (paymentSchedule.isPresent()) {
+                                var schedule = paymentSchedule.get();
+                                if (schedule.getUpfrontPaid() != null && schedule.getUpfrontPaid() && 
+                                    schedule.getUpfrontAmount() != null) {
+                                    paidAmount = schedule.getUpfrontAmount();
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("Could not check payment status for job {}: {}", jobId, e.getMessage());
+                        }
+                        
+                        // Calculate refund: if partial payment made, refund based on configuration
+                        if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+                            // Partial payment made - refund logic
+                            // Refund = paidAmount - cancellationFee (if fee < paidAmount), else 0
+                            if (cancellationFee.compareTo(paidAmount) <= 0) {
+                                refundAmount = paidAmount.subtract(cancellationFee);
+                            } else {
+                                // Fee exceeds paid amount, no refund
+                                refundAmount = BigDecimal.ZERO;
+                            }
+                        } else {
+                            // No payment made - refund = jobAmount - cancellationFee
+                            refundAmount = jobAmount.subtract(cancellationFee);
+                        }
+                        
+                        // Set status to CANCELLATION_PAYMENT_PENDING - wait for payment
+                        stateMachine.validateTransition(previousStatus, "CANCELLATION_PAYMENT_PENDING");
+                        job.setStatus("CANCELLATION_PAYMENT_PENDING");
+                        job.setCancellationFee(cancellationFee);
+                        job.setCancellationRefundAmount(refundAmount);
+                        job.setCancellationReason(cancelReason);
+                        jobRepository.save(job);
+                        
+                        // Sync workflow with status change
+                        try {
+                            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLATION_PAYMENT_PENDING");
+                        } catch (Exception e) {
+                            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLATION_PAYMENT_PENDING",
+                                    jobId, previousStatus, e);
+                        }
+                        
+                        log.info("Job {} set to CANCELLATION_PAYMENT_PENDING. Fee: ₹{}, Refund: ₹{}", 
+                                jobId, cancellationFee, refundAmount);
+                        
+                        // Create payment schedule for cancellation fee
+                        try {
+                            paymentService.createCancellationFeePaymentSchedule(jobId, cancellationFee);
+                        } catch (Exception e) {
+                            log.error("Failed to create cancellation fee payment schedule: {}", e.getMessage());
+                        }
+                    } else {
+                        // No fee - cancel immediately
+                        refundAmount = jobAmount;
+                        job.setStatus("CANCELLED");
+                        job.setCancellationFee(BigDecimal.ZERO);
+                        job.setCancellationRefundAmount(refundAmount);
+                        job.setCancellationReason(cancelReason);
+                        jobRepository.save(job);
+                        
+                        // Sync workflow with status change
+                        try {
+                            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+                        } catch (Exception e) {
+                            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                                    jobId, previousStatus, e);
+                        }
+                        
+                        log.info("No cancellation fee (CANCELLATION_FEE_BEFORE_START is 0). Job cancelled immediately.");
                     }
-                    refundAmount = jobAmount.subtract(cancellationFee);
-                    log.info("Customer cancellation fee (after start): {}% = ₹{}", feePercent, cancellationFee);
                 }
             }
             
-            // TODO: Process actual refund transaction
             log.info("Cancellation calculated - Fee: ₹{}, Refund: ₹{}", cancellationFee, refundAmount);
         } catch (Exception e) {
             log.warn("Cancellation fee calculation failed: {}", e.getMessage());
             // Fallback: Full refund if calculation fails
             refundAmount = jobAmount;
+            cancellationFee = BigDecimal.ZERO;
+            job.setStatus("CANCELLED");
+            job.setCancellationFee(BigDecimal.ZERO);
+            job.setCancellationRefundAmount(refundAmount);
+            job.setCancellationReason(cancelReason);
+            jobRepository.save(job);
+            
+            // Sync workflow with status change
+            try {
+                jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+            } catch (Exception workflowEx) {
+                log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                        jobId, previousStatus, workflowEx);
+            }
         }
 
-        // Business Logic: Reassign if provider cancelled after acceptance
-        if (isProvider && ("ACCEPTED".equals(previousStatus) || "IN_PROGRESS".equals(previousStatus))) {
-            log.info("Provider cancelled job. Attempting reassignment for jobId: {}", jobId);
-            try {
-                reassignJob(jobId, userId);
-            } catch (Exception e) {
-                log.error("Failed to reassign job {}: {}", jobId, e.getMessage());
+        // Only process reassignment, logging, and notifications if job is actually cancelled
+        // (not in CANCELLATION_PAYMENT_PENDING status)
+        if ("CANCELLED".equals(job.getStatus())) {
+            // Business Logic: Reassign if provider cancelled after acceptance
+            if (isProvider && ("ACCEPTED".equals(previousStatus) || "IN_PROGRESS".equals(previousStatus))) {
+                log.info("Provider cancelled job. Attempting reassignment for jobId: {}", jobId);
+                try {
+                    reassignJob(jobId, userId);
+                } catch (Exception e) {
+                    log.error("Failed to reassign job {}: {}", jobId, e.getMessage());
+                }
             }
+
+            // Business Logic: Log activity
+            if (isProvider) {
+                activityLogService.logProviderActivity(userId, "JOB_CANCELLED",
+                        Map.of("jobId", jobId, "jobCode", job.getJobCode(), "reason", cancelReason),
+                        null, null, null, null);
+            } else {
+                activityLogService.logCustomerActivity(userId, "JOB_CANCELLED",
+                        Map.of("jobId", jobId, "jobCode", job.getJobCode(), "reason", cancelReason),
+                        null, null, null, null);
+            }
+
+            // Business Logic: Notify opposite party
+            if (isProvider) {
+                notificationService.createNotification(
+                        job.getCustomerId(), "CUSTOMER", "JOB_CANCELLED",
+                        "Job Cancelled by Provider",
+                        String.format("Provider has cancelled job: %s. Reason: %s", job.getTitle(), cancelReason),
+                        "JOB", jobId, String.format("/customer/jobs/%d", jobId),
+                        Map.of("jobCode", job.getJobCode()));
+            } else {
+                if (job.getProviderId() != null) {
+                    notificationService.createNotification(
+                            job.getProviderId(), "PROVIDER", "JOB_CANCELLED",
+                            "Job Cancelled by Customer",
+                            String.format("Customer has cancelled job: %s. Reason: %s", job.getTitle(), cancelReason),
+                            "JOB", jobId, String.format("/provider/jobs/%d", jobId),
+                            Map.of("jobCode", job.getJobCode()));
+                }
+            }
+
+            log.info("Job {} cancelled successfully", jobId);
+        } else if ("CANCELLATION_PAYMENT_PENDING".equals(job.getStatus())) {
+            // Notify customer about cancellation fee payment required
+            notificationService.createNotification(
+                    job.getCustomerId(), "CUSTOMER", "CANCELLATION_FEE_PENDING",
+                    "Cancellation Fee Payment Required",
+                    String.format("Please pay cancellation fee of ₹%s to complete cancellation of job: %s", 
+                            cancellationFee, job.getTitle()),
+                    "PAYMENT", jobId,
+                    String.format("/customer/jobs/%d", jobId),
+                    Map.of("jobCode", job.getJobCode(), "cancellationFee", cancellationFee.toString()));
+            
+            log.info("Job {} set to CANCELLATION_PAYMENT_PENDING. Waiting for fee payment.", jobId);
+        }
+    }
+
+    /**
+     * Complete cancellation after cancellation fee payment is done
+     */
+    @Transactional
+    public void completeCancellation(Long jobId) {
+        log.info("Completing cancellation for jobId: {} after fee payment", jobId);
+
+        JobMaster job = jobRepository.findById(jobId)
+                .orElseThrow(() -> {
+                    log.error("Job not found with id: {}", jobId);
+                    return new RuntimeException("Job not found");
+                });
+
+        if (!"CANCELLATION_PAYMENT_PENDING".equals(job.getStatus())) {
+            log.error("Job {} is not in CANCELLATION_PAYMENT_PENDING status. Current status: {}", 
+                    jobId, job.getStatus());
+            throw new RuntimeException("Job is not awaiting cancellation fee payment");
+        }
+
+        String previousStatus = job.getStatus();
+        
+        // Validate transition
+        stateMachine.validateTransition(previousStatus, "CANCELLED");
+        
+        // Actually cancel the job
+        job.setStatus("CANCELLED");
+        jobRepository.save(job);
+        
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, previousStatus, "CANCELLED");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change {} -> CANCELLED",
+                    jobId, previousStatus, e);
+        }
+
+        // Process refund if applicable
+        BigDecimal refundAmount = job.getCancellationRefundAmount() != null ? 
+                job.getCancellationRefundAmount() : BigDecimal.ZERO;
+        
+        if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+            // TODO: Process actual refund transaction
+            log.info("Refund amount calculated: ₹{} for job {}", refundAmount, jobId);
         }
 
         // Business Logic: Log activity
-        if (isProvider) {
-            activityLogService.logProviderActivity(userId, "JOB_CANCELLED",
-                    Map.of("jobId", jobId, "jobCode", job.getJobCode(), "reason", cancelReason),
-                    null, null, null, null);
-        } else {
-            activityLogService.logCustomerActivity(userId, "JOB_CANCELLED",
-                    Map.of("jobId", jobId, "jobCode", job.getJobCode(), "reason", cancelReason),
-                    null, null, null, null);
+        activityLogService.logCustomerActivity(job.getCustomerId(), "JOB_CANCELLED",
+                Map.of("jobId", jobId, "jobCode", job.getJobCode(), 
+                       "reason", job.getCancellationReason() != null ? job.getCancellationReason() : "Customer cancelled",
+                       "cancellationFee", job.getCancellationFee() != null ? job.getCancellationFee().toString() : "0"),
+                null, null, null, null);
+
+        // Business Logic: Notify provider
+        if (job.getProviderId() != null) {
+            notificationService.createNotification(
+                    job.getProviderId(), "PROVIDER", "JOB_CANCELLED",
+                    "Job Cancelled by Customer",
+                    String.format("Customer has cancelled job: %s. Reason: %s", 
+                            job.getTitle(), 
+                            job.getCancellationReason() != null ? job.getCancellationReason() : "Customer cancelled"),
+                    "JOB", jobId, String.format("/provider/jobs/%d", jobId),
+                    Map.of("jobCode", job.getJobCode()));
         }
 
-        // Business Logic: Notify opposite party
+        log.info("Job {} cancelled successfully after fee payment", jobId);
+    }
+
+    /**
+     * Get cancellation fee estimate without actually cancelling the job
+     */
+    public Map<String, Object> getCancellationFeeEstimate(Long jobId, Long userId, boolean isProvider) {
+        log.info("Calculating cancellation fee estimate for jobId: {} by userId: {}, isProvider: {}", 
+                jobId, userId, isProvider);
+
+        JobMaster job = jobRepository.findById(jobId)
+                .orElseThrow(() -> {
+                    log.error("Job not found with id: {}", jobId);
+                    return new RuntimeException("Job not found");
+                });
+
+        // Validate authorization
         if (isProvider) {
-            notificationService.createNotification(
-                    job.getCustomerId(), "CUSTOMER", "JOB_CANCELLED",
-                    "Job Cancelled by Provider",
-                    String.format("Provider has cancelled job: %s. Reason: %s", job.getTitle(), cancelReason),
-                    "JOB", jobId, String.format("/customer/jobs/%d", jobId),
-                    Map.of("jobCode", job.getJobCode()));
+            ServiceProviderProfile providerProfile = providerRepository.findByUserId(userId)
+                    .orElse(null);
+            if (providerProfile == null || job.getProviderId() == null || 
+                !job.getProviderId().equals(providerProfile.getId())) {
+                throw new RuntimeException("Unauthorized");
+            }
         } else {
-            if (job.getProviderId() != null) {
-                notificationService.createNotification(
-                        job.getProviderId(), "PROVIDER", "JOB_CANCELLED",
-                        "Job Cancelled by Customer",
-                        String.format("Customer has cancelled job: %s. Reason: %s", job.getTitle(), cancelReason),
-                        "JOB", jobId, String.format("/provider/jobs/%d", jobId),
-                        Map.of("jobCode", job.getJobCode()));
+            if (!job.getCustomerId().equals(userId)) {
+                throw new RuntimeException("Unauthorized");
             }
         }
 
-        log.info("Job {} cancelled successfully", jobId);
+        List<String> cancellableStatuses = Arrays.asList("PENDING", "MATCHED", "ACCEPTED", "IN_PROGRESS");
+        if (!cancellableStatuses.contains(job.getStatus())) {
+            throw new RuntimeException("Job cannot be cancelled in current state");
+        }
+
+        String currentStatus = job.getStatus();
+        BigDecimal cancellationFee = BigDecimal.ZERO;
+        BigDecimal refundAmount = BigDecimal.ZERO;
+        BigDecimal jobAmount = job.getFinalPrice() != null ? job.getFinalPrice() : 
+                               (job.getEstimatedBudget() != null ? job.getEstimatedBudget() : BigDecimal.ZERO);
+        
+        try {
+            if (isProvider) {
+                // Provider cancellation - penalty on provider
+                if ("ACCEPTED".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus)) {
+                    // Customer gets 100% refund
+                    refundAmount = jobAmount;
+                    cancellationFee = BigDecimal.ZERO;
+                } else {
+                    refundAmount = jobAmount;
+                    cancellationFee = BigDecimal.ZERO;
+                }
+            } else {
+                // Customer cancellation - fee based on job status
+                if ("PENDING".equals(currentStatus) || "MATCHED".equals(currentStatus)) {
+                    // Before provider accepts - no fee, 100% refund
+                    refundAmount = jobAmount;
+                    cancellationFee = BigDecimal.ZERO;
+                } else if ("ACCEPTED".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus)) {
+                    // After provider accepts - use CANCELLATION_FEE_BEFORE_START (percentage)
+                    BigDecimal feePercent = businessRuleService.getRuleValueAsBigDecimal(
+                        "CANCELLATION_FEE_BEFORE_START", BigDecimal.ZERO);
+                    
+                    if (feePercent.compareTo(BigDecimal.ZERO) > 0) {
+                        // Calculate fee as percentage of job amount
+                        cancellationFee = jobAmount.multiply(feePercent)
+                            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                        
+                        // Check if partial payment was made
+                        BigDecimal paidAmount = BigDecimal.ZERO;
+                        try {
+                            var paymentSchedule = paymentService.getPaymentScheduleOptional(jobId);
+                            if (paymentSchedule.isPresent()) {
+                                var schedule = paymentSchedule.get();
+                                if (schedule.getUpfrontPaid() != null && schedule.getUpfrontPaid() && 
+                                    schedule.getUpfrontAmount() != null) {
+                                    paidAmount = schedule.getUpfrontAmount();
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("Could not check payment status for job {}: {}", jobId, e.getMessage());
+                        }
+                        
+                        // Calculate refund: if partial payment made, refund based on configuration
+                        if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+                            // Partial payment made - refund = paidAmount - cancellationFee (if fee < paidAmount)
+                            if (cancellationFee.compareTo(paidAmount) <= 0) {
+                                refundAmount = paidAmount.subtract(cancellationFee);
+                            } else {
+                                // Fee exceeds paid amount, no refund
+                                refundAmount = BigDecimal.ZERO;
+                            }
+                        } else {
+                            // No payment made - refund = jobAmount - cancellationFee
+                            refundAmount = jobAmount.subtract(cancellationFee);
+                        }
+                    } else {
+                        // No fee - full refund
+                        cancellationFee = BigDecimal.ZERO;
+                        refundAmount = jobAmount;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Cancellation fee calculation failed: {}", e.getMessage());
+            // Fallback: Full refund if calculation fails
+            refundAmount = jobAmount;
+            cancellationFee = BigDecimal.ZERO;
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("cancellationFee", cancellationFee);
+        result.put("refundAmount", refundAmount);
+        result.put("jobAmount", jobAmount);
+        result.put("canCancel", true);
+        
+        return result;
     }
 
     private void reassignJob(Long jobId, Long cancelledProviderId) {
@@ -399,7 +789,38 @@ public class JobStatusService {
         job.setAcceptedAt(null);
         jobRepository.save(job);
 
-        matchingService.matchJobToProviders(jobId);
+        // Sync workflow with status change
+        try {
+            jobWorkflowService.onStatusChanged(jobId, "CANCELLED", "PENDING");
+        } catch (Exception e) {
+            log.error("Failed to sync workflow for jobId: {} on status change CANCELLED -> PENDING",
+                    jobId, e);
+        }
+
+        // Re-match job if AUTO_MATCHING_FEATURE is enabled
+        try {
+            if (configService.isAutoMatchingEnabled()) {
+                log.info("AUTO_MATCHING_FEATURE enabled. Triggering re-matching for reassigned jobId: {}", jobId);
+                matchingService.matchJobToProviders(jobId);
+            } else {
+                log.info("AUTO_MATCHING_FEATURE disabled. Skipping re-matching for jobId: {}. Admin can manually assign.", jobId);
+                // Notify customer that admin will assign manually
+                try {
+                    notificationService.createNotification(
+                            job.getCustomerId(), "CUSTOMER", "JOB_PENDING_MANUAL_ASSIGNMENT",
+                            "Job Reassigned - Manual Assignment",
+                            String.format("Your job '%s' has been reassigned. Our team will assign a provider shortly.", job.getTitle()),
+                            "JOB", jobId,
+                            String.format("/customer/jobs/%d", jobId),
+                            Map.of("jobCode", job.getJobCode())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to send manual assignment notification", e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error checking AUTO_MATCHING_FEATURE or triggering re-matching for jobId: {}", jobId, e);
+        }
 
         log.info("Job {} reassigned successfully", jobId);
     }
